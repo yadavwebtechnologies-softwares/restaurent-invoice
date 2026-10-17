@@ -8,1042 +8,914 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-
   <link
     href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
     rel="stylesheet"
   />
-
   <link rel="stylesheet" href="style.css" />
 </head>
-
 <body>
-  <div class="app">
+<div class="app">
 
-    <!-- SIDEBAR -->
-    <aside class="sidebar" id="sidebar">
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-mark">B</div>
+      <div class="brand-text">
+        <h1><span class="ph">[Business Name]</span></h1>
+        <span><span class="ph">[Tagline]</span></span>
+      </div>
+    </div>
 
-      <div class="brand">
-        <div class="brand-mark">B</div>
+    <div class="nav-section">Main</div>
 
-        <div class="brand-text">
-          <h1><span class="ph">[Business Name]</span></h1>
-          <span><span class="ph">[Tagline]</span></span>
+    <a class="nav-item active" aria-current="page" href="index.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="7" height="9" rx="1.5"/>
+        <rect x="14" y="3" width="7" height="5" rx="1.5"/>
+        <rect x="14" y="12" width="7" height="9" rx="1.5"/>
+        <rect x="3" y="16" width="7" height="5" rx="1.5"/>
+      </svg>
+      Dashboard
+    </a>
+
+    <a class="nav-item" href="new-invoice.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 5v14M5 12h14"/>
+      </svg>
+      New Invoice
+    </a>
+
+    <a class="nav-item" href="invoices.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <path d="M14 2v6h6"/>
+      </svg>
+      Invoices
+    </a>
+
+    <a class="nav-item" href="reports.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 3v18h18"/>
+        <path d="M7 14l4-4 3 3 5-6"/>
+      </svg>
+      Reports
+    </a>
+
+    <div class="nav-section">Manage</div>
+
+    <a class="nav-item" href="products.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 7l-8-4-8 4 8 4 8-4z"/>
+        <path d="M4 7v10l8 4 8-4V7"/>
+      </svg>
+      Products
+    </a>
+
+    <a class="nav-item" href="categories.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 7h18M3 12h18M3 17h12"/>
+      </svg>
+      Categories
+    </a>
+
+    <a class="nav-item" href="settings.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+      Settings
+    </a>
+
+    <div class="sidebar-footer">
+      <div class="target-card">
+        <div class="label">Today's Target</div>
+        <div class="value"><span class="ph">[Amount]</span></div>
+        <div class="target-track">
+          <div class="target-fill"></div>
+        </div>
+        <div class="target-meta">
+          <span><span class="ph">[%]</span> achieved</span>
+          <span><span class="ph">[Left]</span></span>
         </div>
       </div>
+    </div>
+  </aside>
 
-      <div class="nav-section">Main</div>
+  <div class="overlay" id="overlay"></div>
 
-      <a class="nav-item active" href="#">
+  <!-- MAIN -->
+  <div class="main">
+
+    <!-- TOPBAR -->
+    <header class="topbar">
+      <button class="menu-btn" id="menuBtn" aria-label="Open menu">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="7" height="9" rx="1.5"/>
-          <rect x="14" y="3" width="7" height="5" rx="1.5"/>
-          <rect x="14" y="12" width="7" height="9" rx="1.5"/>
-          <rect x="3" y="16" width="7" height="5" rx="1.5"/>
+          stroke-width="2" stroke-linecap="round">
+          <path d="M3 6h18M3 12h18M3 18h18"/>
         </svg>
-        Dashboard
-      </a>
+      </button>
 
-      <a class="nav-item" href="#">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 5v14M5 12h14"/>
-        </svg>
-        New Invoice
-      </a>
-
-      <a class="nav-item" href="#">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-          <path d="M14 2v6h6"/>
-        </svg>
-        Invoices
-      </a>
-
-      <a class="nav-item" href="#">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 3v18h18"/>
-          <path d="M7 14l4-4 3 3 5-6"/>
-        </svg>
-        Reports
-      </a>
-
-      <div class="nav-section">Manage</div>
-
-      <a class="nav-item" href="#">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M20 7l-8-4-8 4 8 4 8-4z"/>
-          <path d="M4 7v10l8 4 8-4V7"/>
-        </svg>
-        Products
-      </a>
-
-      <a class="nav-item" href="#">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 7h18M3 12h18M3 17h12"/>
-        </svg>
-        Categories
-      </a>
-
-      <a class="nav-item" href="#">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="3"/>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-        </svg>
-        Settings
-      </a>
-
-      <div class="sidebar-footer">
-        <div class="target-card">
-          <div class="label">Today's Target</div>
-          <div class="value"><span class="ph">[Amount]</span></div>
-
-          <div class="target-track">
-            <div class="target-fill"></div>
-          </div>
-
-          <div class="target-meta">
-            <span><span class="ph">[%]</span> achieved</span>
-            <span><span class="ph">[Left]</span></span>
-          </div>
-        </div>
+      <div class="crumbs">
+        <span>Main</span>
+        <span class="sep">/</span>
+        <span class="current">Dashboard</span>
       </div>
 
-    </aside>
-
-    <div class="overlay" id="overlay"></div>
-
-    <!-- MAIN CONTENT -->
-    <div class="main">
-
-      <!-- TOPBAR -->
-      <header class="topbar">
-
-        <button class="menu-btn" id="menuBtn" aria-label="Open menu">
+      <div class="topbar-right">
+        <button class="btn-icon" aria-label="Notifications">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            stroke-width="2" stroke-linecap="round">
-            <path d="M3 6h18M3 12h18M3 18h18"/>
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+            <path d="M13.7 21a2 2 0 0 1-3.4 0"/>
           </svg>
         </button>
 
-        <div class="crumbs">
-          <span>Main</span>
-          <span class="sep">/</span>
-          <span class="current">Dashboard</span>
+        <button class="profile">
+          <div>
+            <div class="name"><span class="ph">[Owner Name]</span></div>
+            <div class="role"><span class="ph">[Role]</span></div>
+          </div>
+          <div class="avatar">O</div>
+        </button>
+      </div>
+    </header>
+
+    <main class="content">
+
+      <!-- PAGE HEADING -->
+      <div class="page-head">
+        <div>
+          <h2>Dashboard</h2>
+          <p>Sales performance, reports, and business insights at a glance.</p>
         </div>
 
-        <div class="topbar-right">
-
-          <button class="btn-icon" aria-label="Notifications">
+        <div class="page-actions">
+          <button class="btn btn-outline" type="button">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-              <path d="M13.7 21a2 2 0 0 1-3.4 0"/>
+              <rect x="3" y="4" width="18" height="18" rx="2"/>
+              <path d="M16 2v4M8 2v4M3 10h18"/>
             </svg>
+            This Week
           </button>
 
-          <button class="profile">
-            <div>
-              <div class="name"><span class="ph">[Owner Name]</span></div>
-              <div class="role"><span class="ph">[Role]</span></div>
-            </div>
-            <div class="avatar">O</div>
+          <button class="btn btn-soft" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <path d="M7 10l5 5 5-5M12 15V3"/>
+            </svg>
+            Export
           </button>
 
+          <a class="btn btn-primary" href="new-invoice.html">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 5v14M5 12h14"/>
+            </svg>
+            New Invoice
+          </a>
         </div>
-      </header>
+      </div>
 
-      <div class="content">
+      <!-- KPI CARDS -->
+      <section class="kpis">
 
-        <!-- PAGE HEADER -->
-        <div class="page-head">
-
-          <div>
-            <h2>Dashboard</h2>
-            <p>Sales performance, reports, and business insights at a glance.</p>
+        <div class="kpi">
+          <div class="kpi-top">
+            <div class="kpi-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+              </svg>
+            </div>
+            <span class="kpi-trend up">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M7 17L17 7M9 7h8v8"/>
+              </svg>
+              12.4%
+            </span>
           </div>
-
-          <div class="page-actions">
-
-            <button class="btn btn-outline">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="4" width="18" height="18" rx="2"/>
-                <path d="M16 2v4M8 2v4M3 10h18"/>
-              </svg>
-              This Week
-            </button>
-
-            <button class="btn btn-soft">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                <path d="M7 10l5 5 5-5M12 15V3"/>
-              </svg>
-              Export
-            </button>
-
-            <button class="btn btn-primary">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 5v14M5 12h14"/>
-              </svg>
-              New Invoice
-            </button>
-
-          </div>
+          <div class="kpi-label">Today's Revenue</div>
+          <div class="kpi-value"><span class="ph">[Revenue]</span></div>
+          <div class="kpi-sub">vs <span class="ph">[Yesterday]</span> yesterday</div>
         </div>
 
-        <!-- KPI CARDS -->
-        <section class="kpis">
-
-          <div class="kpi">
-            <div class="kpi-top">
-              <div class="kpi-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-                </svg>
-              </div>
-
-              <span class="kpi-trend up">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M7 17L17 7M9 7h8v8"/>
-                </svg>
-                12.4%
-              </span>
+        <div class="kpi">
+          <div class="kpi-top">
+            <div class="kpi-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <path d="M14 2v6h6M8 13h8M8 17h5"/>
+              </svg>
             </div>
-
-            <div class="kpi-label">Today's Revenue</div>
-            <div class="kpi-value"><span class="ph">[Revenue]</span></div>
-            <div class="kpi-sub">vs <span class="ph">[Yesterday]</span> yesterday</div>
+            <span class="kpi-trend up">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M7 17L17 7M9 7h8v8"/>
+              </svg>
+              8.1%
+            </span>
           </div>
-
-          <div class="kpi">
-            <div class="kpi-top">
-              <div class="kpi-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                  <path d="M14 2v6h6M8 13h8M8 17h5"/>
-                </svg>
-              </div>
-
-              <span class="kpi-trend up">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M7 17L17 7M9 7h8v8"/>
-                </svg>
-                8.1%
-              </span>
-            </div>
-
-            <div class="kpi-label">Invoices Today</div>
-            <div class="kpi-value"><span class="ph">[Count]</span></div>
-            <div class="kpi-sub">
-              <span class="ph">[Paid]</span> paid ·
-              <span class="ph">[Pending]</span> pending
-            </div>
+          <div class="kpi-label">Invoices Today</div>
+          <div class="kpi-value"><span class="ph">[Count]</span></div>
+          <div class="kpi-sub">
+            <span class="ph">[Paid]</span> paid ·
+            <span class="ph">[Pending]</span> pending
           </div>
+        </div>
 
-          <div class="kpi">
-            <div class="kpi-top">
-              <div class="kpi-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M3 3v18h18"/>
-                  <path d="M18 9l-5 5-3-3-4 4"/>
-                </svg>
-              </div>
-
-              <span class="kpi-trend down">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M7 7l10 10M17 17H9v-8"/>
-                </svg>
-                2.3%
-              </span>
+        <div class="kpi">
+          <div class="kpi-top">
+            <div class="kpi-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 3v18h18"/>
+                <path d="M18 9l-5 5-3-3-4 4"/>
+              </svg>
             </div>
-
-            <div class="kpi-label">Average Bill Value</div>
-            <div class="kpi-value"><span class="ph">[Avg]</span></div>
-            <div class="kpi-sub">across <span class="ph">[N]</span> invoices</div>
+            <span class="kpi-trend down">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M7 7l10 10M17 17H9v-8"/>
+              </svg>
+              2.3%
+            </span>
           </div>
+          <div class="kpi-label">Average Bill Value</div>
+          <div class="kpi-value"><span class="ph">[Avg]</span></div>
+          <div class="kpi-sub">across <span class="ph">[N]</span> invoices</div>
+        </div>
 
-          <div class="kpi">
-            <div class="kpi-top">
-              <div class="kpi-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <circle cx="12" cy="12" r="9"/>
-                  <path d="M12 7v5l3 2"/>
-                </svg>
-              </div>
-
-              <span class="kpi-trend flat">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M5 12h14"/>
-                </svg>
-                flat
-              </span>
+        <div class="kpi">
+          <div class="kpi-top">
+            <div class="kpi-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9"/>
+                <path d="M12 7v5l3 2"/>
+              </svg>
             </div>
-
-            <div class="kpi-label">Pending Drafts</div>
-            <div class="kpi-value"><span class="ph">[N]</span></div>
-            <div class="kpi-sub">Unfinished invoices</div>
+            <span class="kpi-trend flat">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M5 12h14"/>
+              </svg>
+              flat
+            </span>
           </div>
+          <div class="kpi-label">Pending Drafts</div>
+          <div class="kpi-value"><span class="ph">[N]</span></div>
+          <div class="kpi-sub">Unfinished invoices</div>
+        </div>
 
-        </section>
+      </section>
 
-        <!-- WEEKLY SALES AND PAYMENT SPLIT -->
-        <section class="row-2">
+      <!-- WEEKLY SALES AND PAYMENT SPLIT -->
+      <section class="row-2">
 
-          <div class="card">
-            <div class="card-head">
-              <div>
-                <h3>Weekly Sales Trend</h3>
-                <p>Revenue over the last 7 days</p>
-              </div>
-
-              <div class="chart-legend">
-                <span class="legend-dot cur"><i></i> This week</span>
-                <span class="legend-dot prev"><i></i> Last week</span>
-              </div>
-            </div>
-
-            <div class="card-body">
-              <div class="chart">
-                <div class="chart-grid">
-                  <span></span>
-                  <span></span>
-                  <span></span>
-                  <span></span>
-                </div>
-
-                <div class="chart-col">
-                  <div class="chart-bars">
-                    <div class="bar" style="height:58%" data-tip="Mon · [amount]"></div>
-                    <div class="bar prev" style="height:46%" data-tip="Mon · [amount]"></div>
-                  </div>
-                  <div class="chart-day">Mon</div>
-                </div>
-
-                <div class="chart-col">
-                  <div class="chart-bars">
-                    <div class="bar" style="height:72%" data-tip="Tue · [amount]"></div>
-                    <div class="bar prev" style="height:55%" data-tip="Tue · [amount]"></div>
-                  </div>
-                  <div class="chart-day">Tue</div>
-                </div>
-
-                <div class="chart-col">
-                  <div class="chart-bars">
-                    <div class="bar" style="height:64%" data-tip="Wed · [amount]"></div>
-                    <div class="bar prev" style="height:60%" data-tip="Wed · [amount]"></div>
-                  </div>
-                  <div class="chart-day">Wed</div>
-                </div>
-
-                <div class="chart-col">
-                  <div class="chart-bars">
-                    <div class="bar" style="height:88%" data-tip="Thu · [amount]"></div>
-                    <div class="bar prev" style="height:70%" data-tip="Thu · [amount]"></div>
-                  </div>
-                  <div class="chart-day">Thu</div>
-                </div>
-
-                <div class="chart-col">
-                  <div class="chart-bars">
-                    <div class="bar" style="height:76%" data-tip="Fri · [amount]"></div>
-                    <div class="bar prev" style="height:66%" data-tip="Fri · [amount]"></div>
-                  </div>
-                  <div class="chart-day">Fri</div>
-                </div>
-
-                <div class="chart-col">
-                  <div class="chart-bars">
-                    <div class="bar" style="height:96%" data-tip="Sat · [amount]"></div>
-                    <div class="bar prev" style="height:82%" data-tip="Sat · [amount]"></div>
-                  </div>
-                  <div class="chart-day">Sat</div>
-                </div>
-
-                <div class="chart-col">
-                  <div class="chart-bars">
-                    <div class="bar" style="height:70%" data-tip="Sun · [amount]"></div>
-                    <div class="bar prev" style="height:62%" data-tip="Sun · [amount]"></div>
-                  </div>
-                  <div class="chart-day">Sun</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="card">
-            <div class="card-head">
-              <div>
-                <h3>Payment Split</h3>
-                <p>Today's collection</p>
-              </div>
-            </div>
-
-            <div class="card-body">
-              <div class="split-bar">
-                <div class="split-seg s1" style="width:52%"></div>
-                <div class="split-seg s2" style="width:34%"></div>
-                <div class="split-seg s3" style="width:14%"></div>
-              </div>
-
-              <div class="split-legend">
-
-                <div class="split-legend-item">
-                  <div class="sl-left">
-                    <span class="sl-dot s1"></span>
-                    <span class="sl-name">UPI</span>
-                  </div>
-                  <span class="sl-val"><span class="ph">[Amount]</span> · 52%</span>
-                </div>
-
-                <div class="split-legend-item">
-                  <div class="sl-left">
-                    <span class="sl-dot s2"></span>
-                    <span class="sl-name">Cash</span>
-                  </div>
-                  <span class="sl-val"><span class="ph">[Amount]</span> · 34%</span>
-                </div>
-
-                <div class="split-legend-item">
-                  <div class="sl-left">
-                    <span class="sl-dot s3"></span>
-                    <span class="sl-name">Card</span>
-                  </div>
-                  <span class="sl-val"><span class="ph">[Amount]</span> · 14%</span>
-                </div>
-
-              </div>
-            </div>
-          </div>
-
-        </section>
-
-        <!-- PERFORMANCE REPORT -->
-        <section class="report-hero">
-
-          <div class="rh-text">
-            <h3>Performance Report</h3>
-            <p>
-              Monthly summary ·
-              <span
-                class="ph"
-                style="background:rgba(255,255,255,0.12);color:#E5E5E5;border-color:rgba(255,255,255,0.25);"
-              >[Month Year]</span>
-            </p>
-          </div>
-
-          <div class="rh-stats">
-
-            <div class="rh-stat">
-              <div class="rs-label">Total Sales</div>
-              <div class="rs-value"><span class="ph">[Amount]</span></div>
-            </div>
-
-            <div class="rh-stat">
-              <div class="rs-label">Orders</div>
-              <div class="rs-value"><span class="ph">[N]</span></div>
-            </div>
-
-            <div class="rh-stat">
-              <div class="rs-label">Growth</div>
-              <div class="rs-value"><span class="ph">[%]</span></div>
-            </div>
-
-          </div>
-        </section>
-
-        <!-- REPORTS AND ANALYTICS -->
-        <section class="row-3">
-
-          <!-- MONTHLY TREND -->
-          <div class="card">
-            <div class="card-head">
-              <div>
-                <h3>Monthly Trend</h3>
-                <p>Last 6 months revenue</p>
-              </div>
-            </div>
-
-            <div class="card-body">
-              <div class="cat-list">
-
-                <div class="cat-item">
-                  <div class="cat-row">
-                    <span class="cat-name">May</span>
-                    <span class="cat-val"><span class="ph">[Amount]</span></span>
-                  </div>
-                  <div class="cat-track">
-                    <div class="cat-fill" style="width:58%"></div>
-                  </div>
-                </div>
-
-                <div class="cat-item">
-                  <div class="cat-row">
-                    <span class="cat-name">Jun</span>
-                    <span class="cat-val"><span class="ph">[Amount]</span></span>
-                  </div>
-                  <div class="cat-track">
-                    <div class="cat-fill" style="width:66%"></div>
-                  </div>
-                </div>
-
-                <div class="cat-item">
-                  <div class="cat-row">
-                    <span class="cat-name">Jul</span>
-                    <span class="cat-val"><span class="ph">[Amount]</span></span>
-                  </div>
-                  <div class="cat-track">
-                    <div class="cat-fill" style="width:72%"></div>
-                  </div>
-                </div>
-
-                <div class="cat-item">
-                  <div class="cat-row">
-                    <span class="cat-name">Aug</span>
-                    <span class="cat-val"><span class="ph">[Amount]</span></span>
-                  </div>
-                  <div class="cat-track">
-                    <div class="cat-fill" style="width:64%"></div>
-                  </div>
-                </div>
-
-                <div class="cat-item">
-                  <div class="cat-row">
-                    <span class="cat-name">Sep</span>
-                    <span class="cat-val"><span class="ph">[Amount]</span></span>
-                  </div>
-                  <div class="cat-track">
-                    <div class="cat-fill" style="width:84%"></div>
-                  </div>
-                </div>
-
-                <div class="cat-item">
-                  <div class="cat-row">
-                    <span class="cat-name">Oct</span>
-                    <span class="cat-val"><span class="ph">[Amount]</span></span>
-                  </div>
-                  <div class="cat-track">
-                    <div class="cat-fill" style="width:94%"></div>
-                  </div>
-                </div>
-
-              </div>
-            </div>
-          </div>
-
-          <!-- TOP CATEGORIES -->
-          <div class="card">
-            <div class="card-head">
-              <div>
-                <h3>Top Categories</h3>
-                <p>By sales this month</p>
-              </div>
-            </div>
-
-            <div class="card-body">
-              <div class="cat-list">
-
-                <div class="cat-item">
-                  <div class="cat-row">
-                    <span class="cat-name">Starters</span>
-                    <span class="cat-val"><span class="ph">[Amount]</span> · 32%</span>
-                  </div>
-                  <div class="cat-track">
-                    <div class="cat-fill" style="width:92%"></div>
-                  </div>
-                </div>
-
-                <div class="cat-item">
-                  <div class="cat-row">
-                    <span class="cat-name">Main Course</span>
-                    <span class="cat-val"><span class="ph">[Amount]</span> · 28%</span>
-                  </div>
-                  <div class="cat-track">
-                    <div class="cat-fill" style="width:82%"></div>
-                  </div>
-                </div>
-
-                <div class="cat-item">
-                  <div class="cat-row">
-                    <span class="cat-name">Beverages</span>
-                    <span class="cat-val"><span class="ph">[Amount]</span> · 18%</span>
-                  </div>
-                  <div class="cat-track">
-                    <div class="cat-fill" style="width:60%"></div>
-                  </div>
-                </div>
-
-                <div class="cat-item">
-                  <div class="cat-row">
-                    <span class="cat-name">Desserts</span>
-                    <span class="cat-val"><span class="ph">[Amount]</span> · 12%</span>
-                  </div>
-                  <div class="cat-track">
-                    <div class="cat-fill" style="width:42%"></div>
-                  </div>
-                </div>
-
-                <div class="cat-item">
-                  <div class="cat-row">
-                    <span class="cat-name">Others</span>
-                    <span class="cat-val"><span class="ph">[Amount]</span> · 10%</span>
-                  </div>
-                  <div class="cat-track">
-                    <div class="cat-fill" style="width:34%"></div>
-                  </div>
-                </div>
-
-              </div>
-            </div>
-          </div>
-
-          <!-- KEY METRICS -->
-          <div class="card">
-            <div class="card-head">
-              <div>
-                <h3>Key Metrics</h3>
-                <p>Vs previous period</p>
-              </div>
-            </div>
-
-            <div class="card-body">
-              <div class="metric-grid" style="grid-template-columns: 1fr;">
-
-                <div class="metric">
-                  <div class="metric-label">Gross Margin</div>
-                  <div class="metric-value"><span class="ph">[%]</span></div>
-
-                  <div class="metric-delta up">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                      stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M7 17L17 7M9 7h8v8"/>
-                    </svg>
-                    <span class="ph">[+%]</span> vs last month
-                  </div>
-                </div>
-
-                <div class="metric">
-                  <div class="metric-label">Repeat Customers</div>
-                  <div class="metric-value"><span class="ph">[%]</span></div>
-
-                  <div class="metric-delta up">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                      stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M7 17L17 7M9 7h8v8"/>
-                    </svg>
-                    <span class="ph">[+%]</span> vs last month
-                  </div>
-                </div>
-
-                <div class="metric">
-                  <div class="metric-label">Peak Hour</div>
-                  <div class="metric-value"><span class="ph">[Time]</span></div>
-                  <div class="metric-delta">
-                    <span class="ph">[Orders]</span> orders avg
-                  </div>
-                </div>
-
-              </div>
-            </div>
-          </div>
-
-        </section>
-
-        <!-- HOURLY SALES AND TOP PRODUCTS -->
-        <section class="row-2">
-
-          <!-- HOURLY SALES HEATMAP -->
-          <div class="card">
-            <div class="card-head">
-              <div>
-                <h3>Hourly Sales Heatmap</h3>
-                <p>Average orders per hour today</p>
-              </div>
-
-              <div class="report-tabs">
-                <button class="report-tab active">Today</button>
-                <button class="report-tab">Week</button>
-              </div>
-            </div>
-
-            <div class="card-body">
-
-              <div class="hourly">
-                <div class="hour-cell" title="8 AM">8</div>
-                <div class="hour-cell level-1" title="9 AM">9</div>
-                <div class="hour-cell level-2" title="10 AM">10</div>
-                <div class="hour-cell level-3" title="11 AM">11</div>
-                <div class="hour-cell level-4" title="12 PM">12</div>
-                <div class="hour-cell level-5" title="1 PM">1</div>
-                <div class="hour-cell level-4" title="2 PM">2</div>
-                <div class="hour-cell level-3" title="3 PM">3</div>
-                <div class="hour-cell level-2" title="4 PM">4</div>
-                <div class="hour-cell level-3" title="5 PM">5</div>
-                <div class="hour-cell level-4" title="6 PM">6</div>
-                <div class="hour-cell level-4" title="7 PM">7</div>
-              </div>
-
-              <div class="hour-labels">
-                <span>8</span>
-                <span>9</span>
-                <span>10</span>
-                <span>11</span>
-                <span>12</span>
-                <span>1</span>
-                <span>2</span>
-                <span>3</span>
-                <span>4</span>
-                <span>5</span>
-                <span>6</span>
-                <span>7</span>
-              </div>
-
-              <div style="margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px dashed var(--border); display: flex; justify-content: space-between; align-items: center; font-size: var(--fs-xs); color: var(--text-muted);">
-                <span>
-                  Peak:
-                  <strong style="color: var(--text);">
-                    <span class="ph">[Hour]</span>
-                  </strong>
-                </span>
-
-                <span>
-                  Slow:
-                  <strong style="color: var(--text);">
-                    <span class="ph">[Hour]</span>
-                  </strong>
-                </span>
-              </div>
-
-            </div>
-          </div>
-
-          <!-- TOP SELLING PRODUCTS -->
-          <div class="card">
-            <div class="card-head">
-              <div>
-                <h3>Top Selling Products</h3>
-                <p>This week</p>
-              </div>
-            </div>
-
-            <div class="card-body">
-              <div class="prod-list">
-
-                <div class="prod-item">
-                  <div class="prod-rank top">1</div>
-                  <div class="prod-info">
-                    <div class="p-name">
-                      <span><span class="ph">[Product Name]</span></span>
-                      <span><span class="ph">[N]</span> sold</span>
-                    </div>
-                    <div class="prod-track">
-                      <div class="prod-fill" style="width:92%"></div>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="prod-item">
-                  <div class="prod-rank top">2</div>
-                  <div class="prod-info">
-                    <div class="p-name">
-                      <span><span class="ph">[Product Name]</span></span>
-                      <span><span class="ph">[N]</span> sold</span>
-                    </div>
-                    <div class="prod-track">
-                      <div class="prod-fill" style="width:82%"></div>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="prod-item">
-                  <div class="prod-rank top">3</div>
-                  <div class="prod-info">
-                    <div class="p-name">
-                      <span><span class="ph">[Product Name]</span></span>
-                      <span><span class="ph">[N]</span> sold</span>
-                    </div>
-                    <div class="prod-track">
-                      <div class="prod-fill" style="width:76%"></div>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="prod-item">
-                  <div class="prod-rank">4</div>
-                  <div class="prod-info">
-                    <div class="p-name">
-                      <span><span class="ph">[Product Name]</span></span>
-                      <span><span class="ph">[N]</span> sold</span>
-                    </div>
-                    <div class="prod-track">
-                      <div class="prod-fill" style="width:64%"></div>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="prod-item">
-                  <div class="prod-rank">5</div>
-                  <div class="prod-info">
-                    <div class="p-name">
-                      <span><span class="ph">[Product Name]</span></span>
-                      <span><span class="ph">[N]</span> sold</span>
-                    </div>
-                    <div class="prod-track">
-                      <div class="prod-fill" style="width:50%"></div>
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-            </div>
-          </div>
-
-        </section>
-
-        <!-- COMPARISON METRICS -->
-        <section class="row-2-even">
-
-          <div class="card">
-            <div class="card-head">
-              <div>
-                <h3>This Week vs Last Week</h3>
-                <p>Revenue comparison</p>
-              </div>
-            </div>
-
-            <div class="card-body">
-              <div class="metric-grid">
-
-                <div class="metric">
-                  <div class="metric-label">This Week</div>
-                  <div class="metric-value"><span class="ph">[Amount]</span></div>
-
-                  <div class="metric-delta up">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                      stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M7 17L17 7M9 7h8v8"/>
-                    </svg>
-                    <span class="ph">[+%]</span>
-                  </div>
-                </div>
-
-                <div class="metric">
-                  <div class="metric-label">Last Week</div>
-                  <div class="metric-value"><span class="ph">[Amount]</span></div>
-                  <div class="metric-delta">baseline</div>
-                </div>
-
-              </div>
-            </div>
-          </div>
-
-          <!-- CUSTOMER INSIGHT -->
-          <div class="card">
-            <div class="card-head">
-              <div>
-                <h3>Customer Insight</h3>
-                <p>New vs returning</p>
-              </div>
-            </div>
-
-            <div class="card-body">
-
-              <div class="split-bar">
-                <div class="split-seg s1" style="width:62%"></div>
-                <div class="split-seg s3" style="width:38%"></div>
-              </div>
-
-              <div class="split-legend">
-
-                <div class="split-legend-item">
-                  <div class="sl-left">
-                    <span class="sl-dot s1"></span>
-                    <span class="sl-name">Returning</span>
-                  </div>
-                  <span class="sl-val">62% · <span class="ph">[N]</span></span>
-                </div>
-
-                <div class="split-legend-item">
-                  <div class="sl-left">
-                    <span class="sl-dot s3"></span>
-                    <span class="sl-name">New</span>
-                  </div>
-                  <span class="sl-val">38% · <span class="ph">[N]</span></span>
-                </div>
-
-              </div>
-            </div>
-          </div>
-
-        </section>
-
-        <!-- RECENT INVOICES -->
-        <section class="card">
-
+        <div class="card">
           <div class="card-head">
             <div>
-              <h3>Recent Invoices</h3>
-              <p>Latest bills generated today</p>
+              <h3>Weekly Sales Trend</h3>
+              <p>Revenue over the last 7 days</p>
+            </div>
+            <div class="chart-legend">
+              <span class="legend-dot cur"><i></i> This week</span>
+              <span class="legend-dot prev"><i></i> Last week</span>
+            </div>
+          </div>
+
+          <div class="card-body">
+            <div class="chart">
+              <div class="chart-grid">
+                <span></span><span></span><span></span><span></span>
+              </div>
+
+              <div class="chart-col">
+                <div class="chart-bars">
+                  <div class="bar" style="height:58%" data-tip="Mon · [amount]"></div>
+                  <div class="bar prev" style="height:46%" data-tip="Mon · [amount]"></div>
+                </div>
+                <div class="chart-day">Mon</div>
+              </div>
+
+              <div class="chart-col">
+                <div class="chart-bars">
+                  <div class="bar" style="height:72%" data-tip="Tue · [amount]"></div>
+                  <div class="bar prev" style="height:55%" data-tip="Tue · [amount]"></div>
+                </div>
+                <div class="chart-day">Tue</div>
+              </div>
+
+              <div class="chart-col">
+                <div class="chart-bars">
+                  <div class="bar" style="height:64%" data-tip="Wed · [amount]"></div>
+                  <div class="bar prev" style="height:60%" data-tip="Wed · [amount]"></div>
+                </div>
+                <div class="chart-day">Wed</div>
+              </div>
+
+              <div class="chart-col">
+                <div class="chart-bars">
+                  <div class="bar" style="height:88%" data-tip="Thu · [amount]"></div>
+                  <div class="bar prev" style="height:70%" data-tip="Thu · [amount]"></div>
+                </div>
+                <div class="chart-day">Thu</div>
+              </div>
+
+              <div class="chart-col">
+                <div class="chart-bars">
+                  <div class="bar" style="height:76%" data-tip="Fri · [amount]"></div>
+                  <div class="bar prev" style="height:66%" data-tip="Fri · [amount]"></div>
+                </div>
+                <div class="chart-day">Fri</div>
+              </div>
+
+              <div class="chart-col">
+                <div class="chart-bars">
+                  <div class="bar" style="height:96%" data-tip="Sat · [amount]"></div>
+                  <div class="bar prev" style="height:82%" data-tip="Sat · [amount]"></div>
+                </div>
+                <div class="chart-day">Sat</div>
+              </div>
+
+              <div class="chart-col">
+                <div class="chart-bars">
+                  <div class="bar" style="height:70%" data-tip="Sun · [amount]"></div>
+                  <div class="bar prev" style="height:62%" data-tip="Sun · [amount]"></div>
+                </div>
+                <div class="chart-day">Sun</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h3>Payment Split</h3>
+              <p>Today's collection</p>
+            </div>
+          </div>
+
+          <div class="card-body">
+            <div class="split-bar">
+              <div class="split-seg s1" style="width:52%"></div>
+              <div class="split-seg s2" style="width:48%"></div>
             </div>
 
-            <button class="btn btn-outline btn-sm">
-              View all
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M5 12h14M13 6l6 6-6 6"/>
-              </svg>
-            </button>
+            <div class="split-legend">
+              <div class="split-legend-item">
+                <div class="sl-left">
+                  <span class="sl-dot s1"></span>
+                  <span class="sl-name">UPI</span>
+                </div>
+                <span class="sl-val"><span class="ph">[Amount]</span> · 52%</span>
+              </div>
+
+              <div class="split-legend-item">
+                <div class="sl-left">
+                  <span class="sl-dot s2"></span>
+                  <span class="sl-name">Cash</span>
+                </div>
+                <span class="sl-val"><span class="ph">[Amount]</span> · 48%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- PERFORMANCE REPORT -->
+      <section class="report-hero">
+        <div class="rh-text">
+          <h3>Performance Report</h3>
+          <p>
+            Monthly summary ·
+            <span class="ph"
+              style="background:rgba(255,255,255,0.12);color:#E5E5E5;border-color:rgba(255,255,255,0.25);">
+              [Month Year]
+            </span>
+          </p>
+        </div>
+
+        <div class="rh-stats">
+          <div class="rh-stat">
+            <div class="rs-label">Total Sales</div>
+            <div class="rs-value"><span class="ph">[Amount]</span></div>
+          </div>
+          <div class="rh-stat">
+            <div class="rs-label">Orders</div>
+            <div class="rs-value"><span class="ph">[N]</span></div>
+          </div>
+          <div class="rh-stat">
+            <div class="rs-label">Growth</div>
+            <div class="rs-value"><span class="ph">[%]</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- REPORTS AND ANALYTICS -->
+      <section class="row-3">
+
+        <!-- Monthly Trend -->
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h3>Monthly Trend</h3>
+              <p>Last 6 months revenue</p>
+            </div>
           </div>
 
-          <div class="table-wrap">
-            <table class="inv-table">
+          <div class="card-body">
+            <div class="cat-list">
+              <div class="cat-item">
+                <div class="cat-row">
+                  <span class="cat-name">May</span>
+                  <span class="cat-val"><span class="ph">[Amount]</span></span>
+                </div>
+                <div class="cat-track"><div class="cat-fill" style="width:58%"></div></div>
+              </div>
 
-              <thead>
-                <tr>
-                  <th>Invoice</th>
-                  <th>Customer</th>
-                  <th>Date</th>
-                  <th style="text-align:right;">Amount</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
+              <div class="cat-item">
+                <div class="cat-row">
+                  <span class="cat-name">Jun</span>
+                  <span class="cat-val"><span class="ph">[Amount]</span></span>
+                </div>
+                <div class="cat-track"><div class="cat-fill" style="width:66%"></div></div>
+              </div>
 
-              <tbody>
+              <div class="cat-item">
+                <div class="cat-row">
+                  <span class="cat-name">Jul</span>
+                  <span class="cat-val"><span class="ph">[Amount]</span></span>
+                </div>
+                <div class="cat-track"><div class="cat-fill" style="width:72%"></div></div>
+              </div>
 
-                <tr>
-                  <td class="mono"><span class="ph">[INV-Number]</span></td>
-                  <td>
-                    <div class="cust">
-                      <div class="cust-avatar">A</div>
-                      <div>
-                        <div class="cust-name">
-                          <span class="ph">[Customer Name]</span>
-                        </div>
-                        <div class="cust-sub">
-                          <span class="ph">[Table]</span>
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td><span class="ph">[Date Time]</span></td>
-                  <td class="num"><span class="ph">[Amount]</span></td>
-                  <td><span class="pill paid">Paid</span></td>
-                </tr>
+              <div class="cat-item">
+                <div class="cat-row">
+                  <span class="cat-name">Aug</span>
+                  <span class="cat-val"><span class="ph">[Amount]</span></span>
+                </div>
+                <div class="cat-track"><div class="cat-fill" style="width:64%"></div></div>
+              </div>
 
-                <tr>
-                  <td class="mono"><span class="ph">[INV-Number]</span></td>
-                  <td>
-                    <div class="cust">
-                      <div class="cust-avatar">B</div>
-                      <div>
-                        <div class="cust-name">
-                          <span class="ph">[Customer Name]</span>
-                        </div>
-                        <div class="cust-sub">Walk-in</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td><span class="ph">[Date Time]</span></td>
-                  <td class="num"><span class="ph">[Amount]</span></td>
-                  <td><span class="pill paid">Paid</span></td>
-                </tr>
+              <div class="cat-item">
+                <div class="cat-row">
+                  <span class="cat-name">Sep</span>
+                  <span class="cat-val"><span class="ph">[Amount]</span></span>
+                </div>
+                <div class="cat-track"><div class="cat-fill" style="width:84%"></div></div>
+              </div>
 
-                <tr>
-                  <td class="mono"><span class="ph">[INV-Number]</span></td>
-                  <td>
-                    <div class="cust">
-                      <div class="cust-avatar">C</div>
-                      <div>
-                        <div class="cust-name">
-                          <span class="ph">[Customer Name]</span>
-                        </div>
-                        <div class="cust-sub">
-                          <span class="ph">[Table]</span>
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td><span class="ph">[Date Time]</span></td>
-                  <td class="num"><span class="ph">[Amount]</span></td>
-                  <td><span class="pill pending">Pending</span></td>
-                </tr>
+              <div class="cat-item">
+                <div class="cat-row">
+                  <span class="cat-name">Oct</span>
+                  <span class="cat-val"><span class="ph">[Amount]</span></span>
+                </div>
+                <div class="cat-track"><div class="cat-fill" style="width:94%"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
 
-                <tr>
-                  <td class="mono"><span class="ph">[INV-Number]</span></td>
-                  <td>
-                    <div class="cust">
-                      <div class="cust-avatar">D</div>
-                      <div>
-                        <div class="cust-name">
-                          <span class="ph">[Customer Name]</span>
-                        </div>
-                        <div class="cust-sub">
-                          <span class="ph">[Table]</span>
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td><span class="ph">[Date Time]</span></td>
-                  <td class="num"><span class="ph">[Amount]</span></td>
-                  <td><span class="pill paid">Paid</span></td>
-                </tr>
-
-                <tr>
-                  <td class="mono"><span class="ph">[INV-Number]</span></td>
-                  <td>
-                    <div class="cust">
-                      <div class="cust-avatar">E</div>
-                      <div>
-                        <div class="cust-name">
-                          <span class="ph">[Customer Name]</span>
-                        </div>
-                        <div class="cust-sub">Walk-in</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td><span class="ph">[Date Time]</span></td>
-                  <td class="num"><span class="ph">[Amount]</span></td>
-                  <td><span class="pill draft">Draft</span></td>
-                </tr>
-
-              </tbody>
-            </table>
+        <!-- Top Categories -->
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h3>Top Categories</h3>
+              <p>By sales this month</p>
+            </div>
           </div>
 
-        </section>
+          <div class="card-body">
+            <div class="cat-list">
+              <div class="cat-item">
+                <div class="cat-row">
+                  <span class="cat-name">Starters</span>
+                  <span class="cat-val"><span class="ph">[Amount]</span> · 32%</span>
+                </div>
+                <div class="cat-track"><div class="cat-fill" style="width:92%"></div></div>
+              </div>
 
-        <!-- FOOTER -->
-        <footer class="page-footer">
-          <span>
-            <span class="ph">[Business Name]</span> ·
-            <span class="ph">[Version]</span>
-          </span>
+              <div class="cat-item">
+                <div class="cat-row">
+                  <span class="cat-name">Main Course</span>
+                  <span class="cat-val"><span class="ph">[Amount]</span> · 28%</span>
+                </div>
+                <div class="cat-track"><div class="cat-fill" style="width:82%"></div></div>
+              </div>
 
-          <span>
-            <a href="#">Privacy</a> · <a href="#">Docs</a>
-          </span>
-        </footer>
+              <div class="cat-item">
+                <div class="cat-row">
+                  <span class="cat-name">Beverages</span>
+                  <span class="cat-val"><span class="ph">[Amount]</span> · 18%</span>
+                </div>
+                <div class="cat-track"><div class="cat-fill" style="width:60%"></div></div>
+              </div>
 
-      </div>
-    </div>
+              <div class="cat-item">
+                <div class="cat-row">
+                  <span class="cat-name">Desserts</span>
+                  <span class="cat-val"><span class="ph">[Amount]</span> · 12%</span>
+                </div>
+                <div class="cat-track"><div class="cat-fill" style="width:42%"></div></div>
+              </div>
+
+              <div class="cat-item">
+                <div class="cat-row">
+                  <span class="cat-name">Others</span>
+                  <span class="cat-val"><span class="ph">[Amount]</span> · 10%</span>
+                </div>
+                <div class="cat-track"><div class="cat-fill" style="width:34%"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Key Metrics -->
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h3>Key Metrics</h3>
+              <p>Vs previous period</p>
+            </div>
+          </div>
+
+          <div class="card-body">
+            <div class="metric-grid" style="grid-template-columns: 1fr;">
+
+              <div class="metric">
+                <div class="metric-label">Gross Margin</div>
+                <div class="metric-value"><span class="ph">[%]</span></div>
+                <div class="metric-delta up">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M7 17L17 7M9 7h8v8"/>
+                  </svg>
+                  <span class="ph">[+%]</span> vs last month
+                </div>
+              </div>
+
+              <div class="metric">
+                <div class="metric-label">Repeat Customers</div>
+                <div class="metric-value"><span class="ph">[%]</span></div>
+                <div class="metric-delta up">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M7 17L17 7M9 7h8v8"/>
+                  </svg>
+                  <span class="ph">[+%]</span> vs last month
+                </div>
+              </div>
+
+              <div class="metric">
+                <div class="metric-label">Peak Hour</div>
+                <div class="metric-value"><span class="ph">[Time]</span></div>
+                <div class="metric-delta">
+                  <span class="ph">[Orders]</span> orders avg
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- HOURLY HEATMAP AND TOP PRODUCTS -->
+      <section class="row-2">
+
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h3>Hourly Sales Heatmap</h3>
+              <p>Average orders per hour today</p>
+            </div>
+            <div class="report-tabs">
+              <button class="report-tab active" type="button">Today</button>
+              <button class="report-tab" type="button">Week</button>
+            </div>
+          </div>
+
+          <div class="card-body">
+            <div class="hourly">
+              <div class="hour-cell" title="8 AM">8</div>
+              <div class="hour-cell level-1" title="9 AM">9</div>
+              <div class="hour-cell level-2" title="10 AM">10</div>
+              <div class="hour-cell level-3" title="11 AM">11</div>
+              <div class="hour-cell level-4" title="12 PM">12</div>
+              <div class="hour-cell level-5" title="1 PM">1</div>
+              <div class="hour-cell level-4" title="2 PM">2</div>
+              <div class="hour-cell level-3" title="3 PM">3</div>
+              <div class="hour-cell level-2" title="4 PM">4</div>
+              <div class="hour-cell level-3" title="5 PM">5</div>
+              <div class="hour-cell level-4" title="6 PM">6</div>
+              <div class="hour-cell level-4" title="7 PM">7</div>
+            </div>
+
+            <div class="hour-labels">
+              <span>8</span><span>9</span><span>10</span><span>11</span>
+              <span>12</span><span>1</span><span>2</span><span>3</span>
+              <span>4</span><span>5</span><span>6</span><span>7</span>
+            </div>
+
+            <div style="margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px dashed var(--border); display: flex; justify-content: space-between; align-items: center; font-size: var(--fs-xs); color: var(--text-muted);">
+              <span>Peak: <strong style="color: var(--text);"><span class="ph">[Hour]</span></strong></span>
+              <span>Slow: <strong style="color: var(--text);"><span class="ph">[Hour]</span></strong></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h3>Top Selling Products</h3>
+              <p>This week</p>
+            </div>
+          </div>
+
+          <div class="card-body">
+            <div class="prod-list">
+
+              <div class="prod-item">
+                <div class="prod-rank top">1</div>
+                <div class="prod-info">
+                  <div class="p-name">
+                    <span><span class="ph">[Product Name]</span></span>
+                    <span><span class="ph">[N]</span> sold</span>
+                  </div>
+                  <div class="prod-track"><div class="prod-fill" style="width:92%"></div></div>
+                </div>
+              </div>
+
+              <div class="prod-item">
+                <div class="prod-rank top">2</div>
+                <div class="prod-info">
+                  <div class="p-name">
+                    <span><span class="ph">[Product Name]</span></span>
+                    <span><span class="ph">[N]</span> sold</span>
+                  </div>
+                  <div class="prod-track"><div class="prod-fill" style="width:82%"></div></div>
+                </div>
+              </div>
+
+              <div class="prod-item">
+                <div class="prod-rank top">3</div>
+                <div class="prod-info">
+                  <div class="p-name">
+                    <span><span class="ph">[Product Name]</span></span>
+                    <span><span class="ph">[N]</span> sold</span>
+                  </div>
+                  <div class="prod-track"><div class="prod-fill" style="width:76%"></div></div>
+                </div>
+              </div>
+
+              <div class="prod-item">
+                <div class="prod-rank">4</div>
+                <div class="prod-info">
+                  <div class="p-name">
+                    <span><span class="ph">[Product Name]</span></span>
+                    <span><span class="ph">[N]</span> sold</span>
+                  </div>
+                  <div class="prod-track"><div class="prod-fill" style="width:64%"></div></div>
+                </div>
+              </div>
+
+              <div class="prod-item">
+                <div class="prod-rank">5</div>
+                <div class="prod-info">
+                  <div class="p-name">
+                    <span><span class="ph">[Product Name]</span></span>
+                    <span><span class="ph">[N]</span> sold</span>
+                  </div>
+                  <div class="prod-track"><div class="prod-fill" style="width:50%"></div></div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- WEEKLY COMPARISON AND CUSTOMER INSIGHT -->
+      <section class="row-2-even">
+
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h3>This Week vs Last Week</h3>
+              <p>Revenue comparison</p>
+            </div>
+          </div>
+
+          <div class="card-body">
+            <div class="metric-grid">
+              <div class="metric">
+                <div class="metric-label">This Week</div>
+                <div class="metric-value"><span class="ph">[Amount]</span></div>
+                <div class="metric-delta up">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M7 17L17 7M9 7h8v8"/>
+                  </svg>
+                  <span class="ph">[+%]</span>
+                </div>
+              </div>
+
+              <div class="metric">
+                <div class="metric-label">Last Week</div>
+                <div class="metric-value"><span class="ph">[Amount]</span></div>
+                <div class="metric-delta">baseline</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h3>Customer Insight</h3>
+              <p>New vs returning</p>
+            </div>
+          </div>
+
+          <div class="card-body">
+            <div class="split-bar">
+              <div class="split-seg s1" style="width:62%"></div>
+              <div class="split-seg s3" style="width:38%"></div>
+            </div>
+
+            <div class="split-legend">
+              <div class="split-legend-item">
+                <div class="sl-left">
+                  <span class="sl-dot s1"></span>
+                  <span class="sl-name">Returning</span>
+                </div>
+                <span class="sl-val">62% · <span class="ph">[N]</span></span>
+              </div>
+
+              <div class="split-legend-item">
+                <div class="sl-left">
+                  <span class="sl-dot s3"></span>
+                  <span class="sl-name">New</span>
+                </div>
+                <span class="sl-val">38% · <span class="ph">[N]</span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- RECENT INVOICES -->
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <h3>Recent Invoices</h3>
+            <p>Latest bills generated today</p>
+          </div>
+
+          <a class="btn btn-outline btn-sm" href="invoices.html">
+            View all
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 12h14M13 6l6 6-6 6"/>
+            </svg>
+          </a>
+        </div>
+
+        <div class="table-wrap">
+          <table class="inv-table">
+            <thead>
+              <tr>
+                <th>Invoice</th>
+                <th>Customer</th>
+                <th>Date</th>
+                <th style="text-align:right;">Amount</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              <tr>
+                <td class="mono"><span class="ph">[INV-Number]</span></td>
+                <td>
+                  <div class="cust">
+                    <div class="cust-avatar">A</div>
+                    <div>
+                      <div class="cust-name"><span class="ph">[Customer Name]</span></div>
+                      <div class="cust-sub"><span class="ph">[Table]</span></div>
+                    </div>
+                  </div>
+                </td>
+                <td><span class="ph">[Date Time]</span></td>
+                <td class="num"><span class="ph">[Amount]</span></td>
+                <td><span class="pill paid">Paid</span></td>
+              </tr>
+
+              <tr>
+                <td class="mono"><span class="ph">[INV-Number]</span></td>
+                <td>
+                  <div class="cust">
+                    <div class="cust-avatar">B</div>
+                    <div>
+                      <div class="cust-name"><span class="ph">[Customer Name]</span></div>
+                      <div class="cust-sub">Walk-in</div>
+                    </div>
+                  </div>
+                </td>
+                <td><span class="ph">[Date Time]</span></td>
+                <td class="num"><span class="ph">[Amount]</span></td>
+                <td><span class="pill paid">Paid</span></td>
+              </tr>
+
+              <tr>
+                <td class="mono"><span class="ph">[INV-Number]</span></td>
+                <td>
+                  <div class="cust">
+                    <div class="cust-avatar">C</div>
+                    <div>
+                      <div class="cust-name"><span class="ph">[Customer Name]</span></div>
+                      <div class="cust-sub"><span class="ph">[Table]</span></div>
+                    </div>
+                  </div>
+                </td>
+                <td><span class="ph">[Date Time]</span></td>
+                <td class="num"><span class="ph">[Amount]</span></td>
+                <td><span class="pill pending">Pending</span></td>
+              </tr>
+
+              <tr>
+                <td class="mono"><span class="ph">[INV-Number]</span></td>
+                <td>
+                  <div class="cust">
+                    <div class="cust-avatar">D</div>
+                    <div>
+                      <div class="cust-name"><span class="ph">[Customer Name]</span></div>
+                      <div class="cust-sub"><span class="ph">[Table]</span></div>
+                    </div>
+                  </div>
+                </td>
+                <td><span class="ph">[Date Time]</span></td>
+                <td class="num"><span class="ph">[Amount]</span></td>
+                <td><span class="pill paid">Paid</span></td>
+              </tr>
+
+              <tr>
+                <td class="mono"><span class="ph">[INV-Number]</span></td>
+                <td>
+                  <div class="cust">
+                    <div class="cust-avatar">E</div>
+                    <div>
+                      <div class="cust-name"><span class="ph">[Customer Name]</span></div>
+                      <div class="cust-sub">Walk-in</div>
+                    </div>
+                  </div>
+                </td>
+                <td><span class="ph">[Date Time]</span></td>
+                <td class="num"><span class="ph">[Amount]</span></td>
+                <td><span class="pill draft">Draft</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- FOOTER -->
+      <footer class="page-footer">
+        <span>
+          <span class="ph">[Business Name]</span> ·
+          <span class="ph">[Version]</span>
+        </span>
+        <span>
+          <a href="invoices.html">Invoices</a> ·
+          <a href="reports.html">Reports</a> ·
+          <a href="products.html">Products</a> ·
+          <a href="categories.html">Categories</a> ·
+          <a href="settings.html">Settings</a>
+        </span>
+      </footer>
+
+    </main>
   </div>
+</div>
 
-  <script src="script.js" defer></script>
+<!-- Shared responsive shell + page-specific dashboard logic -->
+<script src="script.js" defer></script>
+<script src="js/dashboard.js" defer></script>
 </body>
 </html>
