@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -26,6 +27,7 @@
 
     <div class="brand">
       <div class="brand-mark">B</div>
+
       <div class="brand-text">
         <h1>[Business Name]</h1>
         <span>Restaurant Billing</span>
@@ -105,9 +107,11 @@
       <div class="target-card">
         <div class="label">Today's Target</div>
         <div class="value">₹25,000</div>
+
         <div class="target-track">
           <div class="target-fill"></div>
         </div>
+
         <div class="target-meta">
           <span>Progress</span>
           <span>Demo</span>
@@ -158,6 +162,7 @@
             <div class="name">[Owner Name]</div>
             <div class="role">Owner</div>
           </div>
+
           <div class="avatar">O</div>
         </button>
 
@@ -168,7 +173,6 @@
     <!-- PAGE CONTENT -->
     <main class="content">
 
-      <!-- PAGE HEADING -->
       <section class="page-head">
         <div>
           <h2>Create New Invoice</h2>
@@ -199,7 +203,6 @@
           </div>
 
           <div class="card-body">
-
             <div class="invoice-details-grid">
 
               <label class="form-field">
@@ -240,7 +243,6 @@
               </label>
 
             </div>
-
           </div>
 
         </section>
@@ -258,7 +260,6 @@
           </div>
 
           <div class="card-body">
-
             <div class="invoice-details-grid">
 
               <label class="form-field">
@@ -304,7 +305,6 @@
               </label>
 
             </div>
-
           </div>
 
         </section>
@@ -374,7 +374,6 @@
 
           <!-- SELECTED ITEMS TABLE -->
           <div class="table-wrap">
-
             <table class="inv-table" id="invoiceItemsTable">
 
               <thead>
@@ -388,7 +387,6 @@
               </thead>
 
               <tbody id="invoiceItemsBody">
-
                 <tr id="emptyItemsRow">
                   <td colspan="5" style="text-align:center;padding:36px 16px;">
                     <strong>No items added yet</strong>
@@ -397,15 +395,14 @@
                     </div>
                   </td>
                 </tr>
-
               </tbody>
 
             </table>
-
           </div>
 
           <div class="card-head">
             <p id="itemCount">0 items added</p>
+
             <button
               class="btn btn-soft btn-sm"
               type="button"
@@ -428,7 +425,6 @@
           </div>
 
           <div class="card-body">
-
             <div class="invoice-summary-layout">
 
               <div class="invoice-summary-notes">
@@ -508,9 +504,7 @@
                 </p>
 
               </div>
-
             </div>
-
           </div>
 
         </section>
@@ -528,11 +522,9 @@
           <div class="card-body">
 
             <fieldset class="payment-methods">
-
               <legend>Select payment method</legend>
 
               <label class="payment-option" for="paymentCash">
-
                 <input
                   type="radio"
                   name="paymentMethod"
@@ -546,11 +538,9 @@
                   <strong>Cash</strong>
                   <small>Payment received in cash</small>
                 </span>
-
               </label>
 
               <label class="payment-option" for="paymentUPI">
-
                 <input
                   type="radio"
                   name="paymentMethod"
@@ -563,7 +553,6 @@
                   <strong>UPI</strong>
                   <small>Payment through UPI</small>
                 </span>
-
               </label>
 
             </fieldset>
@@ -578,11 +567,11 @@
           class="invoice-message"
           role="status"
           aria-live="polite"
+          hidden
         ></div>
 
         <!-- ACTIONS -->
         <section class="card">
-
           <div class="card-body">
 
             <div class="invoice-footer-actions">
@@ -614,11 +603,9 @@
                 </button>
 
               </div>
-
             </div>
 
           </div>
-
         </section>
 
       </form>
@@ -636,11 +623,16 @@
 <!-- Shared interface functionality -->
 <script src="script.js" defer></script>
 
+<!-- Firebase configuration and authentication -->
+<script src="js/firebase-config.js" defer></script>
+<script src="js/auth.js" defer></script>
+<script src="js/guard.js" defer></script>
+
+<!-- Logout functionality -->
+<script src="js/logout.js" defer></script>
+
 <!-- New Invoice page-specific functionality -->
 <script src="js/invoice.js" defer></script>
-  <script src="js/firebase-config.js"></script>
-<script src="js/auth.js"></script>
-<script src="js/guard.js"></script>
 
 </body>
 </html>
