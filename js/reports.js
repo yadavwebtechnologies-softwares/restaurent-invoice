@@ -1,41 +1,39 @@
+
 "use strict";
 
 /*
  * Restaurant Billing Software
  * File: js/reports.js
  *
- * Phase 1: Frontend analytics with clearly identified demo data.
+ * Real Firebase Realtime Database analytics.
  *
- * Features:
- * - Executive KPIs
- * - Sales trends by hour, day, week and month
- * - Product and category revenue analysis
- * - Hourly and weekday sales analytics
- * - Current vs previous period comparisons
- * - Automated business insights
- * - Category, product and date filters
- * - Product performance and category tables
- * - CSV report exports
+ * Reads:
+ * restaurantBilling/invoices
+ * restaurantBilling/products
+ * restaurantBilling/categories
  *
- * Important:
- * The dataset below is illustrative demo data, not actual sales.
- * Firebase Realtime Database integration will replace the demo
- * dataset with real invoice and invoice-item records.
+ * Uses shared services from:
+ * js/firebase-config.js
+ * js/auth.js
  *
- * Sales revenue is not profit.
- * Profit analysis requires costs and expenses.
+ * No generated demo transactions.
+ * No hardcoded demo products.
+ * Charts are responsive inline SVG.
+ *
+ * Revenue is not profit. Profit calculations require costs
+ * and expense records.
  */
 
 (() => {
   // ==================================================
-  // 1. DOM REFERENCES
+  // 1. DOM AND STATE
   // ==================================================
 
-  const $ = (selector, parent = document) =>
-    parent.querySelector(selector);
+  const $ = (selector, root = document) =>
+    root.querySelector(selector);
 
-  const $$ = (selector, parent = document) =>
-    Array.from(parent.querySelectorAll(selector));
+  const $$ = (selector, root = document) =>
+    Array.from(root.querySelectorAll(selector));
 
   const filtersForm = $("#reportFilters");
   const periodSelect = $("#reportPeriod");
@@ -54,16 +52,22 @@
   const filterMessage = $("#reportFilterMessage");
   const dataStatus = $("#reportDataStatus");
 
-  if (!filtersForm || !periodSelect) {
-    console.error("Reports: Required filter elements were not found.");
-    return;
-  }
+  const ADMIN_UID = "20wif9y7LQhBZgFPDsAlrQpFjnI2";
 
-  // ==================================================
-  // 2. CONSTANTS
-  // ==================================================
+  const DATABASE_PATH = "restaurantBilling";
 
-  const MAX_DAYS = 120;
+  const state = {
+    root: {},
+    invoices: [],
+    products: [],
+    categories: [],
+    productMap: new Map(),
+    categoryMap: new Map(),
+    unsubscribe: null,
+    latestReport: null,
+    firebaseReady: false,
+    destroyed: false
+  };
 
   const moneyFormat = new Intl.NumberFormat("en-IN", {
     style: "currency",
@@ -96,106 +100,14 @@
     "Saturday"
   ];
 
-  // ==================================================
-  // 3. DEMO PRODUCT CATALOG
-  // ==================================================
-
-  const demoProducts = [
-    {
-      id: "P001",
-      name: "Chicken Biryani",
-      category: "Biryani",
-      price: 180
-    },
-    {
-      id: "P002",
-      name: "Paneer Butter Masala",
-      category: "Main Course",
-      price: 160
-    },
-    {
-      id: "P003",
-      name: "French Fries",
-      category: "Starters",
-      price: 90
-    },
-    {
-      id: "P004",
-      name: "Cold Coffee",
-      category: "Beverages",
-      price: 100
-    },
-    {
-      id: "P005",
-      name: "Chocolate Brownie",
-      category: "Desserts",
-      price: 120
-    },
-    {
-      id: "P006",
-      name: "Veg Biryani",
-      category: "Biryani",
-      price: 140
-    },
-    {
-      id: "P007",
-      name: "Chicken Soup",
-      category: "Soups",
-      price: 110
-    },
-    {
-      id: "P008",
-      name: "Family Meal Combo",
-      category: "Combos",
-      price: 450
-    },
-    {
-      id: "P009",
-      name: "Masala Tea",
-      category: "Beverages",
-      price: 30
-    },
-    {
-      id: "P010",
-      name: "Paneer Tikka",
-      category: "Starters",
-      price: 190
-    },
-    {
-      id: "P011",
-      name: "Seasonal Special Thali",
-      category: "Seasonal Specials",
-      price: 250
-    },
-    {
-      id: "P012",
-      name: "Gulab Jamun",
-      category: "Desserts",
-      price: 60
-    }
+  const MONTHS = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
   ];
 
-  const productMap = new Map(
-    demoProducts.map(product => [product.id, product])
-  );
-
   // ==================================================
-  // 4. GENERAL HELPERS
+  // 2. GENERAL HELPERS
   // ==================================================
-
-  function escapeHTML(value) {
-    return String(value ?? "").replace(/[&<>"']/g, character => {
-      const entities = {
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#39;"
-      };
-
-      return entities[character];
-    });
-  }
 
   function money(value) {
     return moneyFormat.format(Number(value) || 0);
@@ -217,8 +129,50 @@
     return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
   }
 
+  function number(value, fallback = 0) {
+    const parsed = Number(value);
+
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
   function normalise(value) {
     return String(value ?? "").trim().toLowerCase();
+  }
+
+  function setText(selector, value) {
+    const element = typeof selector === "string"
+      ? $(selector)
+      : selector;
+
+    if (element) {
+      element.textContent = String(value ?? "");
+    }
+  }
+
+  function setMessage(message, type = "info") {
+    if (!filterMessage) {
+      if (message) console.info("Reports:", message);
+      return;
+    }
+
+    filterMessage.textContent = message;
+
+    if (message) {
+      filterMessage.dataset.type = type;
+    } else {
+      delete filterMessage.dataset.type;
+    }
+  }
+
+  function setStatus(message, type = "info") {
+    if (!dataStatus) return;
+
+    dataStatus.textContent = message;
+    dataStatus.dataset.type = type;
+  }
+
+  function clearMessage() {
+    setMessage("");
   }
 
   function localDateString(date = new Date()) {
@@ -229,24 +183,45 @@
     return `${year}-${month}-${day}`;
   }
 
-  function parseLocalDate(dateString) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateString))) {
-      return null;
+  function parseLocalDate(value) {
+    if (value instanceof Date) {
+      return Number.isNaN(value.getTime()) ? null : new Date(value);
     }
 
-    const [year, month, day] = dateString.split("-").map(Number);
+    if (typeof value === "number" && Number.isFinite(value)) {
+      const timestamp = value < 1e12 ? value * 1000 : value;
+      const result = new Date(timestamp);
 
-    const date = new Date(year, month - 1, day);
-
-    if (
-      date.getFullYear() !== year ||
-      date.getMonth() !== month - 1 ||
-      date.getDate() !== day
-    ) {
-      return null;
+      return Number.isNaN(result.getTime()) ? null : result;
     }
 
-    return date;
+    const text = String(value ?? "").trim();
+
+    if (!text) return null;
+
+    const match = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+    if (match) {
+      const result = new Date(
+        Number(match[1]),
+        Number(match[2]) - 1,
+        Number(match[3])
+      );
+
+      if (
+        result.getFullYear() !== Number(match[1]) ||
+        result.getMonth() !== Number(match[2]) - 1 ||
+        result.getDate() !== Number(match[3])
+      ) {
+        return null;
+      }
+
+      return result;
+    }
+
+    const result = new Date(text);
+
+    return Number.isNaN(result.getTime()) ? null : result;
   }
 
   function addDays(date, days) {
@@ -261,10 +236,10 @@
     return result;
   }
 
-  function formatShortDate(dateString) {
-    const date = parseLocalDate(dateString);
+  function formatShortDate(dateKey) {
+    const date = parseLocalDate(dateKey);
 
-    if (!date) return dateString;
+    if (!date) return String(dateKey ?? "");
 
     return new Intl.DateTimeFormat("en-IN", {
       day: "numeric",
@@ -272,10 +247,10 @@
     }).format(date);
   }
 
-  function formatMonth(dateString) {
-    const date = parseLocalDate(dateString);
+  function formatMonth(dateKey) {
+    const date = parseLocalDate(dateKey);
 
-    if (!date) return dateString;
+    if (!date) return String(dateKey ?? "");
 
     return new Intl.DateTimeFormat("en-IN", {
       month: "short",
@@ -290,294 +265,719 @@
     return `${displayHour} ${suffix}`;
   }
 
-  function showMessage(message, isError = false) {
-    filterMessage.textContent = message;
-
-    filterMessage.dataset.type = isError ? "error" : "info";
+  function dateKeyFor(date) {
+    return localDateString(date);
   }
 
-  function clearMessage() {
-    filterMessage.textContent = "";
-    delete filterMessage.dataset.type;
-  }
+  function recordsFrom(value) {
+    if (!value || typeof value !== "object") {
+      return [];
+    }
 
-  // ==================================================
-  // 5. GENERATE CLEARLY LABELLED DEMO TRANSACTIONS
-  // ==================================================
+    if (Array.isArray(value)) {
+      return value
+        .map((item, index) => {
+          if (!item || typeof item !== "object") return null;
 
-  /*
-   * These records are generated for demonstrating the analytics.
-   * They are NOT actual restaurant transactions.
-   *
-   * Each invoice contains:
-   * - Local date and timestamp
-   * - Cash or UPI
-   * - Product-level line items
-   * - Quantities, unit prices and line revenue
-   * - Generated/cancelled status
-   */
+          return {
+            ...item,
+            id: item.id || item.key || String(index)
+          };
+        })
+        .filter(Boolean);
+    }
 
-  let randomState = 0x4a2f18b7;
+    return Object.entries(value)
+      .map(([key, item]) => {
+        if (!item || typeof item !== "object") return null;
 
-  function seededRandom() {
-    randomState = (
-      Math.imul(randomState, 1664525) + 1013904223
-    ) >>> 0;
-
-    return randomState / 4294967296;
-  }
-
-  function choose(items) {
-    return items[Math.floor(seededRandom() * items.length)];
-  }
-
-  function generateDemoTransactions() {
-    randomState = 0x4a2f18b7;
-
-    const transactions = [];
-    const today = new Date();
-
-    today.setHours(0, 0, 0, 0);
-
-    const popularHours = [
-      8, 9, 10, 11, 12, 12, 13, 13,
-      14, 15, 17, 18, 18, 19, 19, 20, 21, 21, 22
-    ];
-
-    for (let daysAgo = MAX_DAYS - 1; daysAgo >= 0; daysAgo--) {
-      const date = addDays(today, -daysAgo);
-
-      const isoDate = localDateString(date);
-
-      /*
-       * Vary daily activity to create a non-flat demonstration
-       * dataset with busy and quiet trading days.
-       */
-
-      const dayIndex = MAX_DAYS - 1 - daysAgo;
-
-      const weekendBonus =
-        date.getDay() === 0 || date.getDay() === 6 ? 2 : 0;
-
-      const invoiceCount =
-        4 + (dayIndex % 7) + weekendBonus;
-
-      for (let index = 0; index < invoiceCount; index++) {
-        const hour = choose(popularHours);
-
-        const minute = Math.floor(seededRandom() * 60);
-        const second = Math.floor(seededRandom() * 60);
-
-        const timestamp = new Date(date);
-
-        timestamp.setHours(hour, minute, second, 0);
-
-        const itemCount = 1 + Math.floor(seededRandom() * 4);
-
-        const selectedProducts = new Set();
-        const items = [];
-
-        while (selectedProducts.size < itemCount) {
-          const product = choose(demoProducts);
-          selectedProducts.add(product.id);
-        }
-
-        for (const productId of selectedProducts) {
-          const product = productMap.get(productId);
-
-          const quantity = 1 + Math.floor(seededRandom() * 3);
-
-          items.push({
-            productId: product.id,
-            productName: product.name,
-            category: product.category,
-            quantity,
-            unitPrice: product.price,
-            revenue: roundMoney(product.price * quantity)
-          });
-        }
-
-        const cancelled = seededRandom() < 0.025;
-
-        const transaction = {
-          id: `DEMO-${isoDate.replace(/-/g, "")}-${String(index + 1).padStart(3, "0")}`,
-          date: isoDate,
-          hour,
-          timestamp,
-          paymentMethod: seededRandom() < 0.55 ? "cash" : "upi",
-          status: cancelled ? "cancelled" : "generated",
-          items
+        return {
+          ...item,
+          id: item.id || item.key || key
         };
+      })
+      .filter(Boolean);
+  }
 
-        transaction.revenue = roundMoney(
-          items.reduce((sum, item) => sum + item.revenue, 0)
+  function csvCell(value) {
+    let text = String(value ?? "");
+
+    // Reduce spreadsheet formula-injection risk.
+    if (/^[\s]*[=+\-@]/.test(text)) {
+      text = "'" + text;
+    }
+
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+
+  function downloadCSV(rows, filename) {
+    if (!rows.length) {
+      setMessage("Export karne ke liye data available nahi hai.", "error");
+      return;
+    }
+
+    const csv = rows
+      .map(row => row.map(csvCell).join(","))
+      .join("\r\n");
+
+    const blob = new Blob(
+      ["\uFEFF", csv],
+      { type: "text/csv;charset=utf-8;" }
+    );
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = filename;
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  // ==================================================
+  // 3. FIREBASE CONNECTION
+  // ==================================================
+
+  async function getFirebase() {
+    const firebase = window.restaurantFirebase;
+
+    if (!firebase?.ready) {
+      throw new Error(
+        "Firebase service nahi mila. firebase-config.js check karein."
+      );
+    }
+
+    const initialized = await firebase.ready;
+
+    if (
+      !initialized ||
+      !firebase.auth ||
+      !firebase.db ||
+      !firebase.sdk?.auth ||
+      !firebase.sdk?.database
+    ) {
+      throw new Error(
+        "Firebase Authentication ya Realtime Database initialize nahi hua."
+      );
+    }
+
+    return firebase;
+  }
+
+  async function waitForAdministrator(firebase) {
+    const auth = firebase.auth;
+    const authSDK = firebase.sdk.auth;
+
+    if (auth.currentUser) {
+      if (auth.currentUser.uid === ADMIN_UID) {
+        return auth.currentUser;
+      }
+
+      throw new Error("Authorized administrator account se login karein.");
+    }
+
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      let unsubscribe = null;
+
+      const timeout = window.setTimeout(() => {
+        if (settled) return;
+
+        settled = true;
+
+        if (unsubscribe) unsubscribe();
+
+        reject(
+          new Error("Authentication check timeout ho gaya. Page reload karein.")
         );
+      }, 15000);
 
-        transactions.push(transaction);
+      unsubscribe = authSDK.onAuthStateChanged(
+        auth,
+        user => {
+          if (settled) return;
+
+          settled = true;
+          window.clearTimeout(timeout);
+          unsubscribe?.();
+
+          if (user?.uid === ADMIN_UID) {
+            resolve(user);
+          } else {
+            reject(
+              new Error(
+                "Reports access ke liye authorized owner login zaroori hai."
+              )
+            );
+          }
+        },
+        error => {
+          if (settled) return;
+
+          settled = true;
+          window.clearTimeout(timeout);
+          unsubscribe?.();
+
+          reject(error);
+        }
+      );
+    });
+  }
+
+  // ==================================================
+  // 4. DATABASE RECORD NORMALIZATION
+  // ==================================================
+
+  function getProductId(product) {
+    return String(
+      product?.id ||
+      product?.productId ||
+      product?.productID ||
+      ""
+    );
+  }
+
+  function getProductName(product) {
+    return String(
+      product?.name ||
+      product?.productName ||
+      product?.title ||
+      "Unnamed product"
+    );
+  }
+
+  function getCategoryId(category) {
+    return String(
+      category?.id ||
+      category?.categoryId ||
+      category?.categoryID ||
+      ""
+    );
+  }
+
+  function getCategoryName(category) {
+    return String(
+      category?.name ||
+      category?.categoryName ||
+      category?.title ||
+      "Uncategorized"
+    );
+  }
+
+  function findProduct(item) {
+    const itemId = String(
+      item?.productId ||
+      item?.productID ||
+      item?.id ||
+      ""
+    );
+
+    if (itemId && state.productMap.has(itemId)) {
+      return state.productMap.get(itemId);
+    }
+
+    const itemName = normalise(
+      item?.name ||
+      item?.productName ||
+      item?.title
+    );
+
+    if (!itemName) return null;
+
+    return state.products.find(product =>
+      normalise(getProductName(product)) === itemName
+    ) || null;
+  }
+
+  function resolveCategory(item, product) {
+    const directName =
+      item?.categoryName ||
+      item?.category ||
+      product?.categoryName ||
+      (typeof product?.category === "string" ? product.category : "");
+
+    if (directName) {
+      return String(directName);
+    }
+
+    const categoryId = String(
+      item?.categoryId ||
+      item?.categoryID ||
+      product?.categoryId ||
+      product?.categoryID ||
+      (typeof product?.category === "object"
+        ? product.category.id || product.category.categoryId || ""
+        : "")
+    );
+
+    if (categoryId && state.categoryMap.has(categoryId)) {
+      return getCategoryName(state.categoryMap.get(categoryId));
+    }
+
+    return "Uncategorized";
+  }
+
+  function getItemQuantity(item) {
+    return Math.max(0, number(item?.quantity ?? item?.qty, 0));
+  }
+
+  function getItemPrice(item) {
+    return Math.max(
+      0,
+      number(
+        item?.price ??
+        item?.unitPrice ??
+        item?.rate,
+        0
+      )
+    );
+  }
+
+  function getItemRevenue(item) {
+    const value = item?.amount ?? item?.lineTotal ?? item?.revenue;
+
+    if (value !== undefined && value !== null && value !== "") {
+      const parsed = Number(value);
+
+      if (Number.isFinite(parsed) && parsed >= 0) {
+        return roundMoney(parsed);
       }
     }
 
-    return transactions;
+    return roundMoney(getItemPrice(item) * getItemQuantity(item));
   }
 
-  const demoTransactions = generateDemoTransactions();
+  function getItems(invoice) {
+    const value =
+      invoice?.items ||
+      invoice?.orderItems ||
+      invoice?.products ||
+      [];
 
-  const minimumAvailableDate =
-    demoTransactions[0].date;
+    return recordsFrom(value);
+  }
 
-  const maximumAvailableDate =
-    demoTransactions[demoTransactions.length - 1].date;
+  function getInvoiceDate(invoice) {
+    let date = parseLocalDate(
+      invoice?.invoiceDate ||
+      invoice?.date ||
+      invoice?.createdAt ||
+      invoice?.timestamp
+    );
+
+    if (!date) return null;
+
+    // Combine an explicit invoice time with a date-only value.
+    const time = String(
+      invoice?.invoiceTime ||
+      invoice?.time ||
+      ""
+    );
+
+    const match = time.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+
+    if (
+      match &&
+      date.getHours() === 0 &&
+      date.getMinutes() === 0 &&
+      date.getSeconds() === 0
+    ) {
+      const hours = Number(match[1]);
+      const minutes = Number(match[2]);
+      const seconds = Number(match[3] || 0);
+
+      if (
+        hours >= 0 && hours <= 23 &&
+        minutes >= 0 && minutes <= 59 &&
+        seconds >= 0 && seconds <= 59
+      ) {
+        date.setHours(hours, minutes, seconds, 0);
+      }
+    }
+
+    return date;
+  }
+
+  function getInvoiceNumber(invoice) {
+    return String(
+      invoice?.invoiceNumber ||
+      invoice?.number ||
+      invoice?.id ||
+      "Invoice"
+    );
+  }
+
+  function getInvoiceCustomer(invoice) {
+    return String(
+      invoice?.customerName ||
+      invoice?.customer ||
+      "Walk-in Customer"
+    );
+  }
+
+  function getInvoicePayment(invoice) {
+    return normalise(
+      invoice?.paymentMethod ||
+      invoice?.payment ||
+      ""
+    );
+  }
+
+  function getInvoiceStatus(invoice) {
+    return normalise(
+      invoice?.status ||
+      invoice?.invoiceStatus ||
+      invoice?.recordStatus ||
+      "generated"
+    );
+  }
+
+  function isCancelled(invoice) {
+    const status = getInvoiceStatus(invoice);
+
+    return status.includes("cancel");
+  }
+
+  function isDraft(invoice) {
+    return getInvoiceStatus(invoice).includes("draft");
+  }
+
+  function isIncludedInSales(invoice) {
+    return !isCancelled(invoice) && !isDraft(invoice);
+  }
+
+  function getInvoiceTotal(invoice) {
+    return Math.max(
+      0,
+      number(
+        invoice?.grandTotal ??
+        invoice?.total ??
+        invoice?.amount ??
+        invoice?.totals?.grandTotal,
+        0
+      )
+    );
+  }
+
+  function normaliseInvoice(invoice) {
+    const date = getInvoiceDate(invoice);
+    const rawItems = getItems(invoice);
+
+    const items = rawItems.map(item => {
+      const product = findProduct(item);
+
+      return {
+        productId: String(
+          item?.productId ||
+          item?.productID ||
+          item?.id ||
+          getProductId(product) ||
+          ""
+        ),
+
+        name: String(
+          item?.name ||
+          item?.productName ||
+          getProductName(product)
+        ),
+
+        category: resolveCategory(item, product),
+
+        quantity: getItemQuantity(item),
+        price: getItemPrice(item),
+        revenue: getItemRevenue(item)
+      };
+    });
+
+    return {
+      id: String(invoice?.id || invoice?.key || ""),
+      number: getInvoiceNumber(invoice),
+      customer: getInvoiceCustomer(invoice),
+      date,
+      dateKey: date ? dateKeyFor(date) : "",
+      hour: date ? date.getHours() : null,
+      payment: getInvoicePayment(invoice),
+      status: getInvoiceStatus(invoice),
+      cancelled: isCancelled(invoice),
+      draft: isDraft(invoice),
+      total: getInvoiceTotal(invoice),
+      items,
+      raw: invoice
+    };
+  }
+
+  function loadDatabaseData(root) {
+    state.root = root || {};
+
+    /*
+     * Standard paths:
+     * restaurantBilling/invoices
+     * restaurantBilling/products
+     * restaurantBilling/categories
+     *
+     * Alternative invoice paths support older project schemas.
+     */
+
+    state.products = recordsFrom(
+      state.root.products ||
+      state.root.catalog?.products
+    );
+
+    state.categories = recordsFrom(
+      state.root.categories ||
+      state.root.catalog?.categories
+    );
+
+    state.productMap = new Map();
+
+    state.products.forEach(product => {
+      const id = getProductId(product);
+
+      if (id) state.productMap.set(id, product);
+    });
+
+    state.categoryMap = new Map();
+
+    state.categories.forEach(category => {
+      const id = getCategoryId(category);
+
+      if (id) state.categoryMap.set(id, category);
+    });
+
+    const invoiceRecords =
+      state.root.invoices ||
+      state.root.invoiceRecords ||
+      state.root.sales ||
+      state.root.billing?.invoices ||
+      {};
+
+    state.invoices = recordsFrom(invoiceRecords)
+      .map(normaliseInvoice)
+      .filter(invoice => invoice.dateKey);
+
+    populateCategoryOptions();
+    populateProductOptions();
+  }
 
   // ==================================================
-  // 6. POPULATE PRODUCT / CATEGORY FILTERS
+  // 5. CATEGORY AND PRODUCT FILTER OPTIONS
   // ==================================================
 
   function populateCategoryOptions() {
+    if (!categorySelect) return;
+
     const previousValue = categorySelect.value;
 
-    const categories = [
-      ...new Set(demoProducts.map(product => product.category))
+    const names = [
+      ...new Set([
+        ...state.categories.map(getCategoryName),
+        ...state.products.map(product => {
+          const categoryId = String(
+            product.categoryId ||
+            product.categoryID ||
+            (typeof product.category === "object"
+              ? product.category.id || product.category.categoryId || ""
+              : "")
+          );
+
+          if (product.categoryName) return product.categoryName;
+
+          if (typeof product.category === "string" && product.category) {
+            return product.category;
+          }
+
+          if (categoryId && state.categoryMap.has(categoryId)) {
+            return getCategoryName(state.categoryMap.get(categoryId));
+          }
+
+          return "";
+        })
+      ].filter(name => name && name !== "Uncategorized")
     ].sort((a, b) => a.localeCompare(b));
 
-    categorySelect.innerHTML = `
-      <option value="">All Categories</option>
-      ${categories.map(category => `
-        <option value="${escapeHTML(category)}">
-          ${escapeHTML(category)}
-        </option>
-      `).join("")}
-    `;
+    categorySelect.replaceChildren();
 
-    if (categories.includes(previousValue)) {
+    categorySelect.add(new Option("All Categories", ""));
+
+    names.forEach(name => {
+      categorySelect.add(new Option(name, name));
+    });
+
+    if (names.includes(previousValue)) {
       categorySelect.value = previousValue;
     }
   }
 
   function populateProductOptions() {
+    if (!productSelect) return;
+
     const previousValue = productSelect.value;
-    const selectedCategory = categorySelect.value;
+    const selectedCategory = categorySelect?.value || "";
 
-    const products = demoProducts
-      .filter(product => (
-        !selectedCategory || product.category === selectedCategory
-      ))
-      .sort((a, b) => a.name.localeCompare(b.name));
+    const products = state.products.filter(product => {
+      if (!selectedCategory) return true;
 
-    productSelect.innerHTML = `
-      <option value="">All Products</option>
-      ${products.map(product => `
-        <option value="${escapeHTML(product.id)}">
-          ${escapeHTML(product.name)}
-        </option>
-      `).join("")}
-    `;
+      const category = resolveCategory({}, product);
 
-    if (products.some(product => product.id === previousValue)) {
+      return category === selectedCategory;
+    });
+
+    productSelect.replaceChildren();
+    productSelect.add(new Option("All Products", ""));
+
+    products
+      .sort((a, b) =>
+        getProductName(a).localeCompare(getProductName(b))
+      )
+      .forEach(product => {
+        const id = getProductId(product);
+
+        if (id) {
+          productSelect.add(
+            new Option(getProductName(product), id)
+          );
+        }
+      });
+
+    if (products.some(product => getProductId(product) === previousValue)) {
       productSelect.value = previousValue;
     }
   }
 
-  categorySelect.addEventListener("change", () => {
-    populateProductOptions();
-  });
-
-  populateCategoryOptions();
-  populateProductOptions();
+  categorySelect?.addEventListener("change", populateProductOptions);
 
   // ==================================================
-  // 7. DATE RANGE FILTERS
+  // 6. REPORT DATE RANGE
   // ==================================================
+
+  function getPeriodKey() {
+    return normalise(periodSelect?.value || "30days");
+  }
 
   function getSelectedDateRange() {
-    const today = new Date();
+    const now = new Date();
+    const today = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
+    );
 
-    today.setHours(0, 0, 0, 0);
+    const todayKey = localDateString(today);
+    const period = getPeriodKey();
 
-    const todayString = localDateString(today);
-    const period = periodSelect.value;
-
-    if (period === "today") {
+    if (["today"].includes(period)) {
       return {
-        from: todayString,
-        to: todayString,
+        from: todayKey,
+        to: todayKey,
         label: "Today",
         valid: true
       };
     }
 
-    if (period === "7days" || period === "30days") {
-      const count = period === "7days" ? 7 : 30;
+    if (["yesterday"].includes(period)) {
+      const day = addDays(today, -1);
 
       return {
-        from: localDateString(addDays(today, 1 - count)),
-        to: todayString,
-        label: period === "7days" ? "Last 7 Days" : "Last 30 Days",
+        from: localDateString(day),
+        to: localDateString(day),
+        label: "Yesterday",
         valid: true
       };
     }
 
-    if (period === "month") {
-      const firstDay = new Date(
-        today.getFullYear(),
-        today.getMonth(),
-        1
-      );
+    if (["week", "thisweek", "this-week"].includes(period)) {
+      const weekday = today.getDay();
+      const monday = addDays(today, weekday === 0 ? -6 : 1 - weekday);
 
       return {
-        from: localDateString(firstDay),
-        to: todayString,
+        from: localDateString(monday),
+        to: todayKey,
+        label: "This Week",
+        valid: true
+      };
+    }
+
+    if (["7days", "last7days", "last-7-days"].includes(period)) {
+      return {
+        from: localDateString(addDays(today, -6)),
+        to: todayKey,
+        label: "Last 7 Days",
+        valid: true
+      };
+    }
+
+    if (["30days", "last30days", "last-30-days"].includes(period)) {
+      return {
+        from: localDateString(addDays(today, -29)),
+        to: todayKey,
+        label: "Last 30 Days",
+        valid: true
+      };
+    }
+
+    if (["month", "thismonth", "this-month"].includes(period)) {
+      return {
+        from: localDateString(new Date(now.getFullYear(), now.getMonth(), 1)),
+        to: todayKey,
         label: "This Month",
         valid: true
       };
     }
 
-    if (period === "previousMonth") {
-      const firstDay = new Date(
-        today.getFullYear(),
-        today.getMonth() - 1,
-        1
-      );
-
-      const lastDay = new Date(
-        today.getFullYear(),
-        today.getMonth(),
-        0
-      );
+    if (["previousmonth", "lastmonth", "previous-month"].includes(period)) {
+      const first = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const last = new Date(now.getFullYear(), now.getMonth(), 0);
 
       return {
-        from: localDateString(firstDay),
-        to: localDateString(lastDay),
+        from: localDateString(first),
+        to: localDateString(last),
         label: "Previous Month",
         valid: true
       };
     }
 
-    if (period === "year") {
-      const firstDay = new Date(today.getFullYear(), 0, 1);
-
+    if (["year", "thisyear", "this-year"].includes(period)) {
       return {
-        from: localDateString(firstDay),
-        to: todayString,
+        from: localDateString(new Date(now.getFullYear(), 0, 1)),
+        to: todayKey,
         label: "This Year",
         valid: true
       };
     }
 
-    if (period === "custom") {
-      const from = dateFromInput.value;
-      const to = dateToInput.value;
+    if (["all", "alltime", "all-time"].includes(period)) {
+      const available = state.invoices
+        .map(invoice => invoice.dateKey)
+        .filter(Boolean)
+        .sort();
+
+      return {
+        from: available[0] || todayKey,
+        to: available[available.length - 1] || todayKey,
+        label: "All Available Data",
+        valid: true
+      };
+    }
+
+    if (["custom", "customrange", "custom-range"].includes(period)) {
+      const from = dateFromInput?.value || "";
+      const to = dateToInput?.value || "";
 
       if (!parseLocalDate(from) || !parseLocalDate(to)) {
         return {
           valid: false,
-          message: "Select valid start and end dates."
+          message: "Custom range ke liye valid From aur To dates select karein."
         };
       }
 
       if (from > to) {
         return {
           valid: false,
-          message: "The start date cannot be later than the end date."
+          message: "From Date, To Date se aage nahi ho sakti."
         };
       }
 
@@ -589,95 +989,73 @@
       };
     }
 
-    if (period === "all") {
-      return {
-        from: minimumAvailableDate,
-        to: maximumAvailableDate,
-        label: "All Available Data",
-        valid: true
-      };
-    }
-
     return {
       valid: false,
-      message: "Please select a valid reporting period."
+      message: "Reporting period select karein."
     };
   }
 
   function updateCustomRangeVisibility() {
-    const visible = periodSelect.value === "custom";
+    if (!customRange) return;
+
+    const visible = [
+      "custom",
+      "customrange",
+      "custom-range"
+    ].includes(getPeriodKey());
 
     customRange.hidden = !visible;
 
-    dateFromInput.required = visible;
-    dateToInput.required = visible;
+    if (dateFromInput) dateFromInput.required = visible;
+    if (dateToInput) dateToInput.required = visible;
   }
 
   periodSelect.addEventListener("change", updateCustomRangeVisibility);
 
-  updateCustomRangeVisibility();
+  dateFromInput?.addEventListener("change", clearMessage);
+  dateToInput?.addEventListener("change", clearMessage);
 
   // ==================================================
-  // 8. COMPARISON PERIOD
+  // 7. PREVIOUS PERIOD RANGE
   // ==================================================
 
-  function getPreviousDateRange(currentRange) {
-    if (periodSelect.value === "all") {
+  function getPreviousDateRange(range) {
+    const period = getPeriodKey();
+
+    if (["all", "alltime", "all-time"].includes(period)) {
       return null;
     }
 
-    const currentFrom = parseLocalDate(currentRange.from);
-    const currentTo = parseLocalDate(currentRange.to);
+    const fromDate = parseLocalDate(range.from);
+    const toDate = parseLocalDate(range.to);
 
-    if (!currentFrom || !currentTo) {
-      return null;
-    }
+    if (!fromDate || !toDate) return null;
 
-    if (periodSelect.value === "previousMonth") {
+    if (["previousmonth", "lastmonth", "previous-month"].includes(period)) {
       const previousFrom = new Date(
-        currentFrom.getFullYear(),
-        currentFrom.getMonth() - 1,
+        fromDate.getFullYear(),
+        fromDate.getMonth() - 1,
         1
       );
 
       const previousTo = new Date(
-        currentFrom.getFullYear(),
-        currentFrom.getMonth(),
+        fromDate.getFullYear(),
+        fromDate.getMonth(),
         0
       );
 
       return {
         from: localDateString(previousFrom),
         to: localDateString(previousTo),
-        label: "Previous Month"
-      };
-    }
-
-    if (periodSelect.value === "year") {
-      const previousFrom = new Date(
-        currentFrom.getFullYear() - 1,
-        0,
-        1
-      );
-
-      const previousTo = new Date(
-        currentTo.getFullYear() - 1,
-        currentTo.getMonth(),
-        currentTo.getDate()
-      );
-
-      return {
-        from: localDateString(previousFrom),
-        to: localDateString(previousTo),
-        label: "Same Period Last Year"
+        label: "Month Before Previous Month"
       };
     }
 
     const dayCount = Math.round(
-      (currentTo.getTime() - currentFrom.getTime()) / 86400000
+      (toDate.getTime() - fromDate.getTime()) / 86400000
     ) + 1;
 
-    const previousTo = addDays(currentFrom, -1);
+    const previousTo = addDays(fromDate, -1);
     const previousFrom = addDays(previousTo, -(dayCount - 1));
 
     return {
@@ -688,117 +1066,124 @@
   }
 
   // ==================================================
-  // 9. APPLY PRODUCT AND DATE FILTERS
+  // 8. FILTER INVOICES AND ITEMS
   // ==================================================
 
-  function matchesSelectedProduct(item) {
-    const selectedCategory = categorySelect.value;
-    const selectedProduct = productSelect.value;
+  function itemMatchesFilters(item) {
+    const selectedCategory = categorySelect?.value || "";
+    const selectedProduct = productSelect?.value || "";
 
-    if (
-      selectedCategory &&
-      item.category !== selectedCategory
-    ) {
+    if (selectedCategory && item.category !== selectedCategory) {
       return false;
     }
 
-    if (
-      selectedProduct &&
-      item.productId !== selectedProduct
-    ) {
+    if (selectedProduct && item.productId !== selectedProduct) {
       return false;
     }
 
     return true;
   }
 
-  function getTransactionsInRange(range) {
+  function getFilteredTransactions(range) {
     if (!range) return [];
 
-    const result = [];
+    const selectedCategory = categorySelect?.value || "";
+    const selectedProduct = productSelect?.value || "";
 
-    for (const transaction of demoTransactions) {
-      if (
-        transaction.date < range.from ||
-        transaction.date > range.to
-      ) {
-        continue;
-      }
+    return state.invoices
+      .filter(invoice => {
+        if (!invoice.dateKey) return false;
 
-      // Exclude cancelled records from valid sales.
-      if (transaction.status !== "generated") {
-        continue;
-      }
+        if (
+          invoice.dateKey < range.from ||
+          invoice.dateKey > range.to
+        ) {
+          return false;
+        }
 
-      const items = transaction.items.filter(matchesSelectedProduct);
+        if (invoice.cancelled || invoice.draft) {
+          return false;
+        }
 
-      if (items.length === 0) {
-        continue;
-      }
+        return true;
+      })
+      .map(invoice => {
+        const matchingItems = invoice.items.filter(itemMatchesFilters);
 
-      const revenue = roundMoney(
-        items.reduce((sum, item) => sum + item.revenue, 0)
-      );
+        if (
+          (selectedCategory || selectedProduct) &&
+          matchingItems.length === 0
+        ) {
+          return null;
+        }
 
-      result.push({
-        ...transaction,
-        items,
-        revenue
-      });
-    }
+        const filteredItemRevenue = roundMoney(
+          matchingItems.reduce(
+            (sum, item) => sum + item.revenue,
+            0
+          )
+        );
 
-    return result;
+        const hasItemFilter = Boolean(
+          selectedCategory || selectedProduct
+        );
+
+        const revenue = hasItemFilter
+          ? filteredItemRevenue
+          : invoice.total || filteredItemRevenue;
+
+        return {
+          ...invoice,
+          items: matchingItems,
+          revenue: roundMoney(revenue)
+        };
+      })
+      .filter(Boolean);
   }
 
   // ==================================================
-  // 10. ANALYTICS CALCULATIONS
+  // 9. ANALYTICS CALCULATIONS
   // ==================================================
 
-  function analyse(transactions) {
-    const revenue = roundMoney(
-      transactions.reduce(
-        (sum, transaction) => sum + transaction.revenue,
-        0
-      )
-    );
-
-    const invoiceCount = transactions.length;
-
-    const unitsSold = transactions.reduce(
-      (sum, transaction) => (
-        sum + transaction.items.reduce(
-          (itemSum, item) => itemSum + item.quantity,
-          0
-        )
-      ),
-      0
-    );
-
-    const averageOrderValue = invoiceCount > 0
-      ? roundMoney(revenue / invoiceCount)
-      : 0;
+  function analyseTransactions(transactions) {
+    let revenue = 0;
+    let cash = 0;
+    let upi = 0;
+    let unitsSold = 0;
 
     const productStats = new Map();
     const categoryStats = new Map();
 
-    for (const transaction of transactions) {
-      for (const item of transaction.items) {
-        if (!productStats.has(item.productId)) {
-          productStats.set(item.productId, {
+    transactions.forEach(invoice => {
+      revenue += invoice.revenue;
+
+      if (invoice.payment === "cash") {
+        cash += invoice.revenue;
+      } else if (invoice.payment === "upi") {
+        upi += invoice.revenue;
+      }
+
+      invoice.items.forEach(item => {
+        unitsSold += item.quantity;
+
+        const productKey = item.productId || normalise(item.name);
+
+        if (!productStats.has(productKey)) {
+          productStats.set(productKey, {
             id: item.productId,
-            name: item.productName,
+            name: item.name,
             category: item.category,
             units: 0,
             revenue: 0,
-            invoiceCount: 0
+            invoices: 0
           });
         }
 
-        const product = productStats.get(item.productId);
+        const product = productStats.get(productKey);
 
         product.units += item.quantity;
         product.revenue += item.revenue;
-        product.invoiceCount += 1;
+        product.invoices += 1;
 
         if (!categoryStats.has(item.category)) {
           categoryStats.set(item.category, {
@@ -811,11 +1196,14 @@
 
         const category = categoryStats.get(item.category);
 
-        category.productIds.add(item.productId);
+        if (productKey) {
+          category.productIds.add(productKey);
+        }
+
         category.units += item.quantity;
         category.revenue += item.revenue;
-      }
-    }
+      });
+    });
 
     const products = Array.from(productStats.values())
       .map(product => ({
@@ -826,50 +1214,44 @@
 
     const categories = Array.from(categoryStats.values())
       .map(category => ({
-        ...category,
+        name: category.name,
         productCount: category.productIds.size,
+        units: category.units,
         revenue: roundMoney(category.revenue)
       }))
       .sort((a, b) => b.revenue - a.revenue);
 
+    revenue = roundMoney(revenue);
+
     return {
       revenue,
-      invoiceCount,
+      invoiceCount: transactions.length,
       unitsSold,
-      averageOrderValue,
+      averageOrderValue: transactions.length
+        ? roundMoney(revenue / transactions.length)
+        : 0,
+      cash: roundMoney(cash),
+      upi: roundMoney(upi),
       products,
-      categories
+      categories,
+      transactions
     };
   }
 
-  function getRevenueShare(revenue, totalRevenue) {
-    if (totalRevenue <= 0) return 0;
-
-    return (revenue / totalRevenue) * 100;
+  function share(value, total) {
+    return total > 0 ? value / total * 100 : 0;
   }
 
   // ==================================================
-  // 11. TIME-SERIES GROUPING
+  // 10. TIME-SERIES GROUPING
   // ==================================================
 
-  function getWeekStart(date) {
-    const start = new Date(date);
-
-    const day = start.getDay();
-    const daysBack = day === 0 ? 6 : day - 1;
-
-    start.setDate(start.getDate() - daysBack);
-    start.setHours(0, 0, 0, 0);
-
-    return start;
-  }
-
-  function groupTransactionsByTime(transactions, granularity) {
+  function groupByTime(transactions, granularity) {
     const groups = new Map();
 
     if (granularity === "hour") {
       for (let hour = 0; hour < 24; hour++) {
-        groups.set(hour, {
+        groups.set(String(hour), {
           key: String(hour),
           label: formatHour(hour),
           revenue: 0,
@@ -877,38 +1259,41 @@
         });
       }
 
-      for (const transaction of transactions) {
-        const bucket = groups.get(transaction.hour);
+      transactions.forEach(invoice => {
+        if (invoice.hour === null || invoice.hour === undefined) return;
 
-        bucket.revenue += transaction.revenue;
-        bucket.count += 1;
-      }
+        const group = groups.get(String(invoice.hour));
 
-      return Array.from(groups.values()).map(bucket => ({
-        ...bucket,
-        revenue: roundMoney(bucket.revenue)
+        group.revenue += invoice.revenue;
+        group.count += 1;
+      });
+
+      return Array.from(groups.values()).map(item => ({
+        ...item,
+        revenue: roundMoney(item.revenue)
       }));
     }
 
-    for (const transaction of transactions) {
-      const date = parseLocalDate(transaction.date);
+    transactions.forEach(invoice => {
+      const date = parseLocalDate(invoice.dateKey);
 
-      if (!date) continue;
+      if (!date) return;
 
       let key;
       let label;
 
-      if (granularity === "day") {
-        key = transaction.date;
-        label = formatShortDate(transaction.date);
-      } else if (granularity === "week") {
-        const weekStart = getWeekStart(date);
+      if (granularity === "week") {
+        const day = date.getDay();
+        const weekStart = addDays(date, day === 0 ? -6 : 1 - day);
 
         key = localDateString(weekStart);
         label = formatShortDate(key);
-      } else {
-        key = transaction.date.slice(0, 7);
+      } else if (granularity === "month") {
+        key = invoice.dateKey.slice(0, 7);
         label = formatMonth(`${key}-01`);
+      } else {
+        key = invoice.dateKey;
+        label = formatShortDate(key);
       }
 
       if (!groups.has(key)) {
@@ -920,21 +1305,21 @@
         });
       }
 
-      const bucket = groups.get(key);
+      const group = groups.get(key);
 
-      bucket.revenue += transaction.revenue;
-      bucket.count += 1;
-    }
+      group.revenue += invoice.revenue;
+      group.count += 1;
+    });
 
     return Array.from(groups.values())
       .sort((a, b) => a.key.localeCompare(b.key))
-      .map(bucket => ({
-        ...bucket,
-        revenue: roundMoney(bucket.revenue)
+      .map(item => ({
+        ...item,
+        revenue: roundMoney(item.revenue)
       }));
   }
 
-  function groupTransactionsByWeekday(transactions) {
+  function groupByWeekday(transactions) {
     const groups = WEEKDAYS.map((day, index) => ({
       key: index,
       label: day.slice(0, 3),
@@ -942,108 +1327,122 @@
       count: 0
     }));
 
-    for (const transaction of transactions) {
-      const date = parseLocalDate(transaction.date);
+    transactions.forEach(invoice => {
+      const date = parseLocalDate(invoice.dateKey);
 
-      if (!date) continue;
+      if (!date) return;
 
-      const bucket = groups[date.getDay()];
+      groups[date.getDay()].revenue += invoice.revenue;
+      groups[date.getDay()].count += 1;
+    });
 
-      bucket.revenue += transaction.revenue;
-      bucket.count += 1;
-    }
-
-    return groups.map(bucket => ({
-      ...bucket,
-      revenue: roundMoney(bucket.revenue)
+    return groups.map(item => ({
+      ...item,
+      revenue: roundMoney(item.revenue)
     }));
   }
 
   // ==================================================
-  // 12. SVG CHART HELPERS
+  // 11. SVG CHART RENDERING
   // ==================================================
 
-  /*
-   * Charts use native SVG, so no third-party chart library
-   * or external API is required for the frontend demo.
-   */
-
   function showChartMessage(container, message) {
-    container.innerHTML = `
-      <div
-        style="
-          min-height:220px;
-          display:flex;
-          align-items:center;
-          justify-content:center;
-          padding:24px;
-          text-align:center;
-          color:#6b7280;
-          font-size:13px;
-          line-height:1.7;
-        "
-      >
-        ${escapeHTML(message)}
-      </div>
-    `;
+    if (!container) return;
+
+    container.replaceChildren();
+
+    const notice = document.createElement("div");
+
+    notice.textContent = message;
+    notice.style.cssText = [
+      "min-height:240px",
+      "display:flex",
+      "align-items:center",
+      "justify-content:center",
+      "padding:24px",
+      "text-align:center",
+      "color:#6b7280",
+      "font-size:13px",
+      "line-height:1.7",
+      "border:1px dashed #d1d5db",
+      "border-radius:6px",
+      "width:100%"
+    ].join(";");
+
+    container.appendChild(notice);
   }
 
-  function svgText(x, y, text, options = {}) {
-    const anchor = options.anchor || "start";
-    const size = options.size || 11;
-    const fill = options.fill || "#6b7280";
-    const weight = options.weight || 400;
+  function prepareChartContainer(container) {
+    if (!container) return false;
 
+    container.style.width = "100%";
+    container.style.minWidth = "0";
+    container.style.minHeight = "240px";
+    container.style.overflow = "hidden";
+
+    return true;
+  }
+
+  function svgLabel(x, y, text, options = {}) {
     return `
       <text
         x="${x}"
         y="${y}"
-        text-anchor="${anchor}"
-        font-size="${size}"
-        font-weight="${weight}"
-        fill="${fill}"
-      >${escapeHTML(text)}</text>
+        text-anchor="${options.anchor || "start"}"
+        font-size="${options.size || 11}"
+        font-weight="${options.weight || 400}"
+        fill="${options.fill || "#6b7280"}"
+      >${String(text).replace(/[&<>"]/g, char => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;"
+      })[char])}</text>
     `;
   }
 
+  function svgNumber(value) {
+    return Number.isFinite(value) ? String(value) : "0";
+  }
+
   function renderLineChart(container, points) {
+    if (!prepareChartContainer(container)) return;
+
     if (!points.length) {
-      showChartMessage(container, "No sales data for this period.");
+      showChartMessage(container, "Is reporting period mein data available nahi hai.");
+      return;
+    }
+
+    if (!points.some(point => point.revenue > 0)) {
+      showChartMessage(container, "Selected period mein recorded sales nahi hain.");
       return;
     }
 
     const width = 900;
     const height = 320;
-
-    const left = 76;
-    const right = 22;
-    const top = 25;
-    const bottom = 58;
+    const left = 85;
+    const right = 24;
+    const top = 24;
+    const bottom = 52;
 
     const plotWidth = width - left - right;
     const plotHeight = height - top - bottom;
 
-    const maximum = Math.max(
-      1,
-      ...points.map(point => point.revenue)
-    );
-
-    const gridCount = 4;
+    const maximum = Math.max(1, ...points.map(point => point.revenue));
 
     let svg = `
       <svg
         viewBox="0 0 ${width} ${height}"
         width="100%"
         role="img"
-        aria-label="Sales revenue trend chart"
+        aria-label="Sales revenue trend"
         xmlns="http://www.w3.org/2000/svg"
+        style="display:block;height:auto;max-width:100%;"
       >
     `;
 
-    // Grid and Y-axis labels.
-    for (let index = 0; index <= gridCount; index++) {
-      const ratio = index / gridCount;
-
+    for (let index = 0; index <= 4; index++) {
+      const ratio = index / 4;
       const y = top + ratio * plotHeight;
       const value = maximum * (1 - ratio);
 
@@ -1058,7 +1457,7 @@
         />
       `;
 
-      svg += svgText(
+      svg += svgLabel(
         left - 10,
         y + 4,
         compactMoney(value),
@@ -1081,60 +1480,68 @@
       };
     });
 
-    // X-axis labels.
-    const maximumLabels = 8;
+    const linePath = coordinates
+      .map((point, index) =>
+        `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`
+      )
+      .join(" ");
 
+    const areaPath = [
+      `M ${coordinates[0].x} ${top + plotHeight}`,
+      ...coordinates.map(point => `L ${point.x} ${point.y}`),
+      `L ${coordinates[coordinates.length - 1].x} ${top + plotHeight}`,
+      "Z"
+    ].join(" ");
+
+    svg += `
+      <path
+        d="${areaPath}"
+        fill="#d1d5db"
+        fill-opacity="0.35"
+        stroke="none"
+      />
+
+      <path
+        d="${linePath}"
+        fill="none"
+        stroke="#111827"
+        stroke-width="3"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    `;
+
+    const maximumLabels = 8;
     const labelStep = Math.max(
       1,
       Math.ceil(points.length / maximumLabels)
     );
 
     coordinates.forEach((coordinate, index) => {
-      const isLast = index === points.length - 1;
-
-      if (index % labelStep !== 0 && !isLast) {
-        return;
-      }
-
-      svg += svgText(
-        coordinate.x,
-        height - 22,
-        coordinate.point.label,
-        { anchor: "middle", size: 10 }
-      );
-    });
-
-    const path = coordinates.map((coordinate, index) => (
-      `${index === 0 ? "M" : "L"} ${coordinate.x} ${coordinate.y}`
-    )).join(" ");
-
-    svg += `
-      <path
-        d="${path}"
-        fill="none"
-        stroke="#111111"
-        stroke-width="2.5"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      />
-    `;
-
-    coordinates.forEach(coordinate => {
       svg += `
         <circle
           cx="${coordinate.x}"
           cy="${coordinate.y}"
           r="4"
-          fill="#111111"
+          fill="#111827"
           stroke="#ffffff"
           stroke-width="1.5"
         >
-          <title>
-            ${escapeHTML(coordinate.point.label)}:
-            ${money(coordinate.point.revenue)}
-          </title>
+          <title>${coordinate.point.label}: ${money(coordinate.point.revenue)}</title>
         </circle>
       `;
+
+      if (
+        index % labelStep === 0 ||
+        index === coordinates.length - 1
+      ) {
+        svg += svgLabel(
+          coordinate.x,
+          height - 22,
+          coordinate.point.label,
+          { anchor: "middle", size: 10 }
+        );
+      }
     });
 
     svg += "</svg>";
@@ -1146,48 +1553,44 @@
     container,
     items,
     labelKey,
-    valueKey,
-    formatter = compactMoney
+    valueKey
   ) {
+    if (!prepareChartContainer(container)) return;
+
     if (!items.length || !items.some(item => item[valueKey] > 0)) {
-      showChartMessage(container, "No product or category sales data available.");
+      showChartMessage(container, "Product ya category sales data available nahi hai.");
       return;
     }
 
     const width = 900;
-    const rowHeight = 36;
-    const height = Math.max(240, items.length * rowHeight + 30);
+    const rowHeight = 39;
+    const height = Math.max(240, items.length * rowHeight + 28);
 
-    const left = 190;
-    const right = 95;
+    const left = 200;
+    const right = 105;
     const top = 12;
-
     const plotWidth = width - left - right;
 
-    const maximum = Math.max(
-      1,
-      ...items.map(item => item[valueKey])
-    );
+    const maximum = Math.max(1, ...items.map(item => item[valueKey]));
 
     let svg = `
       <svg
         viewBox="0 0 ${width} ${height}"
         width="100%"
         role="img"
-        aria-label="Ranked business performance bar chart"
+        aria-label="Ranked sales performance"
         xmlns="http://www.w3.org/2000/svg"
+        style="display:block;height:auto;max-width:100%;"
       >
     `;
 
     items.forEach((item, index) => {
       const y = top + index * rowHeight;
+      const barWidth = plotWidth * item[valueKey] / maximum;
 
-      const barWidth =
-        (item[valueKey] / maximum) * plotWidth;
-
-      svg += svgText(
+      svg += svgLabel(
         left - 12,
-        y + 19,
+        y + 20,
         item[labelKey],
         {
           anchor: "end",
@@ -1202,7 +1605,7 @@
           x="${left}"
           y="${y + 4}"
           width="${plotWidth}"
-          height="18"
+          height="19"
           rx="3"
           fill="#f3f4f6"
         />
@@ -1211,21 +1614,19 @@
           x="${left}"
           y="${y + 4}"
           width="${Math.max(0, barWidth)}"
-          height="18"
+          height="19"
           rx="3"
-          fill="${index === 0 ? "#111111" : "#777777"}"
+          fill="${index === 0 ? "#111827" : "#6b7280"}"
         >
-          <title>
-            ${escapeHTML(item[labelKey])}: ${formatter(item[valueKey])}
-          </title>
+          <title>${String(item[labelKey])}: ${money(item[valueKey])}</title>
         </rect>
       `;
 
-      svg += svgText(
+      svg += svgLabel(
         width - right + 12,
         y + 19,
-        formatter(item[valueKey]),
-        { size: 10, fill: "#111111" }
+        compactMoney(item[valueKey]),
+        { size: 10, fill: "#111827" }
       );
     });
 
@@ -1234,38 +1635,30 @@
     container.innerHTML = svg;
   }
 
-  function renderVerticalBarChart(
-    container,
-    items,
-    formatter = compactMoney,
-    options = {}
-  ) {
-    if (!items.length) {
-      showChartMessage(container, "No data available for this chart.");
+  function renderVerticalBarChart(container, points) {
+    if (!prepareChartContainer(container)) return;
+
+    if (!points.length || !points.some(point => point.revenue > 0)) {
+      showChartMessage(container, "Is chart ke liye sales data available nahi hai.");
       return;
     }
 
     const width = 900;
     const height = 300;
 
-    const left = 60;
-    const right = 20;
+    const left = 75;
+    const right = 22;
     const top = 24;
-    const bottom = 58;
+    const bottom = 52;
 
     const plotWidth = width - left - right;
     const plotHeight = height - top - bottom;
-
-    const maximum = Math.max(
-      1,
-      ...items.map(item => item.revenue)
-    );
-
-    const gap = items.length > 16 ? 3 : 8;
+    const maximum = Math.max(1, ...points.map(point => point.revenue));
+    const gap = points.length > 16 ? 3 : 8;
 
     const barWidth = Math.max(
       2,
-      (plotWidth - gap * items.length) / items.length
+      (plotWidth - gap * points.length) / points.length
     );
 
     let svg = `
@@ -1273,8 +1666,9 @@
         viewBox="0 0 ${width} ${height}"
         width="100%"
         role="img"
-        aria-label="Business sales bar chart"
+        aria-label="Revenue bar chart"
         xmlns="http://www.w3.org/2000/svg"
+        style="display:block;height:auto;max-width:100%;"
       >
     `;
 
@@ -1294,47 +1688,42 @@
         />
       `;
 
-      svg += svgText(
-        left - 8,
+      svg += svgLabel(
+        left - 10,
         y + 4,
-        formatter(value),
+        compactMoney(value),
         { anchor: "end", size: 10 }
       );
     }
 
-    items.forEach((item, index) => {
+    const labelStep = Math.max(
+      1,
+      Math.ceil(points.length / 10)
+    );
+
+    points.forEach((point, index) => {
       const x = left + index * (barWidth + gap);
-
-      const barHeight =
-        (item.revenue / maximum) * plotHeight;
-
+      const barHeight = point.revenue / maximum * plotHeight;
       const y = top + plotHeight - barHeight;
 
       svg += `
         <rect
-          x="${x}"
-          y="${y}"
-          width="${barWidth}"
-          height="${barHeight}"
+          x="${svgNumber(x)}"
+          y="${svgNumber(y)}"
+          width="${svgNumber(barWidth)}"
+          height="${svgNumber(barHeight)}"
           rx="2"
-          fill="${barHeight > 0 ? "#111111" : "#e5e7eb"}"
+          fill="#4b5563"
         >
-          <title>
-            ${escapeHTML(item.label)}: ${formatter(item.revenue)}
-          </title>
+          <title>${point.label}: ${money(point.revenue)}</title>
         </rect>
       `;
 
-      const labelStep = Math.max(
-        1,
-        Math.ceil(items.length / 10)
-      );
-
-      if (index % labelStep === 0 || index === items.length - 1) {
-        svg += svgText(
+      if (index % labelStep === 0 || index === points.length - 1) {
+        svg += svgLabel(
           x + barWidth / 2,
-          height - 25,
-          item.label,
+          height - 22,
+          point.label,
           { anchor: "middle", size: 9 }
         );
       }
@@ -1346,670 +1735,533 @@
   }
 
   // ==================================================
-  // 13. EXECUTIVE KPI UPDATES
+  // 12. KPI UPDATES
   // ==================================================
 
-  function formatChange(current, previous) {
-    if (previous === null || previous === undefined) {
-      return "No comparable period";
+  function growthText(current, previous) {
+    if (!previous) {
+      return "Previous period data nahi hai";
     }
 
-    if (previous === 0) {
-      return current === 0
+    if (previous.revenue === 0) {
+      return current.revenue === 0
         ? "No change"
-        : "New activity; previous value was zero";
+        : "Previous period mein sales zero thi";
     }
 
-    const change = ((current - previous) / previous) * 100;
+    const change =
+      ((current.revenue - previous.revenue) / previous.revenue) * 100;
 
-    const label = change > 0
-      ? "increase"
-      : change < 0
-        ? "decrease"
-        : "no change";
-
-    return `${Math.abs(change).toFixed(1)}% ${label} vs previous period`;
+    return `${change > 0 ? "+" : ""}${change.toFixed(1)}% vs previous period`;
   }
 
-  function calculateGrowth(current, previous) {
-    if (previous === null || previous === undefined) {
-      return "—";
+  function growthValue(current, previous) {
+    if (!previous) return "—";
+
+    if (previous.revenue === 0) {
+      return current.revenue === 0 ? "0%" : "N/A";
     }
 
-    if (previous === 0) {
-      return current === 0 ? "0%" : "N/A";
-    }
-
-    const change = ((current - previous) / previous) * 100;
+    const change =
+      ((current.revenue - previous.revenue) / previous.revenue) * 100;
 
     return `${change > 0 ? "+" : ""}${change.toFixed(1)}%`;
   }
 
-  function renderExecutiveKPIs(current, previous) {
-    $("#reportRevenue").textContent = money(current.revenue);
+  function updateExecutiveKPIs(current, previous) {
+    setText("#reportRevenue", money(current.revenue));
+    setText("#reportInvoiceCount", integer(current.invoiceCount));
+    setText("#reportAverageOrder", money(current.averageOrderValue));
+    setText("#reportGrowth", growthValue(current, previous));
 
-    $("#reportInvoiceCount").textContent =
-      integer(current.invoiceCount);
+    setText("#reportRevenueChange", growthText(current, previous));
 
-    $("#reportAverageOrder").textContent =
-      money(current.averageOrderValue);
-
-    $("#reportGrowth").textContent =
-      calculateGrowth(
-        current.revenue,
-        previous?.revenue ?? null
-      );
-
-    $("#reportRevenueChange").textContent =
-      formatChange(current.revenue, previous?.revenue ?? null);
-
-    $("#reportInvoiceChange").textContent =
-      formatChange(
-        current.invoiceCount,
-        previous?.invoiceCount ?? null
-      );
-
-    $("#reportGrowthDescription").textContent =
+    setText(
+      "#reportInvoiceChange",
       previous
-        ? previous.label
-        : "No comparable period available";
+        ? `${current.invoiceCount - previous.invoiceCount} invoice difference`
+        : "No comparable period"
+    );
+
+    setText(
+      "#reportGrowthDescription",
+      previous?.label || "No comparison data"
+    );
   }
 
   // ==================================================
-  // 14. PRODUCT PERFORMANCE TABLE
+  // 13. PERFORMANCE TABLES
   // ==================================================
 
   function renderProductTable(analysis) {
     const body = $("#productPerformanceBody");
 
+    if (!body) return;
+
+    body.replaceChildren();
+
     if (!analysis.products.length) {
-      body.innerHTML = `
-        <tr>
-          <td colspan="7" style="text-align:center;padding:28px;">
-            No product sales were recorded for the selected filters.
-          </td>
-        </tr>
-      `;
+      const row = document.createElement("tr");
+      const cell = document.createElement("td");
+
+      cell.colSpan = 7;
+      cell.textContent = "Selected period mein product sales available nahi hain.";
+      cell.style.textAlign = "center";
+      cell.style.padding = "24px";
+
+      row.appendChild(cell);
+      body.appendChild(row);
 
       return;
     }
 
-    body.innerHTML = analysis.products.map((product, index) => {
-      const share = getRevenueShare(
-        product.revenue,
-        analysis.revenue
-      );
+    analysis.products.forEach((product, index) => {
+      const row = document.createElement("tr");
 
-      let performance = "Low Volume";
+      const values = [
+        index + 1,
+        product.name,
+        product.category,
+        integer(product.units),
+        money(product.revenue),
+        percentage(share(product.revenue, analysis.revenue)),
+        index === 0 ? "Top Revenue" : "Recorded"
+      ];
 
-      if (index === 0) {
-        performance = "Top Performer";
-      } else if (share >= 15) {
-        performance = "Strong";
-      } else if (share >= 5) {
-        performance = "Moderate";
-      }
+      values.forEach((value, cellIndex) => {
+        const cell = document.createElement("td");
 
-      return `
-        <tr>
-          <td>${index + 1}</td>
+        if (cellIndex === 5 || cellIndex === 4) {
+          cell.classList.add("num");
+        }
 
-          <td>
-            <div class="cust-name">
-              ${escapeHTML(product.name)}
-            </div>
-            <div class="cust-sub">
-              ${escapeHTML(product.id)}
-            </div>
-          </td>
+        if (cellIndex === 6) {
+          const badge = document.createElement("span");
 
-          <td>${escapeHTML(product.category)}</td>
+          badge.className = `pill ${index === 0 ? "paid" : "pending"}`;
+          badge.textContent = value;
 
-          <td>${integer(product.units)}</td>
+          cell.appendChild(badge);
+        } else {
+          cell.textContent = String(value);
+        }
 
-          <td class="num">
-            ${money(product.revenue)}
-          </td>
+        row.appendChild(cell);
+      });
 
-          <td>
-            ${percentage(share)}
-          </td>
-
-          <td>
-            <span class="pill ${index === 0 ? "paid" : "pending"}">
-              ${performance}
-            </span>
-          </td>
-        </tr>
-      `;
-    }).join("");
+      body.appendChild(row);
+    });
   }
-
-  // ==================================================
-  // 15. CATEGORY PERFORMANCE TABLE
-  // ==================================================
 
   function renderCategoryTable(analysis) {
     const body = $("#categoryPerformanceBody");
 
+    if (!body) return;
+
+    body.replaceChildren();
+
     if (!analysis.categories.length) {
-      body.innerHTML = `
-        <tr>
-          <td colspan="5" style="text-align:center;padding:28px;">
-            No category sales were found for this reporting period.
-          </td>
-        </tr>
-      `;
+      const row = document.createElement("tr");
+      const cell = document.createElement("td");
+
+      cell.colSpan = 5;
+      cell.textContent = "Selected period mein category sales nahi hain.";
+      cell.style.textAlign = "center";
+      cell.style.padding = "24px";
+
+      row.appendChild(cell);
+      body.appendChild(row);
 
       return;
     }
 
-    body.innerHTML = analysis.categories.map(category => {
-      const share = getRevenueShare(
-        category.revenue,
-        analysis.revenue
-      );
+    analysis.categories.forEach(category => {
+      const row = document.createElement("tr");
 
-      return `
-        <tr>
-          <td>
-            <div class="cust-name">
-              ${escapeHTML(category.name)}
-            </div>
-          </td>
+      const values = [
+        category.name,
+        integer(category.productCount),
+        integer(category.units),
+        money(category.revenue),
+        percentage(share(category.revenue, analysis.revenue))
+      ];
 
-          <td>${integer(category.productCount)}</td>
+      values.forEach((value, index) => {
+        const cell = document.createElement("td");
 
-          <td>${integer(category.units)}</td>
+        cell.textContent = String(value);
 
-          <td class="num">
-            ${money(category.revenue)}
-          </td>
+        if (index === 3 || index === 4) {
+          cell.classList.add("num");
+        }
 
-          <td>
-            ${percentage(share)}
-          </td>
-        </tr>
-      `;
-    }).join("");
+        row.appendChild(cell);
+      });
+
+      body.appendChild(row);
+    });
   }
-
-  // ==================================================
-  // 16. PERIOD COMPARISON TABLE
-  // ==================================================
 
   function renderComparisonTable(current, previous) {
     const body = $("#periodComparisonBody");
 
+    if (!body) return;
+
+    body.replaceChildren();
+
     if (!previous) {
-      body.innerHTML = `
-        <tr>
-          <td colspan="5" style="text-align:center;padding:28px;">
-            Select a reporting period with comparable historical data.
-          </td>
-        </tr>
-      `;
+      const row = document.createElement("tr");
+      const cell = document.createElement("td");
+
+      cell.colSpan = 5;
+      cell.textContent = "Comparable historical data available nahi hai.";
+      cell.style.textAlign = "center";
+      cell.style.padding = "24px";
+
+      row.appendChild(cell);
+      body.appendChild(row);
 
       return;
     }
 
     const metrics = [
       {
-        label: "Sales Revenue",
+        name: "Sales Revenue",
         current: current.revenue,
         previous: previous.revenue,
         format: money
       },
       {
-        label: "Invoices",
+        name: "Invoices",
         current: current.invoiceCount,
         previous: previous.invoiceCount,
         format: integer
       },
       {
-        label: "Average Order Value",
+        name: "Average Order Value",
         current: current.averageOrderValue,
         previous: previous.averageOrderValue,
         format: money
       },
       {
-        label: "Units Sold",
+        name: "Units Sold",
         current: current.unitsSold,
         previous: previous.unitsSold,
         format: integer
       }
     ];
 
-    body.innerHTML = metrics.map(metric => {
+    metrics.forEach(metric => {
+      const row = document.createElement("tr");
+
       const difference = metric.current - metric.previous;
 
-      return `
-        <tr>
-          <td>${escapeHTML(metric.label)}</td>
+      const values = [
+        metric.name,
+        metric.format(metric.current),
+        metric.format(metric.previous),
+        `${difference > 0 ? "+" : ""}${metric.format(difference)}`,
+        metric.previous === 0
+          ? (metric.current === 0 ? "0%" : "N/A")
+          : `${((difference / metric.previous) * 100).toFixed(1)}%`
+      ];
 
-          <td class="num">
-            ${metric.format(metric.current)}
-          </td>
+      values.forEach(value => {
+        const cell = document.createElement("td");
 
-          <td class="num">
-            ${metric.format(metric.previous)}
-          </td>
+        cell.textContent = String(value);
+        row.appendChild(cell);
+      });
 
-          <td class="num">
-            ${difference > 0 ? "+" : ""}${metric.format(difference)}
-          </td>
-
-          <td>
-            ${calculateGrowth(metric.current, metric.previous)}
-          </td>
-        </tr>
-      `;
-    }).join("");
+      body.appendChild(row);
+    });
   }
 
   // ==================================================
-  // 17. AUTOMATED BUSINESS INSIGHTS
+  // 14. BUSINESS INSIGHTS
   // ==================================================
 
-  function setInsight(titleId, textId, title, text) {
-    $(titleId).textContent = title;
-    $(textId).textContent = text;
-  }
+  function renderInsights(current, previous, hourly, weekdays) {
+    setStatus(
+      state.firebaseReady ? "Live Firebase Data" : "Connecting",
+      state.firebaseReady ? "success" : "info"
+    );
 
-  function renderInsights(
-    current,
-    previous,
-    trendPoints,
-    hourlyPoints,
-    weekdayPoints
-  ) {
-    const insightsStatus = $("#insightsStatus");
+    setText(
+      "#businessInsightsDisclaimer",
+      "Insights saved invoice records par based hain. Missing invoice items ya category data se analysis incomplete ho sakta hai. Revenue profit nahi hota."
+    );
+
+    setText("#insightsStatus", "Database Insights");
 
     if (current.invoiceCount === 0) {
-      insightsStatus.textContent = "Insufficient Data";
-
-      setInsight(
-        "#insightSalesTitle",
+      setText("#insightSalesTitle", "No recorded sales");
+      setText(
         "#insightSalesText",
-        "No sales found",
-        "Try a wider date range or remove product filters."
+        "Selected date range aur filters mein matching invoice records nahi mile."
       );
 
-      setInsight(
-        "#insightProductTitle",
+      setText("#insightProductTitle", "No product ranking");
+      setText(
         "#insightProductText",
-        "No product ranking",
-        "Product recommendations require matching invoice line items."
+        "Product analysis ke liye saved invoices mein item-level records zaroori hain."
       );
 
-      setInsight(
-        "#insightTimeTitle",
+      setText("#insightTimeTitle", "No peak hour identified");
+      setText(
         "#insightTimeText",
-        "No demand pattern",
-        "Select a period containing sales before drawing operational conclusions."
+        "Hourly pattern tab calculate hoga jab dated invoices available hon."
       );
 
-      setInsight(
-        "#insightCategoryTitle",
+      setText("#insightCategoryTitle", "No category activity");
+      setText(
         "#insightCategoryText",
-        "No category activity",
-        "No category contribution can be calculated from the current selection."
+        "Category analysis ke liye invoice items ka category data zaroori hai."
       );
 
       return;
     }
 
-    insightsStatus.textContent = "Demo Insights";
-
-    // Sales trend.
     if (previous && previous.revenue > 0) {
       const change =
         ((current.revenue - previous.revenue) / previous.revenue) * 100;
 
       if (change > 5) {
-        setInsight(
-          "#insightSalesTitle",
+        setText("#insightSalesTitle", "Revenue increased");
+        setText(
           "#insightSalesText",
-          "Revenue is increasing",
-          `Revenue increased by ${change.toFixed(1)}% compared with the previous period. Validate the pattern using actual sales data.`
+          `Revenue previous period ke comparison mein ${change.toFixed(1)}% badha.`
         );
       } else if (change < -5) {
-        setInsight(
-          "#insightSalesTitle",
+        setText("#insightSalesTitle", "Revenue decreased");
+        setText(
           "#insightSalesText",
-          "Revenue is declining",
-          `Revenue decreased by ${Math.abs(change).toFixed(1)}%. Review recent demand, product availability and operating conditions.`
+          `Revenue previous period ke comparison mein ${Math.abs(change).toFixed(1)}% kam hua.`
         );
       } else {
-        setInsight(
-          "#insightSalesTitle",
+        setText("#insightSalesTitle", "Revenue relatively stable");
+        setText(
           "#insightSalesText",
-          "Revenue is relatively stable",
-          `Revenue changed by ${change.toFixed(1)}%. Check longer-term trends before changing business strategy.`
+          `Revenue mein ${change.toFixed(1)}% change record hua.`
         );
       }
     } else {
-      setInsight(
-        "#insightSalesTitle",
+      setText("#insightSalesTitle", "Baseline established");
+      setText(
         "#insightSalesText",
-        "Establish a baseline",
-        "A reliable growth comparison requires a previous period with valid sales."
+        "Growth compare karne ke liye previous period mein saved sales honi chahiye."
       );
     }
 
-    // Product performance.
     const topProduct = current.products[0];
 
-    if (topProduct) {
-      const share = getRevenueShare(
-        topProduct.revenue,
-        current.revenue
-      );
+    setText(
+      "#insightProductTitle",
+      topProduct?.name || "No product data"
+    );
 
-      setInsight(
-        "#insightProductTitle",
-        "#insightProductText",
-        topProduct.name,
-        `Highest-revenue product in this selection, contributing ${percentage(share)} of filtered sales revenue. Consider its availability and consistency of supply.`
-      );
-    }
+    setText(
+      "#insightProductText",
+      topProduct
+        ? `Highest product revenue ${money(topProduct.revenue)} hai, ${percentage(share(topProduct.revenue, current.revenue))} of filtered revenue.`
+        : "Invoice records mein product-level sales detail available nahi hai."
+    );
 
-    // Time-of-day performance.
-    const bestHour = hourlyPoints.reduce(
-      (best, point) => (
-        !best || point.revenue > best.revenue ? point : best
-      ),
+    const peakHour = hourly.reduce(
+      (best, item) => !best || item.revenue > best.revenue ? item : best,
       null
     );
 
-    if (bestHour && bestHour.revenue > 0) {
-      setInsight(
-        "#insightTimeTitle",
-        "#insightTimeText",
-        `Strongest hour: ${bestHour.label}`,
-        `This hour recorded the highest revenue in the selected period. Use actual preparation times and order volumes when planning staff coverage.`
-      );
-    } else {
-      setInsight(
-        "#insightTimeTitle",
-        "#insightTimeText",
-        "No peak hour identified",
-        "More transaction activity is needed to identify meaningful operating patterns."
-      );
-    }
+    setText(
+      "#insightTimeTitle",
+      peakHour && peakHour.revenue > 0
+        ? `Peak hour: ${peakHour.label}`
+        : "No peak hour identified"
+    );
 
-    // Category performance.
+    setText(
+      "#insightTimeText",
+      peakHour && peakHour.revenue > 0
+        ? `Is hour mein ${money(peakHour.revenue)} revenue record hua.`
+        : "Is reporting period mein hourly sales data available nahi hai."
+    );
+
     const topCategory = current.categories[0];
 
-    if (topCategory) {
-      const share = getRevenueShare(
-        topCategory.revenue,
-        current.revenue
-      );
+    setText(
+      "#insightCategoryTitle",
+      topCategory?.name || "No category data"
+    );
 
-      setInsight(
-        "#insightCategoryTitle",
-        "#insightCategoryText",
-        topCategory.name,
-        `Leading category by revenue, contributing ${percentage(share)} of filtered sales. Review category breadth and product availability.`
-      );
-    }
-
-    const note = $("#businessInsightsDisclaimer");
-
-    note.textContent =
-      "These rule-based insights use illustrative demo transactions. " +
-      "They identify patterns, not guaranteed causes or forecasts.";
+    setText(
+      "#insightCategoryText",
+      topCategory
+        ? `${topCategory.name} category ka revenue ${money(topCategory.revenue)} raha, yaani ${percentage(share(topCategory.revenue, current.revenue))} of filtered sales.`
+        : "Invoice items ke category details available nahi hain."
+    );
   }
 
   // ==================================================
-  // 18. RENDER ALL CHARTS
+  // 15. RENDER ALL ANALYTICS
   // ==================================================
 
-  function renderCharts(current, selectedRange) {
-    const granularity = granularitySelect.value;
+  function getGranularity() {
+    const value = normalise(granularitySelect?.value || "day");
 
-    const trendPoints = groupTransactionsByTime(
-      current.transactions,
-      granularity
-    );
+    if (["hour", "hourly"].includes(value)) return "hour";
+    if (["week", "weekly"].includes(value)) return "week";
+    if (["month", "monthly"].includes(value)) return "month";
 
-    renderLineChart(
-      $("#salesTrendChart"),
-      trendPoints
-    );
+    return "day";
+  }
 
-    const trendLabel = $("#salesTrendPeriodLabel");
+  function renderAllReports() {
+    clearMessage();
 
-    trendLabel.textContent = selectedRange.label;
+    const range = getSelectedDateRange();
 
-    const insightTrend = $("#salesTrendInsight");
-
-    if (current.transactions.length > 0) {
-      const maximumPoint = trendPoints.reduce(
-        (best, point) => (
-          !best || point.revenue > best.revenue ? point : best
-        ),
-        null
-      );
-
-      insightTrend.textContent = maximumPoint
-        ? `Peak interval: ${maximumPoint.label}`
-        : "No peak interval";
-    } else {
-      insightTrend.textContent = "No sales data available.";
+    if (!range.valid) {
+      setMessage(range.message, "error");
+      return;
     }
 
-    // Top products by revenue.
+    const currentTransactions = getFilteredTransactions(range);
+    const current = analyseTransactions(currentTransactions);
+
+    const previousRange = getPreviousDateRange(range);
+
+    let previous = null;
+
+    if (previousRange) {
+      const previousTransactions = getFilteredTransactions(previousRange);
+
+      previous = {
+        ...analyseTransactions(previousTransactions),
+        label: previousRange.label
+      };
+    }
+
+    updateExecutiveKPIs(current, previous);
+
+    renderProductTable(current);
+    renderCategoryTable(current);
+    renderComparisonTable(current, previous);
+
+    const trend = groupByTime(
+      currentTransactions,
+      getGranularity()
+    );
+
+    const hourly = groupByTime(currentTransactions, "hour");
+    const weekdays = groupByWeekday(currentTransactions);
+
+    renderLineChart($("#salesTrendChart"), trend);
+
     renderHorizontalBarChart(
       $("#productRevenueChart"),
-      current.analysis.products.slice(0, 8),
+      current.products.slice(0, 10),
       "name",
-      "revenue",
-      compactMoney
+      "revenue"
     );
 
-    // Revenue by category.
     renderHorizontalBarChart(
       $("#categoryRevenueChart"),
-      current.analysis.categories,
+      current.categories.slice(0, 10),
       "name",
-      "revenue",
-      compactMoney
+      "revenue"
     );
 
-    // Hourly revenue.
-    const hourlyPoints = groupTransactionsByTime(
-      current.transactions,
-      "hour"
+    renderVerticalBarChart($("#hourlySalesChart"), hourly);
+    renderVerticalBarChart($("#weekdaySalesChart"), weekdays);
+
+    setText(
+      "#salesTrendPeriodLabel",
+      `${range.label} · ${range.from} to ${range.to}`
     );
 
-    renderVerticalBarChart(
-      $("#hourlySalesChart"),
-      hourlyPoints,
-      compactMoney
+    setText(
+      "#salesTrendInsight",
+      trend.length
+        ? `Trend mein ${trend.length} reporting interval hain.`
+        : "No sales intervals available."
     );
 
-    // Weekday revenue.
-    const weekdayPoints = groupTransactionsByWeekday(
-      current.transactions
-    );
-
-    renderVerticalBarChart(
-      $("#weekdaySalesChart"),
-      weekdayPoints,
-      compactMoney
-    );
-
-    // Best hour.
-    const bestHour = hourlyPoints.reduce(
-      (best, point) => (
-        !best || point.revenue > best.revenue ? point : best
-      ),
+    const peakHour = hourly.reduce(
+      (best, item) => !best || item.revenue > best.revenue ? item : best,
       null
     );
 
-    $("#peakHourInsight").innerHTML = bestHour && bestHour.revenue > 0
-      ? `
-        <p class="kpi-sub">
-          <strong>Highest-revenue hour:</strong>
-          ${escapeHTML(bestHour.label)} — ${money(bestHour.revenue)}
-        </p>
-      `
-      : `
-        <p class="kpi-sub">
-          No peak hour identified in this selection.
-        </p>
-      `;
+    setText(
+      "#peakHourInsight",
+      peakHour && peakHour.revenue > 0
+        ? `Highest revenue hour: ${peakHour.label} (${money(peakHour.revenue)})`
+        : "Hourly sales data available nahi hai."
+    );
 
-    // Best weekday.
-    const bestWeekday = weekdayPoints.reduce(
-      (best, point) => (
-        !best || point.revenue > best.revenue ? point : best
-      ),
+    const peakWeekday = weekdays.reduce(
+      (best, item) => !best || item.revenue > best.revenue ? item : best,
       null
     );
 
-    $("#weekdayInsight").innerHTML =
-      bestWeekday && bestWeekday.revenue > 0
-        ? `
-          <p class="kpi-sub">
-            <strong>Highest-revenue weekday:</strong>
-            ${escapeHTML(bestWeekday.label)} — ${money(bestWeekday.revenue)}
-          </p>
-        `
-        : `
-          <p class="kpi-sub">
-            No leading weekday identified.
-          </p>
-        `;
-
-    return {
-      trendPoints,
-      hourlyPoints,
-      weekdayPoints
-    };
-  }
-
-  // ==================================================
-  // 19. EXPORT HELPERS
-  // ==================================================
-
-  function csvCell(value) {
-    let text = String(value ?? "");
-
-    // Protect CSV exports against common spreadsheet formula injection.
-    if (/^[\s]*[=+\-@]/.test(text)) {
-      text = "'" + text;
-    }
-
-    return `"${text.replace(/"/g, '""')}"`;
-  }
-
-  function downloadCSV(rows, filename) {
-    if (!rows.length) {
-      showMessage("There is no report data to export.", true);
-      return;
-    }
-
-    const content = rows
-      .map(row => row.map(csvCell).join(","))
-      .join("\r\n");
-
-    const blob = new Blob(
-      ["\uFEFF", content],
-      { type: "text/csv;charset=utf-8;" }
+    setText(
+      "#weekdayInsight",
+      peakWeekday && peakWeekday.revenue > 0
+        ? `Highest revenue weekday: ${peakWeekday.label} (${money(peakWeekday.revenue)})`
+        : "Weekday sales data available nahi hai."
     );
 
-    const url = URL.createObjectURL(blob);
+    renderInsights(current, previous, hourly, weekdays);
 
-    const link = document.createElement("a");
-
-    link.href = url;
-    link.download = filename;
-
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
-
-  function buildProductExportRows(analysis) {
-    return [
-      [
-        "Rank",
-        "Product",
-        "Category",
-        "Units Sold",
-        "Revenue INR",
-        "Revenue Share Percent"
-      ],
-
-      ...analysis.products.map((product, index) => [
-        index + 1,
-        product.name,
-        product.category,
-        product.units,
-        product.revenue.toFixed(2),
-        getRevenueShare(product.revenue, analysis.revenue).toFixed(2)
-      ])
-    ];
-  }
-
-  // ==================================================
-  // 20. FULL REPORT EXPORT
-  // ==================================================
-
-  let latestReport = null;
-
-  function exportFullReport() {
-    if (!latestReport) {
-      showMessage("Apply a valid report filter before exporting.", true);
-      return;
-    }
-
-    const {
-      currentRange,
+    state.latestReport = {
+      range,
       current,
       previous,
-      charts
-    } = latestReport;
+      trend,
+      hourly,
+      weekdays
+    };
 
-    const rows = [];
+    if (dataStatus) {
+      dataStatus.textContent = "Live Firebase Data";
+      dataStatus.dataset.type = "success";
+    }
+  }
 
-    rows.push(["Restaurant Business Analytics Report"]);
-    rows.push(["Data status", "Illustrative demo data"]);
-    rows.push(["Reporting period", currentRange.label]);
-    rows.push(["From date", currentRange.from]);
-    rows.push(["To date", currentRange.to]);
-    rows.push(["Category filter", categorySelect.value || "All Categories"]);
-    rows.push([
-      "Product filter",
-      productMap.get(productSelect.value)?.name || "All Products"
-    ]);
+  // ==================================================
+  // 16. REPORT EXPORTS
+  // ==================================================
 
-    rows.push([]);
+  function exportFullReport() {
+    const report = state.latestReport;
 
-    rows.push(["EXECUTIVE SUMMARY"]);
-    rows.push(["Metric", "Value"]);
-
-    rows.push(["Sales Revenue INR", current.revenue.toFixed(2)]);
-    rows.push(["Invoices", current.invoiceCount]);
-    rows.push(["Units Sold", current.unitsSold]);
-    rows.push(["Average Order Value INR", current.averageOrderValue.toFixed(2)]);
-
-    if (previous) {
-      rows.push(["Previous Period Revenue INR", previous.revenue.toFixed(2)]);
-      rows.push(["Previous Period Invoices", previous.invoiceCount]);
+    if (!report) {
+      setMessage("Pehle valid report filter apply karein.", "error");
+      return;
     }
 
-    rows.push([]);
+    const rows = [
+      ["Restaurant Business Analytics Report"],
+      ["Data Source", "Firebase Realtime Database"],
+      ["Reporting Period", report.range.label],
+      ["Start Date", report.range.from],
+      ["End Date", report.range.to],
+      ["Category", categorySelect?.value || "All Categories"],
+      ["Product", productSelect?.selectedOptions?.[0]?.textContent || "All Products"],
+      [],
+      ["EXECUTIVE SUMMARY"],
+      ["Metric", "Value"],
+      ["Revenue INR", report.current.revenue.toFixed(2)],
+      ["Invoice Count", report.current.invoiceCount],
+      ["Units Sold", report.current.unitsSold],
+      ["Average Order INR", report.current.averageOrderValue.toFixed(2)],
+      ["Cash INR", report.current.cash.toFixed(2)],
+      ["UPI INR", report.current.upi.toFixed(2)],
+      [],
+      ["SALES TREND"],
+      ["Interval", "Revenue INR", "Invoices"]
+    ];
 
-    rows.push(["SALES TREND"]);
-    rows.push(["Interval", "Revenue INR", "Invoice Count"]);
-
-    charts.trendPoints.forEach(point => {
+    report.trend.forEach(point => {
       rows.push([
         point.label,
         point.revenue.toFixed(2),
@@ -2017,64 +2269,46 @@
       ]);
     });
 
-    rows.push([]);
+    rows.push(
+      [],
+      ["PRODUCT PERFORMANCE"],
+      ["Rank", "Product", "Category", "Units", "Revenue INR", "Revenue Share"]
+    );
 
-    rows.push(["PRODUCT PERFORMANCE"]);
-
-    rows.push([
-      "Rank",
-      "Product",
-      "Category",
-      "Units Sold",
-      "Revenue INR",
-      "Revenue Share Percent"
-    ]);
-
-    current.analysis.products.forEach((product, index) => {
+    report.current.products.forEach((product, index) => {
       rows.push([
         index + 1,
         product.name,
         product.category,
         product.units,
         product.revenue.toFixed(2),
-        getRevenueShare(
-          product.revenue,
-          current.revenue
-        ).toFixed(2)
+        share(product.revenue, report.current.revenue).toFixed(2)
       ]);
     });
 
-    rows.push([]);
+    rows.push(
+      [],
+      ["CATEGORY PERFORMANCE"],
+      ["Category", "Products", "Units", "Revenue INR", "Revenue Share"]
+    );
 
-    rows.push(["CATEGORY PERFORMANCE"]);
-
-    rows.push([
-      "Category",
-      "Unique Products Sold",
-      "Units Sold",
-      "Revenue INR",
-      "Revenue Share Percent"
-    ]);
-
-    current.analysis.categories.forEach(category => {
+    report.current.categories.forEach(category => {
       rows.push([
         category.name,
         category.productCount,
         category.units,
         category.revenue.toFixed(2),
-        getRevenueShare(
-          category.revenue,
-          current.revenue
-        ).toFixed(2)
+        share(category.revenue, report.current.revenue).toFixed(2)
       ]);
     });
 
-    rows.push([]);
+    rows.push(
+      [],
+      ["HOURLY PERFORMANCE"],
+      ["Hour", "Revenue INR", "Invoices"]
+    );
 
-    rows.push(["HOURLY PERFORMANCE"]);
-    rows.push(["Hour", "Revenue INR", "Invoice Count"]);
-
-    charts.hourlyPoints.forEach(point => {
+    report.hourly.forEach(point => {
       rows.push([
         point.label,
         point.revenue.toFixed(2),
@@ -2082,12 +2316,13 @@
       ]);
     });
 
-    rows.push([]);
+    rows.push(
+      [],
+      ["WEEKDAY PERFORMANCE"],
+      ["Weekday", "Revenue INR", "Invoices"]
+    );
 
-    rows.push(["WEEKDAY PERFORMANCE"]);
-    rows.push(["Weekday", "Revenue INR", "Invoice Count"]);
-
-    charts.weekdayPoints.forEach(point => {
+    report.weekdays.forEach(point => {
       rows.push([
         point.label,
         point.revenue.toFixed(2),
@@ -2097,143 +2332,198 @@
 
     downloadCSV(
       rows,
-      `business-analytics-${localDateString()}.csv`
+      `business-report-${localDateString()}.csv`
     );
 
-    showMessage(
-      "Full analytics report exported. The report uses demo data.",
-      false
-    );
+    setMessage("Firebase report CSV export ho gaya.", "success");
   }
 
-  exportButton.addEventListener("click", exportFullReport);
+  function exportProductReport() {
+    const report = state.latestReport;
 
-  exportProductsButton.addEventListener("click", () => {
-    if (!latestReport) {
-      showMessage("Apply a valid report filter first.", true);
+    if (!report) {
+      setMessage("Pehle report filter apply karein.", "error");
       return;
     }
+
+    const rows = [
+      [
+        "Rank",
+        "Product",
+        "Category",
+        "Units Sold",
+        "Revenue INR",
+        "Revenue Share Percent"
+      ]
+    ];
+
+    report.current.products.forEach((product, index) => {
+      rows.push([
+        index + 1,
+        product.name,
+        product.category,
+        product.units,
+        product.revenue.toFixed(2),
+        share(product.revenue, report.current.revenue).toFixed(2)
+      ]);
+    });
 
     downloadCSV(
-      buildProductExportRows(latestReport.current.analysis),
+      rows,
       `product-performance-${localDateString()}.csv`
     );
-  });
-
-  // ==================================================
-  // 21. APPLY REPORT FILTERS
-  // ==================================================
-
-  function applyReportFilters() {
-    clearMessage();
-
-    const selectedRange = getSelectedDateRange();
-
-    if (!selectedRange.valid) {
-      showMessage(selectedRange.message, true);
-      return;
-    }
-
-    const currentTransactions = getTransactionsInRange(selectedRange);
-
-    const currentAnalysis = analyse(currentTransactions);
-
-    const previousRange = getPreviousDateRange(selectedRange);
-
-    let previousAnalysis = null;
-
-    if (previousRange) {
-      const previousTransactions = getTransactionsInRange(previousRange);
-
-      previousAnalysis = analyse(previousTransactions);
-
-      previousAnalysis.label = previousRange.label;
-    }
-
-    const current = {
-      ...currentAnalysis,
-      transactions: currentTransactions
-    };
-
-    const previous = previousAnalysis;
-
-    renderExecutiveKPIs(current, previous);
-
-    renderProductTable(currentAnalysis);
-    renderCategoryTable(currentAnalysis);
-    renderComparisonTable(current, previous);
-
-    const charts = renderCharts(current, selectedRange);
-
-    renderInsights(
-      current,
-      previous,
-      charts.trendPoints,
-      charts.hourlyPoints,
-      charts.weekdayPoints
-    );
-
-    latestReport = {
-      currentRange: selectedRange,
-      current,
-      previous,
-      charts
-    };
-
-    dataStatus.textContent = "Demo Data";
-
-    $("#businessInsightsDisclaimer").textContent =
-      "All displayed figures and insights currently use illustrative demo transactions. " +
-      "Connect Firebase Realtime Database before using the reports for actual business decisions.";
   }
 
   // ==================================================
-  // 22. EVENT LISTENERS
+  // 17. FILTER AND REFRESH EVENTS
   // ==================================================
 
   filtersForm.addEventListener("submit", event => {
     event.preventDefault();
-    applyReportFilters();
+    renderAllReports();
   });
 
   filtersForm.addEventListener("reset", () => {
     window.setTimeout(() => {
       updateCustomRangeVisibility();
       populateProductOptions();
-      clearMessage();
-      applyReportFilters();
+      renderAllReports();
     }, 0);
   });
 
-  refreshButton.addEventListener("click", () => {
+  refreshButton?.addEventListener("click", () => {
     /*
-     * This refresh recalculates the report from current demo
-     * data. It does not contact a database or external API.
+     * Firebase onValue subscription refreshes automatically.
+     * This button rerenders from the latest subscribed data.
      */
+    renderAllReports();
 
-    applyReportFilters();
-
-    showMessage(
-      "Report recalculated from demo data. No database is connected yet.",
-      false
+    setMessage(
+      "Report latest received Firebase data se refresh kiya gaya.",
+      "success"
     );
   });
 
+  granularitySelect?.addEventListener("change", renderAllReports);
+  categorySelect?.addEventListener("change", renderAllReports);
+  productSelect?.addEventListener("change", renderAllReports);
+
+  exportButton?.addEventListener("click", exportFullReport);
+  exportProductsButton?.addEventListener("click", exportProductReport);
+
   // ==================================================
-  // 23. INITIALISE
+  // 18. START LIVE DATABASE SUBSCRIPTION
+  // ==================================================
+
+  async function startReports() {
+    try {
+      setStatus("Connecting to Firebase...", "info");
+
+      if (filterMessage) {
+        filterMessage.textContent = "";
+      }
+
+      const firebase = await getFirebase();
+
+      await waitForAdministrator(firebase);
+
+      const databaseSDK = firebase.sdk.database;
+
+      const reportReference = databaseSDK.ref(
+        firebase.db,
+        DATABASE_PATH
+      );
+
+      state.unsubscribe = databaseSDK.onValue(
+        reportReference,
+        snapshot => {
+          loadDatabaseData(
+            snapshot.exists() ? snapshot.val() : {}
+          );
+
+          state.firebaseReady = true;
+
+          renderAllReports();
+
+          setStatus("Live Firebase Data", "success");
+
+          console.info("Reports updated from Firebase.", {
+            invoices: state.invoices.length,
+            products: state.products.length,
+            categories: state.categories.length
+          });
+
+          if (state.invoices.length === 0) {
+            setMessage(
+              "Firebase connected hai, lekin restaurantBilling/invoices mein invoice records nahi mile. Sales charts abhi empty rahenge.",
+              "info"
+            );
+          } else {
+            clearMessage();
+          }
+        },
+        error => {
+          console.error("Reports database read failed:", error);
+
+          setStatus("Database Error", "error");
+
+          setMessage(
+            `Firebase data read nahi ho saka: ${error.message}`,
+            "error"
+          );
+        }
+      );
+    } catch (error) {
+      console.error("Reports initialization failed:", error);
+
+      setStatus("Connection Failed", "error");
+
+      setMessage(
+        error.message ||
+        "Firebase reports initialize nahi ho paye.",
+        "error"
+      );
+
+      // Do not generate demo data as a fallback.
+      [
+        "#salesTrendChart",
+        "#productRevenueChart",
+        "#categoryRevenueChart",
+        "#hourlySalesChart",
+        "#weekdaySalesChart"
+      ].forEach(selector => {
+        showChartMessage(
+          $(selector),
+          "Firebase data load nahi hua. Connection aur database rules check karein."
+        );
+      });
+    }
+  }
+
+  // ==================================================
+  // 19. CLEAN UP
+  // ==================================================
+
+  window.addEventListener("pagehide", () => {
+    state.destroyed = true;
+
+    if (typeof state.unsubscribe === "function") {
+      state.unsubscribe();
+      state.unsubscribe = null;
+    }
+  });
+
+  // ==================================================
+  // 20. INITIALISE
   // ==================================================
 
   updateCustomRangeVisibility();
 
-  applyReportFilters();
-
-  console.info(
-    "Reports Analytics initialised with illustrative demo transactions.",
-    {
-      transactions: demoTransactions.length,
-      products: demoProducts.length,
-      availableFrom: minimumAvailableDate,
-      availableTo: maximumAvailableDate
-    }
-  );
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", startReports, {
+      once: true
+    });
+  } else {
+    startReports();
+  }
 })();
