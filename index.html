@@ -6,6 +6,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#ffffff">
 
+  <meta
+    name="description"
+    content="Restaurant dashboard, sales performance and business insights."
+  >
+
   <title>Dashboard | Restaurant Billing</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -17,6 +22,43 @@
   >
 
   <link rel="stylesheet" href="style.css">
+
+  <style>
+    .dashboard-chart-empty {
+      min-height: 180px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+      color: #6b7280;
+      font-size: 13px;
+      line-height: 1.7;
+      border: 1px dashed #d1d5db;
+      border-radius: 5px;
+    }
+
+    .dashboard-data-status {
+      margin: 12px 0;
+      font-size: 13px;
+      color: #6b7280;
+    }
+
+    .dashboard-no-data {
+      text-align: center;
+      padding: 28px 16px;
+      color: #6b7280;
+    }
+
+    .dashboard-empty-bar {
+      width: 100%;
+      height: 0;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+  </style>
 </head>
 
 <body>
@@ -59,7 +101,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
         stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-        <path d="M14 2v6h6"/>
+        <path d="M14 2v6h6M8 13h8M8 17h5"/>
       </svg>
       Invoices
     </a>
@@ -80,6 +122,7 @@
         stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M20 7l-8-4-8 4 8 4 8-4z"/>
         <path d="M4 7v10l8 4 8-4V7"/>
+        <path d="M12 11v10"/>
       </svg>
       Products
     </a>
@@ -96,7 +139,8 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
         stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="3"/>
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        <path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+        <path d="m4.93 4.93 2.12 2.12m9.9 9.9 2.12 2.12m0-14.14-2.12 2.12m-9.9 9.9-2.12 2.12"/>
       </svg>
       Settings
     </a>
@@ -106,16 +150,16 @@
         <div class="label">Today's Target</div>
 
         <div class="value">
-          <span class="ph">[Amount]</span>
+          <span class="ph">—</span>
         </div>
 
         <div class="target-track">
-          <div class="target-fill"></div>
+          <div class="target-fill" style="width:0%"></div>
         </div>
 
         <div class="target-meta">
-          <span><span class="ph">[%]</span> achieved</span>
-          <span><span class="ph">[Left]</span></span>
+          <span><span class="ph">—</span></span>
+          <span><span class="ph">—</span></span>
         </div>
       </div>
     </div>
@@ -134,7 +178,7 @@
         class="menu-btn"
         id="menuBtn"
         type="button"
-        aria-label="Open menu"
+        aria-label="Open navigation menu"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
           stroke-width="2" stroke-linecap="round">
@@ -173,7 +217,6 @@
     <!-- PAGE CONTENT -->
     <main class="content">
 
-      <!-- PAGE HEADING -->
       <section class="page-head">
         <div>
           <h2>Dashboard</h2>
@@ -182,7 +225,11 @@
 
         <div class="page-actions">
 
-          <button class="btn btn-outline" type="button" id="dashboardDateFilter">
+          <button
+            class="btn btn-outline"
+            type="button"
+            id="dashboardDateFilter"
+          >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="3" y="4" width="18" height="18" rx="2"/>
@@ -191,7 +238,11 @@
             This Week
           </button>
 
-          <button class="btn btn-soft" type="button" id="exportDashboardBtn">
+          <button
+            class="btn btn-soft"
+            type="button"
+            id="exportDashboardBtn"
+          >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -211,32 +262,34 @@
         </div>
       </section>
 
+      <p
+        id="dashboardDataNotice"
+        class="dashboard-data-status"
+        role="status"
+        aria-live="polite"
+        hidden
+      ></p>
+
       <!-- KPI CARDS -->
       <section class="kpis">
 
         <div class="kpi">
           <div class="kpi-top">
-
             <div class="kpi-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
               </svg>
             </div>
-
-            <span class="kpi-trend up" id="revenueTrend">
-              <span class="ph">[Trend]</span>
-            </span>
           </div>
 
           <div class="kpi-label">Today's Revenue</div>
-          <div class="kpi-value"><span class="ph">[Revenue]</span></div>
+          <div class="kpi-value"><span class="ph">—</span></div>
           <div class="kpi-sub">Today's saved invoice revenue</div>
         </div>
 
         <div class="kpi">
           <div class="kpi-top">
-
             <div class="kpi-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -244,23 +297,15 @@
                 <path d="M14 2v6h6M8 13h8M8 17h5"/>
               </svg>
             </div>
-
-            <span class="kpi-trend up" id="invoiceTrend">
-              <span class="ph">[Trend]</span>
-            </span>
           </div>
 
           <div class="kpi-label">Invoices Today</div>
-          <div class="kpi-value"><span class="ph">[Count]</span></div>
-          <div class="kpi-sub">
-            <span class="ph">[Generated]</span> generated ·
-            <span class="ph">[Cancelled]</span> cancelled
-          </div>
+          <div class="kpi-value"><span class="ph">—</span></div>
+          <div class="kpi-sub">Generated and cancelled invoices</div>
         </div>
 
         <div class="kpi">
           <div class="kpi-top">
-
             <div class="kpi-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -268,20 +313,15 @@
                 <path d="M18 9l-5 5-3-3-4 4"/>
               </svg>
             </div>
-
-            <span class="kpi-trend flat">
-              Calculated
-            </span>
           </div>
 
           <div class="kpi-label">Average Bill Value</div>
-          <div class="kpi-value"><span class="ph">[Average]</span></div>
+          <div class="kpi-value"><span class="ph">—</span></div>
           <div class="kpi-sub">Based on today's saved invoices</div>
         </div>
 
         <div class="kpi">
           <div class="kpi-top">
-
             <div class="kpi-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -289,12 +329,10 @@
                 <path d="M12 7v5l3 2"/>
               </svg>
             </div>
-
-            <span class="kpi-trend flat">Current</span>
           </div>
 
           <div class="kpi-label">Pending Drafts</div>
-          <div class="kpi-value"><span class="ph">[Drafts]</span></div>
+          <div class="kpi-value"><span class="ph">—</span></div>
           <div class="kpi-sub">Invoices currently marked as drafts</div>
         </div>
 
@@ -318,70 +356,65 @@
 
           <div class="card-body">
             <div class="chart">
-
               <div class="chart-grid">
-                <span></span>
-                <span></span>
-                <span></span>
-                <span></span>
+                <span></span><span></span><span></span><span></span>
               </div>
 
               <div class="chart-col">
                 <div class="chart-bars">
-                  <div class="bar" data-tip="Mon"></div>
-                  <div class="bar prev" data-tip="Mon"></div>
+                  <div class="bar dashboard-empty-bar" data-tip="Mon"></div>
+                  <div class="bar prev dashboard-empty-bar" data-tip="Mon"></div>
                 </div>
                 <div class="chart-day">Mon</div>
               </div>
 
               <div class="chart-col">
                 <div class="chart-bars">
-                  <div class="bar" data-tip="Tue"></div>
-                  <div class="bar prev" data-tip="Tue"></div>
+                  <div class="bar dashboard-empty-bar" data-tip="Tue"></div>
+                  <div class="bar prev dashboard-empty-bar" data-tip="Tue"></div>
                 </div>
                 <div class="chart-day">Tue</div>
               </div>
 
               <div class="chart-col">
                 <div class="chart-bars">
-                  <div class="bar" data-tip="Wed"></div>
-                  <div class="bar prev" data-tip="Wed"></div>
+                  <div class="bar dashboard-empty-bar" data-tip="Wed"></div>
+                  <div class="bar prev dashboard-empty-bar" data-tip="Wed"></div>
                 </div>
                 <div class="chart-day">Wed</div>
               </div>
 
               <div class="chart-col">
                 <div class="chart-bars">
-                  <div class="bar" data-tip="Thu"></div>
-                  <div class="bar prev" data-tip="Thu"></div>
+                  <div class="bar dashboard-empty-bar" data-tip="Thu"></div>
+                  <div class="bar prev dashboard-empty-bar" data-tip="Thu"></div>
                 </div>
                 <div class="chart-day">Thu</div>
               </div>
 
               <div class="chart-col">
                 <div class="chart-bars">
-                  <div class="bar" data-tip="Fri"></div>
-                  <div class="bar prev" data-tip="Fri"></div>
+                  <div class="bar dashboard-empty-bar" data-tip="Fri"></div>
+                  <div class="bar prev dashboard-empty-bar" data-tip="Fri"></div>
                 </div>
                 <div class="chart-day">Fri</div>
               </div>
 
               <div class="chart-col">
                 <div class="chart-bars">
-                  <div class="bar" data-tip="Sat"></div>
-                  <div class="bar prev" data-tip="Sat"></div>
+                  <div class="bar dashboard-empty-bar" data-tip="Sat"></div>
+                  <div class="bar prev dashboard-empty-bar" data-tip="Sat"></div>
                 </div>
                 <div class="chart-day">Sat</div>
               </div>
 
               <div class="chart-col">
                 <div class="chart-bars">
-                  <div class="bar" data-tip="Sun"></div>
-                  <div class="bar prev" data-tip="Sun"></div>
+                  <div class="bar dashboard-empty-bar" data-tip="Sun"></div>
+                  <div class="bar prev dashboard-empty-bar" data-tip="Sun"></div>
                 </div>
                 <div class="chart-day">Sun</div>
               </div>
-
             </div>
           </div>
         </div>
@@ -395,7 +428,6 @@
           </div>
 
           <div class="card-body">
-
             <div class="split-bar">
               <div class="split-seg s1" style="width:0%"></div>
               <div class="split-seg s2" style="width:0%"></div>
@@ -408,7 +440,7 @@
                   <span class="sl-dot s1"></span>
                   <span class="sl-name">UPI</span>
                 </div>
-                <span class="sl-val"><span class="ph">[UPI Amount]</span></span>
+                <span class="sl-val"><span class="ph">—</span></span>
               </div>
 
               <div class="split-legend-item">
@@ -416,7 +448,7 @@
                   <span class="sl-dot s2"></span>
                   <span class="sl-name">Cash</span>
                 </div>
-                <span class="sl-val"><span class="ph">[Cash Amount]</span></span>
+                <span class="sl-val"><span class="ph">—</span></span>
               </div>
 
             </div>
@@ -427,12 +459,11 @@
 
       <!-- PERFORMANCE REPORT -->
       <section class="report-hero">
-
         <div class="rh-text">
           <h3>Performance Report</h3>
           <p>
             Monthly summary ·
-            <span class="ph">[Month Year]</span>
+            <span class="ph">—</span>
           </p>
         </div>
 
@@ -440,26 +471,25 @@
 
           <div class="rh-stat">
             <div class="rs-label">Total Sales</div>
-            <div class="rs-value"><span class="ph">[Sales]</span></div>
+            <div class="rs-value"><span class="ph">—</span></div>
           </div>
 
           <div class="rh-stat">
             <div class="rs-label">Orders</div>
-            <div class="rs-value"><span class="ph">[Orders]</span></div>
+            <div class="rs-value"><span class="ph">—</span></div>
           </div>
 
           <div class="rh-stat">
             <div class="rs-label">Growth</div>
-            <div class="rs-value"><span class="ph">[Growth]</span></div>
+            <div class="rs-value"><span class="ph">—</span></div>
           </div>
 
         </div>
       </section>
 
-      <!-- REPORTS AND ANALYTICS -->
+      <!-- MONTHLY / CATEGORY / KEY METRICS -->
       <section class="row-3">
 
-        <!-- MONTHLY TREND -->
         <div class="card">
           <div class="card-head">
             <div>
@@ -474,68 +504,55 @@
               <div class="cat-item">
                 <div class="cat-row">
                   <span class="cat-name">—</span>
-                  <span class="cat-val"><span class="ph">[Amount]</span></span>
+                  <span class="cat-val"><span class="ph">—</span></span>
                 </div>
-                <div class="cat-track">
-                  <div class="cat-fill" style="width:0%"></div>
-                </div>
+                <div class="cat-track"><div class="cat-fill" style="width:0%"></div></div>
               </div>
 
               <div class="cat-item">
                 <div class="cat-row">
                   <span class="cat-name">—</span>
-                  <span class="cat-val"><span class="ph">[Amount]</span></span>
+                  <span class="cat-val"><span class="ph">—</span></span>
                 </div>
-                <div class="cat-track">
-                  <div class="cat-fill" style="width:0%"></div>
-                </div>
+                <div class="cat-track"><div class="cat-fill" style="width:0%"></div></div>
               </div>
 
               <div class="cat-item">
                 <div class="cat-row">
                   <span class="cat-name">—</span>
-                  <span class="cat-val"><span class="ph">[Amount]</span></span>
+                  <span class="cat-val"><span class="ph">—</span></span>
                 </div>
-                <div class="cat-track">
-                  <div class="cat-fill" style="width:0%"></div>
-                </div>
+                <div class="cat-track"><div class="cat-fill" style="width:0%"></div></div>
               </div>
 
               <div class="cat-item">
                 <div class="cat-row">
                   <span class="cat-name">—</span>
-                  <span class="cat-val"><span class="ph">[Amount]</span></span>
+                  <span class="cat-val"><span class="ph">—</span></span>
                 </div>
-                <div class="cat-track">
-                  <div class="cat-fill" style="width:0%"></div>
-                </div>
+                <div class="cat-track"><div class="cat-fill" style="width:0%"></div></div>
               </div>
 
               <div class="cat-item">
                 <div class="cat-row">
                   <span class="cat-name">—</span>
-                  <span class="cat-val"><span class="ph">[Amount]</span></span>
+                  <span class="cat-val"><span class="ph">—</span></span>
                 </div>
-                <div class="cat-track">
-                  <div class="cat-fill" style="width:0%"></div>
-                </div>
+                <div class="cat-track"><div class="cat-fill" style="width:0%"></div></div>
               </div>
 
               <div class="cat-item">
                 <div class="cat-row">
                   <span class="cat-name">—</span>
-                  <span class="cat-val"><span class="ph">[Amount]</span></span>
+                  <span class="cat-val"><span class="ph">—</span></span>
                 </div>
-                <div class="cat-track">
-                  <div class="cat-fill" style="width:0%"></div>
-                </div>
+                <div class="cat-track"><div class="cat-fill" style="width:0%"></div></div>
               </div>
 
             </div>
           </div>
         </div>
 
-        <!-- TOP CATEGORIES -->
         <div class="card">
           <div class="card-head">
             <div>
@@ -550,58 +567,47 @@
               <div class="cat-item">
                 <div class="cat-row">
                   <span class="cat-name">—</span>
-                  <span class="cat-val"><span class="ph">[Amount]</span></span>
+                  <span class="cat-val"><span class="ph">—</span></span>
                 </div>
-                <div class="cat-track">
-                  <div class="cat-fill" style="width:0%"></div>
-                </div>
+                <div class="cat-track"><div class="cat-fill" style="width:0%"></div></div>
               </div>
 
               <div class="cat-item">
                 <div class="cat-row">
                   <span class="cat-name">—</span>
-                  <span class="cat-val"><span class="ph">[Amount]</span></span>
+                  <span class="cat-val"><span class="ph">—</span></span>
                 </div>
-                <div class="cat-track">
-                  <div class="cat-fill" style="width:0%"></div>
-                </div>
+                <div class="cat-track"><div class="cat-fill" style="width:0%"></div></div>
               </div>
 
               <div class="cat-item">
                 <div class="cat-row">
                   <span class="cat-name">—</span>
-                  <span class="cat-val"><span class="ph">[Amount]</span></span>
+                  <span class="cat-val"><span class="ph">—</span></span>
                 </div>
-                <div class="cat-track">
-                  <div class="cat-fill" style="width:0%"></div>
-                </div>
+                <div class="cat-track"><div class="cat-fill" style="width:0%"></div></div>
               </div>
 
               <div class="cat-item">
                 <div class="cat-row">
                   <span class="cat-name">—</span>
-                  <span class="cat-val"><span class="ph">[Amount]</span></span>
+                  <span class="cat-val"><span class="ph">—</span></span>
                 </div>
-                <div class="cat-track">
-                  <div class="cat-fill" style="width:0%"></div>
-                </div>
+                <div class="cat-track"><div class="cat-fill" style="width:0%"></div></div>
               </div>
 
               <div class="cat-item">
                 <div class="cat-row">
                   <span class="cat-name">—</span>
-                  <span class="cat-val"><span class="ph">[Amount]</span></span>
+                  <span class="cat-val"><span class="ph">—</span></span>
                 </div>
-                <div class="cat-track">
-                  <div class="cat-fill" style="width:0%"></div>
-                </div>
+                <div class="cat-track"><div class="cat-fill" style="width:0%"></div></div>
               </div>
 
             </div>
           </div>
         </div>
 
-        <!-- KEY METRICS -->
         <div class="card">
           <div class="card-head">
             <div>
@@ -615,20 +621,20 @@
 
               <div class="metric">
                 <div class="metric-label">Top Category Share</div>
-                <div class="metric-value"><span class="ph">[Percentage]</span></div>
+                <div class="metric-value"><span class="ph">—</span></div>
                 <div class="metric-delta">Of recorded item revenue</div>
               </div>
 
               <div class="metric">
                 <div class="metric-label">UPI Share</div>
-                <div class="metric-value"><span class="ph">[Percentage]</span></div>
+                <div class="metric-value"><span class="ph">—</span></div>
                 <div class="metric-delta">Of recorded cash and UPI collection</div>
               </div>
 
               <div class="metric">
                 <div class="metric-label">Peak Hour</div>
-                <div class="metric-value"><span class="ph">[Time]</span></div>
-                <div class="metric-delta">Based on invoice count</div>
+                <div class="metric-value"><span class="ph">—</span></div>
+                <div class="metric-delta">Based on recorded invoices</div>
               </div>
 
             </div>
@@ -637,15 +643,14 @@
 
       </section>
 
-      <!-- HOURLY HEATMAP AND TOP PRODUCTS -->
+      <!-- HOURLY HEATMAP AND PRODUCTS -->
       <section class="row-2">
 
         <div class="card">
           <div class="card-head">
-
             <div>
               <h3>Hourly Sales Heatmap</h3>
-              <p>Saved invoices by hour today</p>
+              <p>Saved invoices by hour</p>
             </div>
 
             <div class="report-tabs">
@@ -657,7 +662,6 @@
                 Week
               </button>
             </div>
-
           </div>
 
           <div class="card-body">
@@ -684,14 +688,13 @@
             </div>
 
             <div style="margin-top:var(--space-4);padding-top:var(--space-4);border-top:1px dashed var(--border);display:flex;justify-content:space-between;align-items:center;font-size:var(--fs-xs);color:var(--text-muted);">
-              <span>Peak: <strong style="color:var(--text);"><span class="ph">[Hour]</span></strong></span>
-              <span>Slow: <strong style="color:var(--text);"><span class="ph">[Hour]</span></strong></span>
+              <span>Peak: <strong style="color:var(--text);"><span class="ph">—</span></strong></span>
+              <span>Slow: <strong style="color:var(--text);"><span class="ph">—</span></strong></span>
             </div>
 
           </div>
         </div>
 
-        <!-- TOP SELLING PRODUCTS -->
         <div class="card">
           <div class="card-head">
             <div>
@@ -707,8 +710,8 @@
                 <div class="prod-rank top">1</div>
                 <div class="prod-info">
                   <div class="p-name">
-                    <span><span class="ph">[Product Name]</span></span>
-                    <span><span class="ph">[Quantity]</span> sold</span>
+                    <span><span class="ph">—</span></span>
+                    <span><span class="ph">—</span></span>
                   </div>
                   <div class="prod-track"><div class="prod-fill" style="width:0%"></div></div>
                 </div>
@@ -718,8 +721,8 @@
                 <div class="prod-rank top">2</div>
                 <div class="prod-info">
                   <div class="p-name">
-                    <span><span class="ph">[Product Name]</span></span>
-                    <span><span class="ph">[Quantity]</span> sold</span>
+                    <span><span class="ph">—</span></span>
+                    <span><span class="ph">—</span></span>
                   </div>
                   <div class="prod-track"><div class="prod-fill" style="width:0%"></div></div>
                 </div>
@@ -729,8 +732,8 @@
                 <div class="prod-rank top">3</div>
                 <div class="prod-info">
                   <div class="p-name">
-                    <span><span class="ph">[Product Name]</span></span>
-                    <span><span class="ph">[Quantity]</span> sold</span>
+                    <span><span class="ph">—</span></span>
+                    <span><span class="ph">—</span></span>
                   </div>
                   <div class="prod-track"><div class="prod-fill" style="width:0%"></div></div>
                 </div>
@@ -740,8 +743,8 @@
                 <div class="prod-rank">4</div>
                 <div class="prod-info">
                   <div class="p-name">
-                    <span><span class="ph">[Product Name]</span></span>
-                    <span><span class="ph">[Quantity]</span> sold</span>
+                    <span><span class="ph">—</span></span>
+                    <span><span class="ph">—</span></span>
                   </div>
                   <div class="prod-track"><div class="prod-fill" style="width:0%"></div></div>
                 </div>
@@ -751,8 +754,8 @@
                 <div class="prod-rank">5</div>
                 <div class="prod-info">
                   <div class="p-name">
-                    <span><span class="ph">[Product Name]</span></span>
-                    <span><span class="ph">[Quantity]</span> sold</span>
+                    <span><span class="ph">—</span></span>
+                    <span><span class="ph">—</span></span>
                   </div>
                   <div class="prod-track"><div class="prod-fill" style="width:0%"></div></div>
                 </div>
@@ -764,7 +767,7 @@
 
       </section>
 
-      <!-- WEEKLY COMPARISON AND CUSTOMER INSIGHTS -->
+      <!-- WEEKLY COMPARISON AND CUSTOMER INSIGHT -->
       <section class="row-2-even">
 
         <div class="card">
@@ -780,13 +783,13 @@
 
               <div class="metric">
                 <div class="metric-label">This Week</div>
-                <div class="metric-value"><span class="ph">[Amount]</span></div>
+                <div class="metric-value"><span class="ph">—</span></div>
                 <div class="metric-delta">Current week</div>
               </div>
 
               <div class="metric">
                 <div class="metric-label">Last Week</div>
-                <div class="metric-value"><span class="ph">[Amount]</span></div>
+                <div class="metric-value"><span class="ph">—</span></div>
                 <div class="metric-delta">Previous week</div>
               </div>
 
@@ -798,7 +801,7 @@
           <div class="card-head">
             <div>
               <h3>Customer Insight</h3>
-              <p>Unique names vs returning names in invoice records</p>
+              <p>Based on names recorded on saved invoices</p>
             </div>
           </div>
 
@@ -816,7 +819,7 @@
                   <span class="sl-dot s1"></span>
                   <span class="sl-name">Returning</span>
                 </div>
-                <span class="sl-val"><span class="ph">[Customers]</span></span>
+                <span class="sl-val"><span class="ph">—</span></span>
               </div>
 
               <div class="split-legend-item">
@@ -824,7 +827,7 @@
                   <span class="sl-dot s3"></span>
                   <span class="sl-name">New</span>
                 </div>
-                <span class="sl-val"><span class="ph">[Customers]</span></span>
+                <span class="sl-val"><span class="ph">—</span></span>
               </div>
 
             </div>
@@ -835,7 +838,6 @@
 
       <!-- RECENT INVOICES -->
       <section class="card">
-
         <div class="card-head">
           <div>
             <h3>Recent Invoices</h3>
@@ -852,7 +854,6 @@
         </div>
 
         <div class="table-wrap">
-
           <table class="inv-table">
             <thead>
               <tr>
@@ -866,20 +867,20 @@
 
             <tbody>
               <tr>
-                <td colspan="5">Loading saved invoices...</td>
+                <td colspan="5" class="dashboard-no-data">
+                  Loading saved invoices...
+                </td>
               </tr>
             </tbody>
-          </table>
 
+          </table>
         </div>
       </section>
 
       <!-- FOOTER -->
       <footer class="page-footer">
-
         <span>
-          <span class="ph">[Business Name]</span> ·
-          <span class="ph">[Version]</span>
+          <span class="ph">[Business Name]</span> · Restaurant Billing
         </span>
 
         <span>
@@ -889,7 +890,6 @@
           <a href="categories.html">Categories</a> ·
           <a href="settings.html">Settings</a>
         </span>
-
       </footer>
 
     </main>
@@ -899,17 +899,13 @@
 <!-- Shared responsive interface -->
 <script src="script.js" defer></script>
 
-<!-- Shared Firebase services: must load before dependent page scripts -->
+<!-- Firebase must load before authentication and page protection -->
 <script src="js/firebase-config.js" defer></script>
 <script src="js/auth.js" defer></script>
-
-<!-- Page access guard -->
 <script src="js/guard.js" defer></script>
-
-<!-- Logout functionality -->
 <script src="js/logout.js" defer></script>
 
-<!-- Dashboard data and analytics -->
+<!-- Live dashboard functionality -->
 <script src="js/dashboard.js" defer></script>
 
 </body>
