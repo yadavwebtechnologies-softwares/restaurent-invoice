@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Admin Login | Restaurant Billing</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="auth-page">
+    <section class="auth-card" aria-labelledby="login-title">
+      <header class="auth-header">
+        <h1 id="login-title">Restaurant Billing</h1>
+        <p>Administrator Sign In</p>
+      </header>
+
+      <form id="admin-login-form">
+        <div class="form-group">
+          <label for="admin-email">Email Address</label>
+          <input
+            type="email"
+            id="admin-email"
+            name="email"
+            autocomplete="username"
+            placeholder="Enter admin email"
+            required
+          >
+        </div>
+
+        <div class="form-group">
+          <label for="admin-password">Password</label>
+          <input
+            type="password"
+            id="admin-password"
+            name="password"
+            autocomplete="current-password"
+            placeholder="Enter password"
+            required
+          >
+        </div>
+
+        <p
+          id="login-message"
+          role="status"
+          aria-live="polite"
+        ></p>
+
+        <button type="submit" id="admin-login-button">
+          Sign In
+        </button>
+      </form>
+    </section>
+  </main>
+</body>
+</html>
