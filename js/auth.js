@@ -1,8 +1,9 @@
+
 "use strict";
 
 /**
  * Restaurant Billing Software
- * Admin authentication service
+ * Firebase Admin Authentication Service
  */
 
 (() => {
@@ -17,7 +18,7 @@
     const firebase = window.restaurantFirebase;
 
     if (!firebase || !firebase.ready) {
-      throw new Error("Firebase configuration is not available.");
+      throw new Error("Firebase configuration is unavailable.");
     }
 
     const initialized = await firebase.ready;
@@ -30,11 +31,9 @@
       authSDKPromise = import(AUTH_SDK_URL);
     }
 
-    const authSDK = await authSDKPromise;
-
     return {
       auth: firebase.auth,
-      authSDK
+      authSDK: await authSDKPromise
     };
   }
 
@@ -64,6 +63,12 @@
     await authSDK.signOut(auth);
   }
 
+  async function sendPasswordReset(email) {
+    const { auth, authSDK } = await getAuthContext();
+
+    await authSDK.sendPasswordResetEmail(auth, email.trim());
+  }
+
   async function watchAuth(callback) {
     if (typeof callback !== "function") {
       throw new TypeError("An authentication callback is required.");
@@ -81,6 +86,7 @@
   window.restaurantAuth = {
     signIn,
     signOut,
+    sendPasswordReset,
     watchAuth
   };
 })();
