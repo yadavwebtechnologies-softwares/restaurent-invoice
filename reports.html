@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -21,10 +22,88 @@
   >
 
   <link rel="stylesheet" href="style.css">
+
+  <style>
+    .report-chart {
+      width: 100%;
+      min-width: 0;
+      min-height: 240px;
+      overflow: hidden;
+    }
+
+    .report-chart-loading {
+      min-height: 240px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      text-align: center;
+      color: #6b7280;
+      border: 1px dashed #d1d5db;
+      border-radius: 6px;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .report-filter-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 16px;
+      align-items: end;
+    }
+
+    .report-custom-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .report-insights-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+      gap: 16px;
+    }
+
+    .report-analytics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+      gap: 20px;
+      margin-top: 24px;
+    }
+
+    .report-section {
+      margin-top: 24px;
+    }
+
+    .report-insight-card {
+      margin: 0;
+      box-shadow: none;
+    }
+
+    .report-note {
+      margin-top: 10px;
+      line-height: 1.8;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+
+    @media (max-width: 560px) {
+      .report-filter-grid,
+      .report-custom-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .report-chart {
+        min-height: 220px;
+      }
+    }
+  </style>
 </head>
 
 <body>
-
 <div class="app">
 
   <!-- SIDEBAR -->
@@ -34,7 +113,7 @@
       <div class="brand-mark">B</div>
 
       <div class="brand-text">
-        <h1>[Business Name]</h1>
+        <h1>Your Business</h1>
         <span>Restaurant Billing</span>
       </div>
     </div>
@@ -76,7 +155,7 @@
         <path d="M3 3v18h18"/>
         <path d="M7 14l4-4 3 3 5-6"/>
       </svg>
-      Reports & Analytics
+      Reports &amp; Analytics
     </a>
 
     <div class="nav-section">Manage</div>
@@ -111,16 +190,16 @@
 
     <div class="sidebar-footer">
       <div class="target-card">
-        <div class="label">Today's Target</div>
-        <div class="value">Business Analytics</div>
+        <div class="label">Reports &amp; Analytics</div>
+        <div class="value">Live Data</div>
 
         <div class="target-track">
-          <div class="target-fill"></div>
+          <div class="target-fill" style="width:0%"></div>
         </div>
 
         <div class="target-meta">
-          <span>Performance</span>
-          <span>Reports</span>
+          <span>Source</span>
+          <span>Firebase</span>
         </div>
       </div>
     </div>
@@ -150,7 +229,7 @@
       <div class="crumbs">
         <span>Business</span>
         <span class="sep">/</span>
-        <span class="current">Reports & Analytics</span>
+        <span class="current">Reports &amp; Analytics</span>
       </div>
 
       <div class="topbar-right">
@@ -165,8 +244,8 @@
 
         <button class="profile" type="button">
           <div>
-            <div class="name">[Owner Name]</div>
-            <div class="role">Owner</div>
+            <div class="name">Owner</div>
+            <div class="role">Administrator</div>
           </div>
 
           <div class="avatar">O</div>
@@ -186,7 +265,7 @@
           <h2>Business Intelligence</h2>
           <p>
             Understand your restaurant's sales, product performance
-            and business trends.
+            and business trends using saved invoice records.
           </p>
         </div>
 
@@ -222,7 +301,7 @@
           </div>
 
           <span class="pill pending" id="reportDataStatus">
-            Demo Data
+            Connecting...
           </span>
         </div>
 
@@ -230,8 +309,7 @@
 
           <form id="reportFilters">
 
-            <div class="report-filter-grid"
-              style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;align-items:end;">
+            <div class="report-filter-grid">
 
               <label class="form-field">
                 <span>Reporting Period</span>
@@ -297,12 +375,8 @@
 
             </div>
 
-            <!-- CUSTOM RANGE -->
-            <div
-              id="reportCustomRange"
-              hidden
-              style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-top:16px;"
-            >
+            <!-- CUSTOM DATE RANGE -->
+            <div id="reportCustomRange" class="report-custom-grid" hidden>
 
               <label class="form-field">
                 <span>From Date</span>
@@ -364,7 +438,7 @@
       </section>
 
       <!-- EXECUTIVE SUMMARY -->
-      <section class="page-head" style="margin-top:24px;">
+      <section class="page-head report-section">
         <div>
           <h3>Executive Summary</h3>
           <p>Key indicators for the selected reporting period.</p>
@@ -374,7 +448,6 @@
       <section class="kpis" id="executiveKpis">
 
         <div class="kpi">
-
           <div class="kpi-top">
             <div class="kpi-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -386,19 +459,11 @@
           </div>
 
           <div class="kpi-label">Total Sales Revenue</div>
-
-          <div class="kpi-value" id="reportRevenue">
-            ₹0.00
-          </div>
-
-          <div class="kpi-sub" id="reportRevenueChange">
-            Compared with previous period
-          </div>
-
+          <div class="kpi-value" id="reportRevenue">—</div>
+          <div class="kpi-sub" id="reportRevenueChange">Waiting for records</div>
         </div>
 
         <div class="kpi">
-
           <div class="kpi-top">
             <div class="kpi-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -410,19 +475,11 @@
           </div>
 
           <div class="kpi-label">Invoices Generated</div>
-
-          <div class="kpi-value" id="reportInvoiceCount">
-            0
-          </div>
-
-          <div class="kpi-sub" id="reportInvoiceChange">
-            Compared with previous period
-          </div>
-
+          <div class="kpi-value" id="reportInvoiceCount">—</div>
+          <div class="kpi-sub" id="reportInvoiceChange">Waiting for records</div>
         </div>
 
         <div class="kpi">
-
           <div class="kpi-top">
             <div class="kpi-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -435,19 +492,11 @@
           </div>
 
           <div class="kpi-label">Average Order Value</div>
-
-          <div class="kpi-value" id="reportAverageOrder">
-            ₹0.00
-          </div>
-
-          <div class="kpi-sub">
-            Average revenue per invoice
-          </div>
-
+          <div class="kpi-value" id="reportAverageOrder">—</div>
+          <div class="kpi-sub">Average revenue per invoice</div>
         </div>
 
         <div class="kpi">
-
           <div class="kpi-top">
             <div class="kpi-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -459,31 +508,22 @@
           </div>
 
           <div class="kpi-label">Sales Growth</div>
-
-          <div class="kpi-value" id="reportGrowth">
-            —
-          </div>
-
-          <div class="kpi-sub" id="reportGrowthDescription">
-            Against the previous comparable period
-          </div>
-
+          <div class="kpi-value" id="reportGrowth">—</div>
+          <div class="kpi-sub" id="reportGrowthDescription">Awaiting comparable period</div>
         </div>
 
       </section>
 
       <!-- SALES TREND -->
-      <section class="card" style="margin-top:24px;">
+      <section class="card report-section">
 
         <div class="card-head">
           <div>
             <h3>Sales Performance Trend</h3>
-            <p>
-              Revenue over time, with comparison against the previous period.
-            </p>
+            <p>Revenue over time, compared with the previous period.</p>
           </div>
 
-          <span class="pill paid" id="salesTrendPeriodLabel">
+          <span class="pill pending" id="salesTrendPeriodLabel">
             Last 7 Days
           </span>
         </div>
@@ -495,23 +535,15 @@
             class="report-chart"
             role="img"
             aria-label="Sales performance over time chart"
-            style="min-height:320px;width:100%;"
           >
             <div class="report-chart-loading">
-              Sales trend chart will render here.
+              Waiting for Firebase invoice data...
             </div>
           </div>
 
           <div class="page-actions" style="justify-content:space-between;margin-top:12px;">
-
-            <span class="kpi-sub">
-              Metric: sales revenue
-            </span>
-
-            <span class="kpi-sub" id="salesTrendInsight">
-              Waiting for analytics data.
-            </span>
-
+            <span class="kpi-sub">Metric: sales revenue</span>
+            <span class="kpi-sub" id="salesTrendInsight">Waiting for data.</span>
           </div>
 
         </div>
@@ -519,110 +551,84 @@
       </section>
 
       <!-- PRODUCT AND CATEGORY ANALYTICS -->
-      <section
-        style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:20px;margin-top:24px;"
-      >
+      <section class="report-analytics-grid">
 
-        <!-- PRODUCT REVENUE -->
         <div class="card">
-
           <div class="card-head">
             <div>
               <h3>Product Revenue Ranking</h3>
-              <p>Products ranked by sales revenue.</p>
+              <p>Products ranked by recorded sales revenue.</p>
             </div>
           </div>
 
           <div class="card-body">
-
             <div
               id="productRevenueChart"
               class="report-chart"
               role="img"
               aria-label="Product revenue ranking chart"
-              style="min-height:300px;width:100%;"
             >
               <div class="report-chart-loading">
-                Product revenue chart will render here.
+                Waiting for product sales records...
               </div>
             </div>
-
           </div>
-
         </div>
 
-        <!-- CATEGORY CONTRIBUTION -->
         <div class="card">
-
           <div class="card-head">
             <div>
               <h3>Category Performance</h3>
-              <p>Revenue contribution by menu category.</p>
+              <p>Recorded revenue contribution by menu category.</p>
             </div>
           </div>
 
           <div class="card-body">
-
             <div
               id="categoryRevenueChart"
               class="report-chart"
               role="img"
               aria-label="Category revenue contribution chart"
-              style="min-height:300px;width:100%;"
             >
               <div class="report-chart-loading">
-                Category performance chart will render here.
+                Waiting for category sales records...
               </div>
             </div>
-
           </div>
-
         </div>
 
       </section>
 
       <!-- TIME ANALYTICS -->
-      <section
-        style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:20px;margin-top:24px;"
-      >
+      <section class="report-analytics-grid">
 
-        <!-- HOURLY REVENUE -->
         <div class="card">
-
           <div class="card-head">
             <div>
               <h3>Hourly Sales Analysis</h3>
-              <p>Discover your busiest and quietest trading hours.</p>
+              <p>Identify busy and quiet trading hours.</p>
             </div>
           </div>
 
           <div class="card-body">
-
             <div
               id="hourlySalesChart"
               class="report-chart"
               role="img"
               aria-label="Hourly sales analysis chart"
-              style="min-height:290px;width:100%;"
             >
               <div class="report-chart-loading">
-                Hourly sales chart will render here.
+                Waiting for dated invoice records...
               </div>
             </div>
 
             <div id="peakHourInsight" style="margin-top:14px;">
-              <p class="kpi-sub">
-                Peak sales hour will be identified from actual invoice timestamps.
-              </p>
+              <p class="kpi-sub">Peak hour will appear when data is available.</p>
             </div>
-
           </div>
-
         </div>
 
-        <!-- SALES BY WEEKDAY -->
         <div class="card">
-
           <div class="card-head">
             <div>
               <h3>Day-of-Week Performance</h3>
@@ -631,40 +637,32 @@
           </div>
 
           <div class="card-body">
-
             <div
               id="weekdaySalesChart"
               class="report-chart"
               role="img"
               aria-label="Sales by weekday chart"
-              style="min-height:290px;width:100%;"
             >
               <div class="report-chart-loading">
-                Weekday performance chart will render here.
+                Waiting for invoice date data...
               </div>
             </div>
 
             <div id="weekdayInsight" style="margin-top:14px;">
-              <p class="kpi-sub">
-                Best-performing day will appear when sufficient data is available.
-              </p>
+              <p class="kpi-sub">Weekday analysis will appear when data is available.</p>
             </div>
-
           </div>
-
         </div>
 
       </section>
 
-      <!-- AUTOMATED BUSINESS INSIGHTS -->
-      <section class="card" style="margin-top:24px;">
+      <!-- BUSINESS INSIGHTS -->
+      <section class="card report-section">
 
         <div class="card-head">
           <div>
             <h3>Business Insights</h3>
-            <p>
-              Data-driven findings to help improve restaurant operations.
-            </p>
+            <p>Findings calculated from the selected reporting data.</p>
           </div>
 
           <span class="pill pending" id="insightsStatus">
@@ -674,88 +672,45 @@
 
         <div class="card-body">
 
-          <div
-            id="businessInsights"
-            style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:16px;"
-          >
+          <div id="businessInsights" class="report-insights-grid">
 
-            <article
-              class="card"
-              style="box-shadow:none;margin:0;"
-              data-insight-type="sales"
-            >
+            <article class="card report-insight-card" data-insight-type="sales">
               <div class="card-body">
-
                 <div class="kpi-label">Sales Trend</div>
-
-                <h4 id="insightSalesTitle" style="margin:10px 0;">
-                  Sales performance
-                </h4>
-
+                <h4 id="insightSalesTitle" style="margin:10px 0;">Awaiting data</h4>
                 <p id="insightSalesText" class="kpi-sub">
-                  Insights will be calculated from recorded sales.
+                  Sales insights will be calculated from saved invoices.
                 </p>
-
               </div>
             </article>
 
-            <article
-              class="card"
-              style="box-shadow:none;margin:0;"
-              data-insight-type="product"
-            >
+            <article class="card report-insight-card" data-insight-type="product">
               <div class="card-body">
-
-                <div class="kpi-label">Product Opportunity</div>
-
-                <h4 id="insightProductTitle" style="margin:10px 0;">
-                  Product performance
-                </h4>
-
+                <div class="kpi-label">Product Performance</div>
+                <h4 id="insightProductTitle" style="margin:10px 0;">Awaiting data</h4>
                 <p id="insightProductText" class="kpi-sub">
-                  Product rankings will reveal leading and weaker performers.
+                  Product rankings require saved invoice items.
                 </p>
-
               </div>
             </article>
 
-            <article
-              class="card"
-              style="box-shadow:none;margin:0;"
-              data-insight-type="time"
-            >
+            <article class="card report-insight-card" data-insight-type="time">
               <div class="card-body">
-
-                <div class="kpi-label">Operational Opportunity</div>
-
-                <h4 id="insightTimeTitle" style="margin:10px 0;">
-                  Demand patterns
-                </h4>
-
+                <div class="kpi-label">Operating Hours</div>
+                <h4 id="insightTimeTitle" style="margin:10px 0;">Awaiting data</h4>
                 <p id="insightTimeText" class="kpi-sub">
-                  Time-based analysis will identify busy and quiet periods.
+                  Time analysis requires valid invoice dates and times.
                 </p>
-
               </div>
             </article>
 
-            <article
-              class="card"
-              style="box-shadow:none;margin:0;"
-              data-insight-type="category"
-            >
+            <article class="card report-insight-card" data-insight-type="category">
               <div class="card-body">
-
-                <div class="kpi-label">Category Opportunity</div>
-
-                <h4 id="insightCategoryTitle" style="margin:10px 0;">
-                  Category contribution
-                </h4>
-
+                <div class="kpi-label">Category Performance</div>
+                <h4 id="insightCategoryTitle" style="margin:10px 0;">Awaiting data</h4>
                 <p id="insightCategoryText" class="kpi-sub">
-                  Category insights will use actual revenue contribution.
+                  Category insights require invoice item details.
                 </p>
-
               </div>
             </article>
 
@@ -763,10 +718,9 @@
 
           <p
             id="businessInsightsDisclaimer"
-            class="kpi-sub"
-            style="margin-top:16px;"
+            class="kpi-sub report-note"
           >
-            Insights require reliable invoice timestamps and product-level sales records.
+            Revenue is not profit. Profit calculations require product costs and business expenses.
           </p>
 
         </div>
@@ -774,14 +728,12 @@
       </section>
 
       <!-- PRODUCT PERFORMANCE TABLE -->
-      <section class="card" style="margin-top:24px;">
+      <section class="card report-section">
 
         <div class="card-head">
           <div>
             <h3>Detailed Product Performance</h3>
-            <p>
-              Understand which products drive revenue and how frequently they sell.
-            </p>
+            <p>Review product revenue, quantity sold and revenue share.</p>
           </div>
 
           <button
@@ -794,7 +746,6 @@
         </div>
 
         <div class="table-wrap">
-
           <table class="inv-table" id="productPerformanceTable">
 
             <thead>
@@ -810,23 +761,20 @@
             </thead>
 
             <tbody id="productPerformanceBody">
-
               <tr>
                 <td colspan="7" style="text-align:center;padding:30px 16px;">
-                  Product-level analytics will appear here.
+                  Waiting for Firebase product sales records...
                 </td>
               </tr>
-
             </tbody>
 
           </table>
-
         </div>
 
       </section>
 
       <!-- CATEGORY PERFORMANCE TABLE -->
-      <section class="card" style="margin-top:24px;">
+      <section class="card report-section">
 
         <div class="card-head">
           <div>
@@ -836,7 +784,6 @@
         </div>
 
         <div class="table-wrap">
-
           <table class="inv-table" id="categoryPerformanceTable">
 
             <thead>
@@ -850,33 +797,29 @@
             </thead>
 
             <tbody id="categoryPerformanceBody">
-
               <tr>
                 <td colspan="5" style="text-align:center;padding:30px 16px;">
-                  Category-level analytics will appear here.
+                  Waiting for Firebase category sales records...
                 </td>
               </tr>
-
             </tbody>
 
           </table>
-
         </div>
 
       </section>
 
       <!-- PERIOD COMPARISON -->
-      <section class="card" style="margin-top:24px;">
+      <section class="card report-section">
 
         <div class="card-head">
           <div>
             <h3>Period-over-Period Comparison</h3>
-            <p>Evaluate business performance against the previous comparable period.</p>
+            <p>Compare the selected period with the previous comparable period.</p>
           </div>
         </div>
 
         <div class="table-wrap">
-
           <table class="inv-table" id="periodComparisonTable">
 
             <thead>
@@ -890,34 +833,31 @@
             </thead>
 
             <tbody id="periodComparisonBody">
-
               <tr>
                 <td colspan="5" style="text-align:center;padding:30px 16px;">
-                  Period comparison will appear when the report data is loaded.
+                  Waiting for Firebase comparison data...
                 </td>
               </tr>
-
             </tbody>
 
           </table>
-
         </div>
 
       </section>
 
-      <!-- DATA QUALITY NOTE -->
-      <section class="card" style="margin-top:24px;">
+      <!-- DATA INTERPRETATION -->
+      <section class="card report-section">
 
         <div class="card-body">
 
           <h3>Data &amp; Interpretation</h3>
 
-          <p class="kpi-sub" style="margin-top:10px;line-height:1.8;">
-            Sales revenue represents invoice sales, not net profit.
-            Profit analysis requires reliable product costs and operating expenses.
-            Product-level insights require item names, quantities and prices to be
-            saved with each invoice. Hourly insights require accurate transaction
-            timestamps. Cancelled invoices must be excluded from valid sales totals.
+          <p class="kpi-sub report-note">
+            Reports use saved invoice records. Product-level analysis requires
+            item names, quantities, unit prices and category details.
+            Hourly analysis requires valid invoice timestamps. Cancelled
+            invoices should be excluded from valid sales. Revenue is not net
+            profit; profit analysis requires product costs and operating expenses.
           </p>
 
         </div>
@@ -926,32 +866,32 @@
 
       <!-- FOOTER -->
       <footer class="page-footer">
+        <span>Your Business · Business Intelligence</span>
 
         <span>
-          [Business Name] · Business Intelligence
+          <a href="invoices.html">Invoices</a> ·
+          <a href="reports.html">Reports</a> ·
+          <a href="products.html">Products</a> ·
+          <a href="categories.html">Categories</a> ·
+          <a href="settings.html">Settings</a>
         </span>
-
-        <span>
-          Sales Analytics &amp; Insights
-        </span>
-
       </footer>
 
     </main>
-
   </div>
-
 </div>
 
-<!-- Shared interface functionality -->
+<!-- Shared responsive interface -->
 <script src="script.js" defer></script>
 
-<!-- Reports page-specific functionality -->
+<!-- Shared Firebase services must load before protected page scripts -->
+<script src="js/firebase-config.js" defer></script>
+<script src="js/auth.js" defer></script>
+<script src="js/guard.js" defer></script>
+<script src="js/logout.js" defer></script>
+
+<!-- Reports page: live database analytics -->
 <script src="js/reports.js" defer></script>
-  <script src="js/firebase-config.js"></script>
-<script src="js/auth.js"></script>
-<script src="js/guard.js"></script>
-  <script src="js/logout.js"></script>
 
 </body>
 </html>
