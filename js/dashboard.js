@@ -1,141 +1,28 @@
+
 "use strict";
 
 /*
  * Restaurant Billing Software
  * File: js/dashboard.js
  *
- * Phase 1:
- * - Dashboard demo data
- * - Sales chart rendering
- * - Hourly heatmap interaction
- * - CSV report export
+ * Firebase integration:
+ * - Reads restaurantBilling from Firebase Realtime Database.
+ * - Calculates dashboard KPIs from saved invoices.
+ * - Builds sales trends, payment split, top products and categories.
+ * - Updates the dashboard when Firebase data changes.
+ * - Exports real invoice data as CSV.
  *
- * Firebase integration will be added in a later phase.
+ * Expected database paths:
+ * restaurantBilling/invoices
+ * restaurantBilling/products
+ * restaurantBilling/categories
+ * restaurantBilling/settings
+ *
+ * Requires firebase-config.js, auth.js and guard.js.
  */
 
 (() => {
-  const DEMO_DATA = {
-    business: {
-      name: "Spice Garden Restaurant",
-      tagline: "Restaurant Billing & Analytics",
-      owner: "Restaurant Owner",
-      role: "Administrator"
-    },
-
-    target: {
-      amount: 30000,
-      achieved: 24850
-    },
-
-    kpis: {
-      revenue: 24850,
-      invoices: 86,
-      paid: 83,
-      pending: 3,
-      averageBill: 289,
-      drafts: 3
-    },
-
-    weeklySales: {
-      current: [
-        { day: "Mon", revenue: 5800 },
-        { day: "Tue", revenue: 7200 },
-        { day: "Wed", revenue: 6400 },
-        { day: "Thu", revenue: 8800 },
-        { day: "Fri", revenue: 7600 },
-        { day: "Sat", revenue: 9600 },
-        { day: "Sun", revenue: 7000 }
-      ],
-
-      previous: [
-        { day: "Mon", revenue: 4600 },
-        { day: "Tue", revenue: 5500 },
-        { day: "Wed", revenue: 6000 },
-        { day: "Thu", revenue: 7000 },
-        { day: "Fri", revenue: 6600 },
-        { day: "Sat", revenue: 8200 },
-        { day: "Sun", revenue: 6200 }
-      ]
-    },
-
-    paymentSplit: {
-      upi: 12900,
-      cash: 11950
-    },
-
-    monthlySales: [
-      { month: "May", revenue: 85000 },
-      { month: "Jun", revenue: 97000 },
-      { month: "Jul", revenue: 108000 },
-      { month: "Aug", revenue: 96000 },
-      { month: "Sep", revenue: 124000 },
-      { month: "Oct", revenue: 139000 }
-    ],
-
-    categories: [
-      { name: "Starters", revenue: 42500, share: 32 },
-      { name: "Main Course", revenue: 37200, share: 28 },
-      { name: "Beverages", revenue: 23900, share: 18 },
-      { name: "Desserts", revenue: 15900, share: 12 },
-      { name: "Others", revenue: 13300, share: 10 }
-    ],
-
-    products: [
-      { name: "Chicken Biryani", quantity: 145, revenue: 21750 },
-      { name: "Paneer Butter Masala", quantity: 112, revenue: 16800 },
-      { name: "Masala Dosa", quantity: 98, revenue: 9800 },
-      { name: "Cold Coffee", quantity: 85, revenue: 10200 },
-      { name: "Gulab Jamun", quantity: 72, revenue: 3600 }
-    ],
-
-    hourlyOrders: {
-      today: [2, 4, 7, 12, 18, 22, 17, 12, 8, 14, 20, 19],
-      week:  [5, 8, 12, 16, 21, 24, 19, 15, 11, 18, 23, 20]
-    },
-
-    invoices: [
-      {
-        number: "INV-0041",
-        customer: "Amit Sharma",
-        detail: "Table 04",
-        date: "Today, 10:45 AM",
-        amount: 1250,
-        status: "Paid"
-      },
-      {
-        number: "INV-0040",
-        customer: "Priya Das",
-        detail: "Walk-in",
-        date: "Today, 10:20 AM",
-        amount: 680,
-        status: "Paid"
-      },
-      {
-        number: "INV-0039",
-        customer: "Rahul Das",
-        detail: "Table 02",
-        date: "Today, 09:55 AM",
-        amount: 940,
-        status: "Pending"
-      },
-      {
-        number: "INV-0038",
-        customer: "Neha Sharma",
-        detail: "Table 06",
-        date: "Today, 09:30 AM",
-        amount: 1570,
-        status: "Paid"
-      },
-      {
-        number: "INV-0037",
-        customer: "Walk-in Customer",
-        detail: "Walk-in",
-        date: "Today, 09:10 AM",
-        amount: 420,
-        status: "Draft"
-      }
-    ]
-  };
+  const ADMIN_UID = "20wif9y7LQhBZgFPDsAlrQpFjnI2";
 
   const $ = (selector, root = document) =>
     root.querySelector(selector);
@@ -143,19 +30,54 @@
   const $$ = (selector, root = document) =>
     Array.from(root.querySelectorAll(selector));
 
-  const formatMoney = (amount) =>
-    new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency: "INR",
-      maximumFractionDigits: 0
-    }).format(amount);
+  const state = {
+    root: {},
+    settings: {},
+    invoices: [],
+    products: [],
+    categories: [],
+    monthlySales: [],
+    weeklySales: {
+      current: [],
+      previous: []
+    },
+    paymentSplit: {
+      upi: 0,
+      cash: 0
+    },
+    hourlyOrders: {
+      today: [],
+      week: []
+    },
+    categorySales: [],
+    productSales: [],
+    todayInvoices: [],
+    todayRevenue: 0,
+    todayTarget: 0,
+    lastUpdated: null,
+    unsubscribe: null
+  };
 
-  const formatNumber = (number) =>
-    new Intl.NumberFormat("en-IN").format(number);
+  const moneyFormatter = new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+
+  const numberFormatter = new Intl.NumberFormat("en-IN");
+
+  function formatMoney(value) {
+    return moneyFormatter.format(Number(value) || 0);
+  }
+
+  function formatNumber(value) {
+    return numberFormatter.format(Number(value) || 0);
+  }
 
   function setText(element, value) {
     if (element) {
-      element.textContent = String(value);
+      element.textContent = String(value ?? "");
     }
   }
 
@@ -165,81 +87,778 @@
     const placeholder = $(".ph", element);
 
     if (placeholder) {
-      placeholder.textContent = String(value);
+      placeholder.textContent = String(value ?? "");
     } else {
-      element.textContent = String(value);
+      element.textContent = String(value ?? "");
     }
   }
 
-  function setProgress(element, percent) {
+  function setProgress(element, percentage) {
     if (!element) return;
 
-    const safePercent = Math.max(0, Math.min(100, percent));
+    const value = Number(percentage);
+    const safeValue = Number.isFinite(value)
+      ? Math.max(0, Math.min(100, value))
+      : 0;
 
-    element.style.width = `${safePercent}%`;
-    element.setAttribute("aria-valuenow", String(safePercent));
+    element.style.width = `${safeValue}%`;
+    element.setAttribute("aria-valuenow", String(safeValue));
   }
 
-  function renderBusinessDetails() {
-    $$(".brand-text h1 .ph").forEach((element) => {
-      setText(element, DEMO_DATA.business.name);
-    });
+  function escapeHTML(value) {
+    return String(value ?? "").replace(/[&<>"']/g, character => {
+      const entities = {
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+      };
 
-    $$(".brand-text > span .ph").forEach((element) => {
-      setText(element, DEMO_DATA.business.tagline);
+      return entities[character];
     });
+  }
 
-    $$(".profile .name .ph").forEach((element) => {
-      setText(element, DEMO_DATA.business.owner);
-    });
+  function toRecords(value) {
+    if (!value || typeof value !== "object") {
+      return [];
+    }
 
-    $$(".profile .role .ph").forEach((element) => {
-      setText(element, DEMO_DATA.business.role);
-    });
+    if (Array.isArray(value)) {
+      return value.filter(item =>
+        item && typeof item === "object"
+      );
+    }
 
-    $$(".page-footer > span:first-child .ph:first-child").forEach(
-      (element) => {
-        setText(element, DEMO_DATA.business.name);
+    return Object.entries(value).map(([key, item]) => {
+      if (!item || typeof item !== "object") {
+        return null;
       }
+
+      return {
+        id: item.id || key,
+        ...item
+      };
+    }).filter(Boolean);
+  }
+
+  function numeric(value, fallback = 0) {
+    const number = Number(value);
+
+    return Number.isFinite(number)
+      ? number
+      : fallback;
+  }
+
+  function getLocalDateKey(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
+  }
+
+  function parseDate(value) {
+    if (!value) return null;
+
+    if (value instanceof Date) {
+      return Number.isNaN(value.getTime()) ? null : value;
+    }
+
+    if (typeof value === "number") {
+      const date = new Date(value);
+
+      return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    const text = String(value).trim();
+
+    const isoDate = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+    if (isoDate) {
+      const date = new Date(
+        Number(isoDate[1]),
+        Number(isoDate[2]) - 1,
+        Number(isoDate[3])
+      );
+
+      return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    const parsed = new Date(text);
+
+    return Number.isNaN(parsed.getTime())
+      ? null
+      : parsed;
+  }
+
+  function getInvoiceDate(invoice) {
+    return parseDate(
+      invoice.invoiceDate ||
+      invoice.date ||
+      invoice.createdAt ||
+      invoice.timestamp
     );
   }
 
-  function renderTarget() {
-    const { amount, achieved } = DEMO_DATA.target;
-    const remaining = Math.max(0, amount - achieved);
-    const percentage = amount > 0
-      ? Math.round((achieved / amount) * 100)
-      : 0;
+  function getInvoiceNumber(invoice) {
+    return String(
+      invoice.invoiceNumber ||
+      invoice.number ||
+      invoice.id ||
+      "Invoice"
+    );
+  }
 
+  function getInvoiceAmount(invoice) {
+    return Math.max(0, numeric(
+      invoice.grandTotal ??
+      invoice.total ??
+      invoice.amount ??
+      invoice.totals?.grandTotal,
+      0
+    ));
+  }
+
+  function getInvoiceStatus(invoice) {
+    const status = String(
+      invoice.status ||
+      invoice.invoiceStatus ||
+      "generated"
+    ).toLowerCase();
+
+    if (status.includes("cancel")) return "Cancelled";
+    if (status.includes("draft")) return "Draft";
+    if (status.includes("pending")) return "Pending";
+    if (status === "paid" || status.includes("paid")) return "Paid";
+
+    return "Generated";
+  }
+
+  function isCancelled(invoice) {
+    return getInvoiceStatus(invoice) === "Cancelled";
+  }
+
+  function isDraft(invoice) {
+    return getInvoiceStatus(invoice) === "Draft";
+  }
+
+  function isCountable(invoice) {
+    return !isCancelled(invoice) && !isDraft(invoice);
+  }
+
+  function getInvoiceItems(invoice) {
+    const items = invoice.items || invoice.orderItems || [];
+
+    if (Array.isArray(items)) {
+      return items;
+    }
+
+    if (items && typeof items === "object") {
+      return Object.values(items);
+    }
+
+    return [];
+  }
+
+  function getItemQuantity(item) {
+    return Math.max(0, numeric(item.quantity ?? item.qty, 0));
+  }
+
+  function getItemPrice(item) {
+    return Math.max(0, numeric(
+      item.price ??
+      item.unitPrice ??
+      item.rate,
+      0
+    ));
+  }
+
+  function getItemAmount(item) {
+    const amount = item.amount ?? item.lineTotal;
+
+    if (amount !== undefined && Number.isFinite(Number(amount))) {
+      return Math.max(0, Number(amount));
+    }
+
+    return getItemPrice(item) * getItemQuantity(item);
+  }
+
+  function getItemName(item) {
+    return String(
+      item.name ||
+      item.productName ||
+      item.title ||
+      "Unknown product"
+    );
+  }
+
+  function getInvoiceCustomer(invoice) {
+    return String(
+      invoice.customerName ||
+      invoice.customer ||
+      "Walk-in Customer"
+    );
+  }
+
+  function getInvoicePayment(invoice) {
+    return String(
+      invoice.paymentMethod ||
+      invoice.payment ||
+      ""
+    ).toLowerCase();
+  }
+
+  function getInvoiceTime(invoice) {
+    const raw = invoice.invoiceTime || invoice.time;
+
+    if (raw) {
+      const match = String(raw).match(/^(\d{1,2}):(\d{2})/);
+
+      if (match) {
+        const hour = Number(match[1]);
+
+        if (hour >= 0 && hour <= 23) {
+          return hour;
+        }
+      }
+    }
+
+    const createdAt = parseDate(invoice.createdAt);
+
+    return createdAt ? createdAt.getHours() : null;
+  }
+
+  function getMonday(date) {
+    const result = new Date(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate()
+    );
+
+    const day = result.getDay();
+    const offset = day === 0 ? -6 : 1 - day;
+
+    result.setDate(result.getDate() + offset);
+
+    return result;
+  }
+
+  function sameDate(first, second) {
+    return !!first &&
+      !!second &&
+      getLocalDateKey(first) === getLocalDateKey(second);
+  }
+
+  // --------------------------------------------------
+  // FIREBASE ACCESS
+  // --------------------------------------------------
+
+  async function getFirebase() {
+    const firebase = window.restaurantFirebase;
+
+    if (!firebase?.ready) {
+      throw new Error(
+        "Firebase is unavailable. Check js/firebase-config.js."
+      );
+    }
+
+    const initialized = await firebase.ready;
+
+    if (
+      !initialized ||
+      !firebase.auth ||
+      !firebase.db ||
+      !firebase.sdk?.database
+    ) {
+      throw new Error(
+        "Firebase Authentication or Realtime Database is not ready."
+      );
+    }
+
+    return firebase;
+  }
+
+  async function waitForAdmin(firebase) {
+    const auth = firebase.auth;
+    const authSDK = firebase.sdk.auth;
+
+    if (auth.currentUser?.uid === ADMIN_UID) {
+      return auth.currentUser;
+    }
+
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      let unsubscribe = null;
+
+      const timeout = window.setTimeout(() => {
+        if (settled) return;
+
+        settled = true;
+
+        if (unsubscribe) {
+          unsubscribe();
+        }
+
+        reject(
+          new Error("Administrator authentication timed out.")
+        );
+      }, 15000);
+
+      authSDK.onAuthStateChanged(
+        auth,
+        user => {
+          if (settled) return;
+
+          if (user?.uid === ADMIN_UID) {
+            settled = true;
+            window.clearTimeout(timeout);
+
+            if (unsubscribe) {
+              unsubscribe();
+            }
+
+            resolve(user);
+          } else if (!user) {
+            settled = true;
+            window.clearTimeout(timeout);
+
+            if (unsubscribe) {
+              unsubscribe();
+            }
+
+            reject(
+              new Error(
+                "Please sign in with the authorized administrator account."
+              )
+            );
+          }
+        },
+        error => {
+          if (settled) return;
+
+          settled = true;
+          window.clearTimeout(timeout);
+
+          if (unsubscribe) {
+            unsubscribe();
+          }
+
+          reject(error);
+        }
+      ).then(unsubscriber => {
+        unsubscribe = unsubscriber;
+
+        if (settled && unsubscribe) {
+          unsubscribe();
+        }
+      }).catch(error => {
+        if (settled) return;
+
+        settled = true;
+        window.clearTimeout(timeout);
+        reject(error);
+      });
+    });
+  }
+
+  // --------------------------------------------------
+  // NORMALIZE DATABASE DATA
+  // --------------------------------------------------
+
+  function loadCollections(root) {
+    state.root = root || {};
+
+    state.settings =
+      state.root.settings ||
+      state.root.businessProfile ||
+      state.root.profile ||
+      {};
+
+    state.invoices = toRecords(
+      state.root.invoices ||
+      state.root.invoiceRecords ||
+      state.root.sales
+    );
+
+    state.products = toRecords(
+      state.root.products ||
+      state.root.catalog?.products
+    );
+
+    state.categories = toRecords(
+      state.root.categories ||
+      state.root.catalog?.categories
+    );
+
+    calculateAnalytics();
+  }
+
+  // --------------------------------------------------
+  // BUILD ANALYTICS FROM SAVED INVOICES
+  // --------------------------------------------------
+
+  function calculateAnalytics() {
+    const now = new Date();
+    const todayKey = getLocalDateKey(now);
+    const monday = getMonday(now);
+    const previousMonday = new Date(monday);
+
+    previousMonday.setDate(previousMonday.getDate() - 7);
+
+    const nextMonday = new Date(monday);
+    nextMonday.setDate(nextMonday.getDate() + 7);
+
+    const productsById = new Map();
+    const productsByName = new Map();
+    const categoriesById = new Map();
+
+    state.products.forEach(product => {
+      const id = product.id || product.productId;
+
+      if (id) {
+        productsById.set(String(id), product);
+      }
+
+      const name = String(
+        product.name || product.productName || ""
+      ).toLowerCase();
+
+      if (name) {
+        productsByName.set(name, product);
+      }
+    });
+
+    state.categories.forEach(category => {
+      const id = category.id || category.categoryId;
+
+      if (id) {
+        categoriesById.set(String(id), category);
+      }
+    });
+
+    const validInvoices = state.invoices.filter(isCountable);
+
+    state.todayInvoices = validInvoices.filter(invoice => {
+      return getInvoiceDate(invoice) &&
+        getLocalDateKey(getInvoiceDate(invoice)) === todayKey;
+    });
+
+    state.todayRevenue = state.todayInvoices.reduce(
+      (sum, invoice) => sum + getInvoiceAmount(invoice),
+      0
+    );
+
+    const invoicesToday = state.todayInvoices;
+
+    const currentWeek = [];
+    const previousWeek = [];
+
+    const weekdayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+    for (let index = 0; index < 7; index += 1) {
+      const currentDate = new Date(monday);
+      currentDate.setDate(currentDate.getDate() + index);
+
+      const previousDate = new Date(previousMonday);
+      previousDate.setDate(previousDate.getDate() + index);
+
+      currentWeek.push({
+        day: weekdayLabels[index],
+        date: getLocalDateKey(currentDate),
+        revenue: 0
+      });
+
+      previousWeek.push({
+        day: weekdayLabels[index],
+        date: getLocalDateKey(previousDate),
+        revenue: 0
+      });
+    }
+
+    const sixMonthSales = [];
+
+    for (let offset = 5; offset >= 0; offset -= 1) {
+      const date = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+
+      sixMonthSales.push({
+        year: date.getFullYear(),
+        monthNumber: date.getMonth(),
+        month: date.toLocaleString("en-IN", { month: "short" }),
+        revenue: 0
+      });
+    }
+
+    const paymentSplit = {
+      upi: 0,
+      cash: 0
+    };
+
+    const todayHours = Array(24).fill(0);
+    const weekHours = Array(24).fill(0);
+
+    const categoryTotals = new Map();
+    const productTotals = new Map();
+
+    for (const invoice of validInvoices) {
+      const date = getInvoiceDate(invoice);
+      const amount = getInvoiceAmount(invoice);
+
+      if (!date) continue;
+
+      const invoiceDateKey = getLocalDateKey(date);
+
+      const weekIndex = currentWeek.findIndex(
+        item => item.date === invoiceDateKey
+      );
+
+      if (weekIndex >= 0) {
+        currentWeek[weekIndex].revenue += amount;
+      }
+
+      const previousWeekIndex = previousWeek.findIndex(
+        item => item.date === invoiceDateKey
+      );
+
+      if (previousWeekIndex >= 0) {
+        previousWeek[previousWeekIndex].revenue += amount;
+      }
+
+      const monthEntry = sixMonthSales.find(
+        item =>
+          item.year === date.getFullYear() &&
+          item.monthNumber === date.getMonth()
+      );
+
+      if (monthEntry) {
+        monthEntry.revenue += amount;
+      }
+
+      if (invoiceDateKey === todayKey) {
+        const hour = getInvoiceTime(invoice);
+
+        if (hour !== null) {
+          todayHours[hour] += 1;
+        }
+
+        const payment = getInvoicePayment(invoice);
+
+        if (payment === "upi") {
+          paymentSplit.upi += amount;
+        } else if (payment === "cash") {
+          paymentSplit.cash += amount;
+        }
+      }
+
+      if (date >= monday && date < nextMonday) {
+        const hour = getInvoiceTime(invoice);
+
+        if (hour !== null) {
+          weekHours[hour] += 1;
+        }
+      }
+
+      for (const item of getInvoiceItems(invoice)) {
+        if (!item || typeof item !== "object") continue;
+
+        const itemName = getItemName(item);
+        const quantity = getItemQuantity(item);
+        const itemRevenue = getItemAmount(item);
+
+        const productId = String(
+          item.productId || item.productID || item.id || ""
+        );
+
+        const product =
+          productsById.get(productId) ||
+          productsByName.get(itemName.toLowerCase());
+
+        const productKey = productId || itemName.toLowerCase();
+
+        const existingProduct = productTotals.get(productKey) || {
+          name: product?.name || product?.productName || itemName,
+          quantity: 0,
+          revenue: 0
+        };
+
+        existingProduct.quantity += quantity;
+        existingProduct.revenue += itemRevenue;
+
+        productTotals.set(productKey, existingProduct);
+
+        const categoryId = String(
+          item.categoryId ||
+          item.categoryID ||
+          product?.categoryId ||
+          ""
+        );
+
+        const categoryName =
+          item.categoryName ||
+          product?.categoryName ||
+          categoriesById.get(categoryId)?.name ||
+          categoriesById.get(categoryId)?.categoryName ||
+          (typeof product?.category === "string" ? product.category : "") ||
+          "Uncategorized";
+
+        const existingCategory = categoryTotals.get(categoryName) || {
+          name: categoryName,
+          revenue: 0,
+          quantity: 0
+        };
+
+        existingCategory.revenue += itemRevenue;
+        existingCategory.quantity += quantity;
+
+        categoryTotals.set(categoryName, existingCategory);
+      }
+    }
+
+    const totalSalesForPayments =
+      paymentSplit.upi + paymentSplit.cash;
+
+    state.paymentSplit = paymentSplit;
+    state.weeklySales = {
+      current: currentWeek,
+      previous: previousWeek
+    };
+
+    state.monthlySales = sixMonthSales;
+
+    state.hourlyOrders = {
+      today: todayHours,
+      week: weekHours
+    };
+
+    state.productSales = Array.from(productTotals.values())
+      .sort((a, b) => b.quantity - a.quantity)
+      .slice(0, 5);
+
+    state.categorySales = Array.from(categoryTotals.values())
+      .sort((a, b) => b.revenue - a.revenue)
+      .map(item => ({
+        ...item,
+        share: 0
+      }));
+
+    const categoryRevenue = state.categorySales.reduce(
+      (sum, item) => sum + item.revenue,
+      0
+    );
+
+    state.categorySales.forEach(item => {
+      item.share = categoryRevenue > 0
+        ? Math.round(item.revenue / categoryRevenue * 100)
+        : 0;
+    });
+
+    state.todayTarget = Math.max(
+      0,
+      numeric(
+        state.settings.dailyTarget ??
+        state.settings.targetAmount ??
+        state.settings.target?.amount,
+        0
+      )
+    );
+
+    state.lastUpdated = new Date();
+
+    // Keep calculated values available for page-specific features.
+    state.metrics = {
+      todayRevenue: state.todayRevenue,
+      todayInvoiceCount: invoicesToday.length,
+      generatedInvoices: validInvoices.length,
+      cancelledInvoices: state.invoices.filter(isCancelled).length,
+      draftInvoices: state.invoices.filter(isDraft).length,
+      averageBill: invoicesToday.length
+        ? state.todayRevenue / invoicesToday.length
+        : 0,
+      paymentTotal: totalSalesForPayments
+    };
+  }
+
+  // --------------------------------------------------
+  // BUSINESS PROFILE AND DAILY TARGET
+  // --------------------------------------------------
+
+  function renderBusinessDetails() {
+    const businessName = state.settings.businessName ||
+      state.settings.name ||
+      "[Business Name]";
+
+    const tagline = state.settings.tagline ||
+      "Restaurant Billing & Analytics";
+
+    const ownerName = state.settings.ownerName ||
+      state.settings.owner ||
+      "[Owner Name]";
+
+    $$(".brand-text h1 .ph").forEach(element => {
+      setText(element, businessName);
+    });
+
+    $$(".brand-text > span .ph").forEach(element => {
+      setText(element, tagline);
+    });
+
+    $$(".profile .name .ph").forEach(element => {
+      setText(element, ownerName);
+    });
+
+    $$(".profile .role .ph").forEach(element => {
+      setText(element, "Administrator");
+    });
+
+    $$(".page-footer > span:first-child .ph:first-child").forEach(element => {
+      setText(element, businessName);
+    });
+  }
+
+  function renderTarget() {
     const card = $(".target-card");
 
     if (!card) return;
 
-    setPlaceholder($(".value", card), formatMoney(amount));
-    setPlaceholder(
-      $(".target-meta span:first-child", card)?.closest("span"),
-      `${percentage}% achieved`
-    );
+    const target = state.todayTarget;
+    const achieved = state.todayRevenue;
+
+    const percentage = target > 0
+      ? Math.min(100, Math.round(achieved / target * 100))
+      : 0;
+
+    const remaining = Math.max(0, target - achieved);
+
+    setPlaceholder($(".value", card), formatMoney(target));
 
     const meta = $$(".target-meta span", card);
 
     if (meta[0]) {
-      meta[0].textContent = `${percentage}% achieved`;
+      meta[0].textContent = target > 0
+        ? `${percentage}% achieved`
+        : "Target not set";
     }
 
     if (meta[1]) {
-      meta[1].textContent = `${formatMoney(remaining)} left`;
+      meta[1].textContent = target > 0
+        ? `${formatMoney(remaining)} left`
+        : "Configure in Settings";
     }
 
     setProgress($(".target-fill", card), percentage);
   }
 
+  // --------------------------------------------------
+  // KPI CARDS
+  // --------------------------------------------------
+
   function renderKpis() {
+    const metrics = state.metrics || {};
     const values = [
-      formatMoney(DEMO_DATA.kpis.revenue),
-      formatNumber(DEMO_DATA.kpis.invoices),
-      formatMoney(DEMO_DATA.kpis.averageBill),
-      formatNumber(DEMO_DATA.kpis.drafts)
+      formatMoney(metrics.todayRevenue),
+      formatNumber(metrics.todayInvoiceCount),
+      formatMoney(metrics.averageBill),
+      formatNumber(metrics.draftInvoices)
     ];
 
     $$(".kpi .kpi-value").forEach((element, index) => {
@@ -251,353 +870,601 @@
     const subtitles = $$(".kpi .kpi-sub");
 
     if (subtitles[0]) {
-      subtitles[0].textContent = "Demo data · daily revenue";
+      subtitles[0].textContent = "Today's saved invoice revenue";
     }
 
     if (subtitles[1]) {
       subtitles[1].textContent =
-        `${DEMO_DATA.kpis.paid} paid · ` +
-        `${DEMO_DATA.kpis.pending} pending`;
+        `${metrics.generatedInvoices || 0} generated · ` +
+        `${metrics.cancelledInvoices || 0} cancelled`;
     }
 
     if (subtitles[2]) {
-      subtitles[2].textContent = "Based on today's demo invoices";
+      subtitles[2].textContent = "Based on today's saved invoices";
     }
 
     if (subtitles[3]) {
-      subtitles[3].textContent = "Demo unfinished invoices";
+      subtitles[3].textContent = "Invoices currently marked as drafts";
     }
   }
 
+  // --------------------------------------------------
+  // WEEKLY SALES CHART
+  // --------------------------------------------------
+
   function renderWeeklySales() {
     const columns = $$(".chart .chart-col");
-    const { current, previous } = DEMO_DATA.weeklySales;
+    const current = state.weeklySales.current;
+    const previous = state.weeklySales.previous;
+
+    const maxRevenue = Math.max(
+      1,
+      ...current.map(item => item.revenue),
+      ...previous.map(item => item.revenue)
+    );
 
     columns.forEach((column, index) => {
       const bars = $$(".bar", column);
       const currentDay = current[index];
       const previousDay = previous[index];
 
-      if (!currentDay || !previousDay) return;
+      const currentHeight = currentDay
+        ? currentDay.revenue / maxRevenue * 100
+        : 0;
 
-      const maxRevenue = Math.max(
-        ...current.map((item) => item.revenue),
-        ...previous.map((item) => item.revenue)
-      );
-
-      const currentHeight = (currentDay.revenue / maxRevenue) * 100;
-      const previousHeight = (previousDay.revenue / maxRevenue) * 100;
+      const previousHeight = previousDay
+        ? previousDay.revenue / maxRevenue * 100
+        : 0;
 
       if (bars[0]) {
         setProgress(bars[0], currentHeight);
-        bars[0].title =
-          `${currentDay.day}: ${formatMoney(currentDay.revenue)}`;
+
+        bars[0].title = currentDay
+          ? `${currentDay.day}: ${formatMoney(currentDay.revenue)}`
+          : "No data";
+
         bars[0].setAttribute(
           "aria-label",
-          `${currentDay.day} current week sales ${formatMoney(currentDay.revenue)}`
+          currentDay
+            ? `${currentDay.day} current week sales ${formatMoney(currentDay.revenue)}`
+            : "No sales data"
         );
       }
 
       if (bars[1]) {
         setProgress(bars[1], previousHeight);
-        bars[1].title =
-          `${previousDay.day}: ${formatMoney(previousDay.revenue)}`;
+
+        bars[1].title = previousDay
+          ? `${previousDay.day}: ${formatMoney(previousDay.revenue)}`
+          : "No data";
+
         bars[1].setAttribute(
           "aria-label",
-          `${previousDay.day} previous week sales ${formatMoney(previousDay.revenue)}`
+          previousDay
+            ? `${previousDay.day} previous week sales ${formatMoney(previousDay.revenue)}`
+            : "No sales data"
         );
       }
 
-      setText($(".chart-day", column), currentDay.day);
+      setText(
+        $(".chart-day", column),
+        currentDay?.day || ""
+      );
     });
   }
 
+  // --------------------------------------------------
+  // PAYMENT SPLIT
+  // --------------------------------------------------
+
   function renderPaymentSplit() {
-    const { upi, cash } = DEMO_DATA.paymentSplit;
+    const upi = state.paymentSplit.upi;
+    const cash = state.paymentSplit.cash;
     const total = upi + cash;
 
-    const upiPercent = total > 0 ? (upi / total) * 100 : 0;
-    const cashPercent = total > 0 ? (cash / total) * 100 : 0;
+    const upiPercent = total > 0 ? upi / total * 100 : 0;
+    const cashPercent = total > 0 ? cash / total * 100 : 0;
 
-    const card = $$(".row-2 .card").find((element) =>
+    const card = $$(".row-2 .card").find(element =>
       $("h3", element)?.textContent.trim() === "Payment Split"
     );
 
     if (!card) return;
 
     const segments = $$(".split-seg", card);
-    const legendValues = $$(".sl-val", card);
+    const values = $$(".sl-val", card);
 
     setProgress(segments[0], upiPercent);
     setProgress(segments[1], cashPercent);
 
-    if (legendValues[0]) {
-      legendValues[0].textContent =
+    if (values[0]) {
+      values[0].textContent =
         `${formatMoney(upi)} · ${Math.round(upiPercent)}%`;
     }
 
-    if (legendValues[1]) {
-      legendValues[1].textContent =
+    if (values[1]) {
+      values[1].textContent =
         `${formatMoney(cash)} · ${Math.round(cashPercent)}%`;
     }
 
     const subtitle = $("p", $(".card-head", card));
 
     if (subtitle) {
-      subtitle.textContent = `Total collection: ${formatMoney(total)}`;
+      subtitle.textContent =
+        `Today's recorded cash and UPI: ${formatMoney(total)}`;
     }
   }
 
+  // --------------------------------------------------
+  // PERFORMANCE REPORT
+  // --------------------------------------------------
+
   function renderPerformanceReport() {
-    const currentMonth = DEMO_DATA.monthlySales.at(-1);
-    const previousMonth = DEMO_DATA.monthlySales.at(-2);
+    const hero = $(".report-hero");
+
+    if (!hero) return;
+
+    const months = state.monthlySales;
+    const currentMonth = months[months.length - 1];
+    const previousMonth = months[months.length - 2];
 
     const growth = previousMonth && previousMonth.revenue > 0
       ? (
           (currentMonth.revenue - previousMonth.revenue) /
           previousMonth.revenue
         ) * 100
-      : 0;
-
-    const hero = $(".report-hero");
-
-    if (!hero) return;
+      : null;
 
     const values = $$(".rs-value", hero);
 
     if (values[0]) {
-      setPlaceholder(values[0], formatMoney(currentMonth.revenue));
+      setPlaceholder(
+        values[0],
+        formatMoney(currentMonth?.revenue || 0)
+      );
     }
 
     if (values[1]) {
-      setPlaceholder(values[1], formatNumber(DEMO_DATA.kpis.invoices));
+      const firstDay = new Date(
+        new Date().getFullYear(),
+        new Date().getMonth(),
+        1
+      );
+
+      const currentMonthInvoices = state.invoices.filter(invoice => {
+        const date = getInvoiceDate(invoice);
+
+        return date &&
+          date >= firstDay &&
+          !isCancelled(invoice) &&
+          !isDraft(invoice);
+      });
+
+      setPlaceholder(values[1], formatNumber(currentMonthInvoices.length));
     }
 
     if (values[2]) {
-      setPlaceholder(values[2], `${growth >= 0 ? "+" : ""}${growth.toFixed(1)}%`);
+      setPlaceholder(
+        values[2],
+        growth === null
+          ? "—"
+          : `${growth >= 0 ? "+" : ""}${growth.toFixed(1)}%`
+      );
     }
   }
 
+  // --------------------------------------------------
+  // MONTHLY SALES
+  // --------------------------------------------------
+
   function renderMonthlySales() {
-    const salesCard = $$(".row-3 .card").find((card) =>
-      $("h3", card)?.textContent.trim() === "Monthly Trend"
+    const card = $$(".row-3 .card").find(element =>
+      $("h3", element)?.textContent.trim() === "Monthly Trend"
     );
 
-    if (!salesCard) return;
+    if (!card) return;
 
-    const rows = $$(".cat-item", salesCard);
+    const rows = $$(".cat-item", card);
+    const months = state.monthlySales;
     const maxValue = Math.max(
-      ...DEMO_DATA.monthlySales.map((item) => item.revenue)
+      1,
+      ...months.map(item => item.revenue)
     );
 
     rows.forEach((row, index) => {
-      const item = DEMO_DATA.monthlySales[index];
+      const item = months[index];
 
-      if (!item) return;
-
-      setText($(".cat-name", row), item.month);
-      setPlaceholder($(".cat-val", row), formatMoney(item.revenue));
+      setText($(".cat-name", row), item?.month || "—");
+      setPlaceholder(
+        $(".cat-val", row),
+        item ? formatMoney(item.revenue) : "—"
+      );
 
       setProgress(
         $(".cat-fill", row),
-        (item.revenue / maxValue) * 100
+        item ? item.revenue / maxValue * 100 : 0
       );
     });
   }
 
+  // --------------------------------------------------
+  // TOP CATEGORIES
+  // --------------------------------------------------
+
   function renderCategories() {
-    const categoryCard = $$(".row-3 .card").find((card) =>
-      $("h3", card)?.textContent.trim() === "Top Categories"
+    const card = $$(".row-3 .card").find(element =>
+      $("h3", element)?.textContent.trim() === "Top Categories"
     );
 
-    if (!categoryCard) return;
+    if (!card) return;
 
-    const rows = $$(".cat-item", categoryCard);
+    const rows = $$(".cat-item", card);
+    const categories = state.categorySales;
     const maxRevenue = Math.max(
-      ...DEMO_DATA.categories.map((item) => item.revenue)
+      1,
+      ...categories.map(item => item.revenue)
     );
 
     rows.forEach((row, index) => {
-      const item = DEMO_DATA.categories[index];
+      const item = categories[index];
 
-      if (!item) return;
-
-      setText($(".cat-name", row), item.name);
+      setText($(".cat-name", row), item?.name || "—");
 
       const value = $(".cat-val", row);
 
       if (value) {
-        value.textContent =
-          `${formatMoney(item.revenue)} · ${item.share}%`;
+        value.textContent = item
+          ? `${formatMoney(item.revenue)} · ${item.share}%`
+          : "—";
       }
 
       setProgress(
         $(".cat-fill", row),
-        (item.revenue / maxRevenue) * 100
+        item ? item.revenue / maxRevenue * 100 : 0
       );
     });
   }
 
+  // --------------------------------------------------
+  // DATA-BASED KEY METRICS
+  // --------------------------------------------------
+
   function renderKeyMetrics() {
-    const metricsCard = $$(".row-3 .card").find((card) =>
-      $("h3", card)?.textContent.trim() === "Key Metrics"
+    const card = $$(".row-3 .card").find(element =>
+      $("h3", element)?.textContent.trim() === "Key Metrics"
     );
 
-    if (!metricsCard) return;
+    if (!card) return;
 
-    const values = $$(".metric-value", metricsCard);
+    const values = $$(".metric-value", card);
+    const labels = $$(".metric-label", card);
 
-    if (values[0]) setPlaceholder(values[0], "38.5%");
-    if (values[1]) setPlaceholder(values[1], "42%");
-    if (values[2]) setPlaceholder(values[2], "7–9 PM");
+    const totalCategoryRevenue = state.categorySales.reduce(
+      (sum, item) => sum + item.revenue,
+      0
+    );
 
-    const labels = $$(".metric-label", metricsCard);
+    const topCategory = state.categorySales[0];
+    const categoryShare = totalCategoryRevenue > 0 && topCategory
+      ? topCategory.revenue / totalCategoryRevenue * 100
+      : null;
 
-    if (labels[2]) {
-      const parent = labels[2].closest(".metric");
-      const delta = $(".metric-delta", parent);
+    const totalPayment =
+      state.paymentSplit.upi + state.paymentSplit.cash;
 
-      if (delta) {
-        delta.textContent = "Highest order volume";
-      }
+    const upiShare = totalPayment > 0
+      ? state.paymentSplit.upi / totalPayment * 100
+      : null;
+
+    const todayHours = state.hourlyOrders.today;
+    const peakOrders = Math.max(0, ...todayHours);
+    const peakHour = todayHours.indexOf(peakOrders);
+
+    if (values[0]) {
+      setPlaceholder(
+        values[0],
+        categoryShare === null ? "—" : `${categoryShare.toFixed(1)}%`
+      );
+    }
+
+    if (values[1]) {
+      setPlaceholder(
+        values[1],
+        upiShare === null ? "—" : `${upiShare.toFixed(1)}%`
+      );
+    }
+
+    if (values[2]) {
+      setPlaceholder(
+        values[2],
+        peakOrders > 0
+          ? `${String(peakHour).padStart(2, "0")}:00`
+          : "—"
+      );
+    }
+
+    const thirdMetric = labels[2]?.closest(".metric");
+    const delta = thirdMetric
+      ? $(".metric-delta", thirdMetric)
+      : null;
+
+    if (delta) {
+      delta.textContent = peakOrders > 0
+        ? `${peakOrders} recorded invoices`
+        : "No hourly invoice data";
     }
   }
 
+  // --------------------------------------------------
+  // TOP SELLING PRODUCTS
+  // --------------------------------------------------
+
   function renderProducts() {
-    const productCard = $$(".row-2 .card").find((card) =>
-      $("h3", card)?.textContent.trim() === "Top Selling Products"
+    const card = $$(".row-2 .card").find(element =>
+      $("h3", element)?.textContent.trim() === "Top Selling Products"
     );
 
-    if (!productCard) return;
+    if (!card) return;
 
-    const rows = $$(".prod-item", productCard);
+    const rows = $$(".prod-item", card);
+    const products = state.productSales;
     const maxQuantity = Math.max(
-      ...DEMO_DATA.products.map((item) => item.quantity)
+      1,
+      ...products.map(item => item.quantity)
     );
 
     rows.forEach((row, index) => {
-      const item = DEMO_DATA.products[index];
-
-      if (!item) return;
+      const item = products[index];
 
       const name = $(".p-name span:first-child", row);
       const quantity = $(".p-name span:last-child", row);
 
-      setText(name, item.name);
-      setText(quantity, `${item.quantity} sold`);
+      setText(name, item?.name || "—");
+      setText(
+        quantity,
+        item ? `${formatNumber(item.quantity)} sold` : "—"
+      );
 
       setProgress(
         $(".prod-fill", row),
-        (item.quantity / maxQuantity) * 100
+        item ? item.quantity / maxQuantity * 100 : 0
       );
 
-      row.title = `${item.name}: ${formatMoney(item.revenue)} sales`;
+      row.title = item
+        ? `${item.name}: ${formatMoney(item.revenue)} sales`
+        : "No product sales data";
     });
   }
+
+  // --------------------------------------------------
+  // THIS WEEK VS LAST WEEK
+  // --------------------------------------------------
 
   function renderComparisonMetrics() {
     const section = $(".row-2-even");
 
     if (!section) return;
 
-    const comparisonCard = $$(".card", section).find((card) =>
-      $("h3", card)?.textContent.trim() === "This Week vs Last Week"
+    const card = $$(".card", section).find(element =>
+      $("h3", element)?.textContent.trim() === "This Week vs Last Week"
     );
 
-    if (!comparisonCard) return;
+    if (!card) return;
 
-    const thisWeek = DEMO_DATA.weeklySales.current.reduce(
+    const currentWeek = state.weeklySales.current.reduce(
       (sum, item) => sum + item.revenue,
       0
     );
 
-    const lastWeek = DEMO_DATA.weeklySales.previous.reduce(
+    const previousWeek = state.weeklySales.previous.reduce(
       (sum, item) => sum + item.revenue,
       0
     );
 
-    const change = lastWeek > 0
-      ? ((thisWeek - lastWeek) / lastWeek) * 100
-      : 0;
+    const change = previousWeek > 0
+      ? (
+          (currentWeek - previousWeek) /
+          previousWeek
+        ) * 100
+      : null;
 
-    const values = $$(".metric-value", comparisonCard);
+    const values = $$(".metric-value", card);
 
-    if (values[0]) setPlaceholder(values[0], formatMoney(thisWeek));
-    if (values[1]) setPlaceholder(values[1], formatMoney(lastWeek));
+    if (values[0]) {
+      setPlaceholder(values[0], formatMoney(currentWeek));
+    }
 
-    const delta = $(".metric-delta", comparisonCard);
+    if (values[1]) {
+      setPlaceholder(values[1], formatMoney(previousWeek));
+    }
+
+    const delta = $(".metric-delta", card);
 
     if (delta) {
-      delta.textContent =
-        `${change >= 0 ? "+" : ""}${change.toFixed(1)}% vs last week`;
+      delta.textContent = change === null
+        ? "No previous-week comparison data"
+        : `${change >= 0 ? "+" : ""}${change.toFixed(1)}% vs last week`;
     }
   }
+
+  // --------------------------------------------------
+  // CUSTOMER INSIGHTS
+  // --------------------------------------------------
 
   function renderCustomerInsights() {
     const section = $(".row-2-even");
 
     if (!section) return;
 
-    const customerCard = $$(".card", section).find((card) =>
-      $("h3", card)?.textContent.trim() === "Customer Insight"
+    const card = $$(".card", section).find(element =>
+      $("h3", element)?.textContent.trim() === "Customer Insight"
     );
 
-    if (!customerCard) return;
+    if (!card) return;
 
-    const segments = $$(".split-seg", customerCard);
-    const legendValues = $$(".sl-val", customerCard);
+    const counts = new Map();
 
-    setProgress(segments[0], 62);
-    setProgress(segments[1], 38);
+    state.invoices
+      .filter(isCountable)
+      .forEach(invoice => {
+        const customer = getInvoiceCustomer(invoice).trim();
 
-    if (legendValues[0]) legendValues[0].textContent = "62% · 124";
-    if (legendValues[1]) legendValues[1].textContent = "38% · 76";
+        if (
+          !customer ||
+          customer.toLowerCase() === "walk-in customer" ||
+          customer.toLowerCase() === "walk-in"
+        ) {
+          return;
+        }
+
+        const key = customer.toLowerCase();
+
+        counts.set(key, (counts.get(key) || 0) + 1);
+      });
+
+    const customers = Array.from(counts.values());
+
+    const repeatCount = customers.filter(count => count > 1).length;
+    const newCount = customers.filter(count => count === 1).length;
+    const total = repeatCount + newCount;
+
+    const repeatPercent = total > 0
+      ? repeatCount / total * 100
+      : 0;
+
+    const newPercent = total > 0
+      ? newCount / total * 100
+      : 0;
+
+    const segments = $$(".split-seg", card);
+    const values = $$(".sl-val", card);
+
+    setProgress(segments[0], repeatPercent);
+    setProgress(segments[1], newPercent);
+
+    if (values[0]) {
+      values[0].textContent =
+        `${Math.round(repeatPercent)}% · ${repeatCount}`;
+    }
+
+    if (values[1]) {
+      values[1].textContent =
+        `${Math.round(newPercent)}% · ${newCount}`;
+    }
+
+    const subtitle = $("p", $(".card-head", card));
+
+    if (subtitle) {
+      subtitle.textContent =
+        "Based on customer names in saved invoices; not a complete customer account history.";
+    }
   }
+
+  // --------------------------------------------------
+  // RECENT INVOICES
+  // --------------------------------------------------
 
   function renderInvoices() {
     const table = $(".inv-table tbody");
 
     if (!table) return;
 
-    const rows = $$("tr", table);
+    const invoices = [...state.invoices]
+      .sort((a, b) => {
+        const first = getInvoiceDate(a)?.getTime() || 0;
+        const second = getInvoiceDate(b)?.getTime() || 0;
 
-    rows.forEach((row, index) => {
-      const invoice = DEMO_DATA.invoices[index];
+        return second - first;
+      })
+      .slice(0, 5);
 
-      if (!invoice) return;
+    table.replaceChildren();
 
-      const cells = $$("td", row);
+    if (invoices.length === 0) {
+      const row = document.createElement("tr");
+      const cell = document.createElement("td");
 
-      setText(cells[0], invoice.number);
+      cell.colSpan = 5;
+      cell.textContent = "No saved invoices found.";
 
-      const customer = $(".cust-name", cells[1]);
-      const detail = $(".cust-sub", cells[1]);
+      row.appendChild(cell);
+      table.appendChild(row);
 
-      setText(customer, invoice.customer);
-      setText(detail, invoice.detail);
-      setText(cells[2], invoice.date);
-      setText(cells[3], formatMoney(invoice.amount));
+      return;
+    }
 
-      const status = $(".pill", cells[4]);
+    for (const invoice of invoices) {
+      const row = document.createElement("tr");
+      const date = getInvoiceDate(invoice);
+      const customer = getInvoiceCustomer(invoice);
 
-      if (status) {
-        status.textContent = invoice.status;
-        status.className = "pill";
+      const cells = [
+        getInvoiceNumber(invoice),
+        "",
+        date
+          ? date.toLocaleString("en-IN", {
+              day: "2-digit",
+              month: "short",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit"
+            })
+          : "—",
+        formatMoney(getInvoiceAmount(invoice)),
+        ""
+      ];
 
-        if (invoice.status === "Paid") {
-          status.classList.add("paid");
-        } else if (invoice.status === "Pending") {
-          status.classList.add("pending");
+      cells.forEach((value, index) => {
+        const cell = document.createElement("td");
+
+        if (index === 1) {
+          const name = document.createElement("div");
+          name.className = "cust-name";
+          name.textContent = customer;
+
+          const detail = document.createElement("div");
+          detail.className = "cust-sub";
+          detail.textContent = String(
+            invoice.orderType || invoice.detail || ""
+          );
+
+          cell.append(name, detail);
+        } else if (index === 4) {
+          const badge = document.createElement("span");
+          const status = getInvoiceStatus(invoice);
+
+          badge.className = "pill";
+
+          if (status === "Paid") {
+            badge.classList.add("paid");
+          } else if (status === "Pending") {
+            badge.classList.add("pending");
+          } else if (status === "Cancelled") {
+            badge.classList.add("cancelled");
+          } else {
+            badge.classList.add("draft");
+          }
+
+          badge.textContent = status;
+          cell.appendChild(badge);
         } else {
-          status.classList.add("draft");
+          cell.textContent = String(value);
         }
-      }
-    });
+
+        row.appendChild(cell);
+      });
+
+      table.appendChild(row);
+    }
   }
 
+  // --------------------------------------------------
+  // HOURLY SALES / ORDER HEATMAP
+  // --------------------------------------------------
+
   function getHourlyCard() {
-    return $$(".row-2 .card").find((card) =>
-      $("h3", card)?.textContent.trim() === "Hourly Sales Heatmap"
+    return $$(".row-2 .card").find(element =>
+      $("h3", element)?.textContent.trim() === "Hourly Sales Heatmap"
     );
   }
 
@@ -606,15 +1473,23 @@
 
     if (!card) return;
 
-    const values = DEMO_DATA.hourlyOrders[period];
+    const values = state.hourlyOrders[period];
     const cells = $$(".hour-cell", card);
 
     if (!values || cells.length === 0) return;
 
-    const maxValue = Math.max(...values);
+    const visibleValues = cells.map(cell => {
+      const hour = Number(cell.textContent.trim());
+
+      return Number.isInteger(hour) && hour >= 0 && hour <= 23
+        ? values[hour] || 0
+        : 0;
+    });
+
+    const maxValue = Math.max(1, ...visibleValues);
 
     cells.forEach((cell, index) => {
-      const value = values[index] ?? 0;
+      const value = visibleValues[index];
 
       cell.classList.remove(
         "level-1",
@@ -624,15 +1499,18 @@
         "level-5"
       );
 
-      const level = maxValue > 0
-        ? Math.min(5, Math.max(1, Math.ceil((value / maxValue) * 5)))
-        : 1;
+      const level = value > 0
+        ? Math.min(5, Math.max(1, Math.ceil(value / maxValue * 5)))
+        : 0;
 
-      cell.classList.add(`level-${level}`);
-      cell.title = `${cell.textContent}:00 — ${value} demo orders`;
+      if (level > 0) {
+        cell.classList.add(`level-${level}`);
+      }
+
+      cell.title = `${cell.textContent}:00 — ${value} invoices`;
       cell.setAttribute(
         "aria-label",
-        `${cell.textContent}:00, ${value} demo orders`
+        `${cell.textContent}:00, ${value} invoices`
       );
     });
 
@@ -640,35 +1518,34 @@
 
     if (subtitle) {
       subtitle.textContent = period === "today"
-        ? "Demo orders per hour today"
-        : "Demo average orders per hour this week";
+        ? "Saved invoices by hour today"
+        : "Saved invoices by hour this week";
     }
 
-    const peakIndex = values.indexOf(maxValue);
-    const peakCell = cells[peakIndex];
+    const peak = Math.max(0, ...visibleValues);
+    const peakIndex = visibleValues.indexOf(peak);
+    const slow = Math.min(...visibleValues);
+    const slowIndex = visibleValues.indexOf(slow);
 
-    const summary = card.querySelector(
-      ".card-body > div:last-child"
-    );
+    const summary = card.querySelector(".card-body > div:last-child");
 
     if (summary) {
       const spans = $$("span", summary);
 
       if (spans[0]) {
-        spans[0].textContent =
-          `Peak: ${peakCell?.textContent ?? "—"} · ${maxValue} orders`;
+        spans[0].textContent = peak > 0
+          ? `Peak: ${cells[peakIndex]?.textContent ?? "—"} · ${peak} invoices`
+          : "Peak: —";
       }
 
-      const minValue = Math.min(...values);
-      const slowIndex = values.indexOf(minValue);
-
       if (spans[1]) {
-        spans[1].textContent =
-          `Slow: ${cells[slowIndex]?.textContent ?? "—"} · ${minValue} orders`;
+        spans[1].textContent = slow > 0
+          ? `Lowest: ${cells[slowIndex]?.textContent ?? "—"} · ${slow} invoices`
+          : "No hourly data";
       }
     }
 
-    $$(".report-tab", card).forEach((button) => {
+    $$(".report-tab", card).forEach(button => {
       const selected =
         (period === "today" && button.textContent.trim() === "Today") ||
         (period === "week" && button.textContent.trim() === "Week");
@@ -678,49 +1555,51 @@
     });
   }
 
+  // --------------------------------------------------
+  // EXPORT REAL DATABASE DATA
+  // --------------------------------------------------
+
   function exportDashboardCsv() {
     const lines = [
-      ["Restaurant Dashboard Demo Report"],
-      ["Report generated", new Date().toLocaleString("en-IN")],
+      ["Restaurant Dashboard Report"],
+      ["Generated at", new Date().toLocaleString("en-IN")],
       [],
-      ["Daily KPI", "Value"],
-      ["Today's revenue", DEMO_DATA.kpis.revenue],
-      ["Invoices today", DEMO_DATA.kpis.invoices],
-      ["Paid invoices", DEMO_DATA.kpis.paid],
-      ["Pending invoices", DEMO_DATA.kpis.pending],
-      ["Average bill value", DEMO_DATA.kpis.averageBill],
+      ["Metric", "Value"],
+      ["Today's revenue", state.todayRevenue],
+      ["Today's invoices", state.todayInvoices.length],
+      ["Daily target", state.todayTarget],
       [],
       ["Weekly Sales", "Day", "Current Week Revenue", "Previous Week Revenue"]
     ];
 
-    DEMO_DATA.weeklySales.current.forEach((item, index) => {
+    state.weeklySales.current.forEach((item, index) => {
       lines.push([
         "Weekly Sales",
         item.day,
         item.revenue,
-        DEMO_DATA.weeklySales.previous[index]?.revenue ?? 0
+        state.weeklySales.previous[index]?.revenue || 0
       ]);
     });
 
     lines.push(
       [],
       ["Payment Method", "Amount"],
-      ["UPI", DEMO_DATA.paymentSplit.upi],
-      ["Cash", DEMO_DATA.paymentSplit.cash],
+      ["UPI", state.paymentSplit.upi],
+      ["Cash", state.paymentSplit.cash],
       [],
       ["Category", "Revenue", "Share (%)"]
     );
 
-    DEMO_DATA.categories.forEach((item) => {
+    state.categorySales.forEach(item => {
       lines.push([item.name, item.revenue, item.share]);
     });
 
     lines.push(
       [],
-      ["Top Selling Product", "Quantity Sold", "Revenue"]
+      ["Product", "Quantity Sold", "Revenue"]
     );
 
-    DEMO_DATA.products.forEach((item) => {
+    state.productSales.forEach(item => {
       lines.push([item.name, item.quantity, item.revenue]);
     });
 
@@ -729,27 +1608,25 @@
       ["Invoice Number", "Customer", "Date", "Amount", "Status"]
     );
 
-    DEMO_DATA.invoices.forEach((item) => {
+    state.invoices.forEach(invoice => {
+      const date = getInvoiceDate(invoice);
+
       lines.push([
-        item.number,
-        item.customer,
-        item.date,
-        item.amount,
-        item.status
+        getInvoiceNumber(invoice),
+        getInvoiceCustomer(invoice),
+        date ? getLocalDateKey(date) : "",
+        getInvoiceAmount(invoice),
+        getInvoiceStatus(invoice)
       ]);
     });
 
-    const csv = lines
-      .map((row) =>
-        row
-          .map((value) => {
-            const safeValue = String(value ?? "");
+    const csv = lines.map(row =>
+      row.map(value => {
+        const text = String(value ?? "");
 
-            return `"${safeValue.replace(/"/g, '""')}"`;
-          })
-          .join(",")
-      )
-      .join("\r\n");
+        return `"${text.replace(/"/g, '""')}"`;
+      }).join(",")
+    ).join("\r\n");
 
     const blob = new Blob(
       ["\uFEFF", csv],
@@ -760,16 +1637,19 @@
     const link = document.createElement("a");
 
     link.href = url;
-    link.download = `dashboard-demo-${new Date()
-      .toISOString()
-      .slice(0, 10)}.csv`;
+    link.download =
+      `dashboard-report-${getLocalDateKey()}.csv`;
 
     document.body.appendChild(link);
     link.click();
     link.remove();
 
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
+
+  // --------------------------------------------------
+  // EVENTS
+  // --------------------------------------------------
 
   function bindDashboardEvents() {
     const exportButton = $(".page-actions .btn-soft");
@@ -782,7 +1662,7 @@
     const heatmapCard = getHourlyCard();
 
     if (heatmapCard) {
-      $$(".report-tab", heatmapCard).forEach((button) => {
+      $$(".report-tab", heatmapCard).forEach(button => {
         button.addEventListener("click", () => {
           const period = button.textContent.trim().toLowerCase();
 
@@ -793,17 +1673,18 @@
       });
     }
 
-    // Chart tooltips are also available on keyboard focus.
-    $$(".chart .bar").forEach((bar) => {
+    $$(".chart .bar").forEach(bar => {
       if (!bar.hasAttribute("tabindex")) {
         bar.setAttribute("tabindex", "0");
       }
     });
   }
 
-  function initDashboard() {
-    if (!$(".app") || !$(".kpis")) return;
+  // --------------------------------------------------
+  // RENDER DASHBOARD
+  // --------------------------------------------------
 
+  function renderDashboard() {
     renderBusinessDetails();
     renderTarget();
     renderKpis();
@@ -818,12 +1699,105 @@
     renderCustomerInsights();
     renderInvoices();
     renderHourlyHeatmap("today");
-    bindDashboardEvents();
   }
 
+  function showDashboardError(message) {
+    console.error("Dashboard:", message);
+
+    const heading = $(".page-head");
+
+    if (!heading) return;
+
+    let notice = $("#dashboardDataNotice");
+
+    if (!notice) {
+      notice = document.createElement("div");
+      notice.id = "dashboardDataNotice";
+      notice.setAttribute("role", "status");
+      notice.style.cssText =
+        "margin-top:12px;padding:12px;border:1px solid #d0d0d0;border-radius:5px;";
+
+      heading.appendChild(notice);
+    }
+
+    notice.textContent = message;
+  }
+
+  function clearDashboardError() {
+    $("#dashboardDataNotice")?.remove();
+  }
+
+  // --------------------------------------------------
+  // LIVE FIREBASE SUBSCRIPTION
+  // --------------------------------------------------
+
+  async function startDashboard() {
+    if (!$(".app") || !$(".kpis")) {
+      return;
+    }
+
+    try {
+      const firebase = await getFirebase();
+
+      await waitForAdmin(firebase);
+
+      const databaseSDK = firebase.sdk.database;
+      const rootReference = databaseSDK.ref(
+        firebase.db,
+        "restaurantBilling"
+      );
+
+      state.unsubscribe = databaseSDK.onValue(
+        rootReference,
+        snapshot => {
+          const data = snapshot.exists()
+            ? snapshot.val()
+            : {};
+
+          loadCollections(data);
+          renderDashboard();
+          clearDashboardError();
+
+          console.info(
+            "Dashboard refreshed from Firebase.",
+            {
+              invoices: state.invoices.length,
+              products: state.products.length,
+              categories: state.categories.length,
+              updatedAt: state.lastUpdated?.toISOString()
+            }
+          );
+        },
+        error => {
+          showDashboardError(
+            `Unable to read dashboard data from Firebase: ${error.message}`
+          );
+        }
+      );
+
+      bindDashboardEvents();
+    } catch (error) {
+      showDashboardError(
+        error.message ||
+        "Unable to initialize the Firebase dashboard."
+      );
+    }
+  }
+
+  // --------------------------------------------------
+  // CLEAN UP
+  // --------------------------------------------------
+
+  window.addEventListener("pagehide", () => {
+    if (typeof state.unsubscribe === "function") {
+      state.unsubscribe();
+      state.unsubscribe = null;
+    }
+  });
+
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initDashboard);
+    document.addEventListener("DOMContentLoaded", startDashboard);
   } else {
-    initDashboard();
+    startDashboard();
   }
 })();
