@@ -1,4 +1,3 @@
-
 "use strict";
 
 /*
@@ -9,17 +8,16 @@
  * - Product selection and cart management
  * - Automatic subtotal, discount, tax and grand total
  * - Cash / UPI selection
- * - Dynamic A4 invoice with the approved layout
- * - Firebase Realtime Database verification record
- * - Unique verification ID per generated invoice
- * - Real QR code linking to the verification page
+ * - Dynamic A4 invoice with approved layout
+ * - Sequential Firebase invoice numbers: INV-YYYY-0001
+ * - Full invoice records in restaurantBilling/invoices
+ * - Public verification records for QR scanning
+ * - Atomic invoice counter using Firebase transactions
  *
- * IMPORTANT:
- * - Product options must exist in new-invoice.html.
- * - Firebase configuration is fetched from the Cloudflare Worker.
- * - Firebase Authentication is required to save a verification record.
- * - Only the minimum invoice details needed for verification are saved.
- * - The verification page and database rules must be configured separately.
+ * Requirements:
+ * - js/firebase-config.js must load before this file.
+ * - Firebase Authentication is required.
+ * - The owner UID must be permitted by Realtime Database rules.
  */
 
 (() => {
@@ -67,22 +65,47 @@
   const resetButton = document.getElementById("resetInvoiceBtn");
   const previewButton = document.getElementById("previewInvoiceBtn");
 
+  if (
+    !invoiceNumberInput ||
+    !invoiceDateInput ||
+    !invoiceTimeInput ||
+    !customerNameInput ||
+    !customerPhoneInput ||
+    !orderTypeInput ||
+    !productSelect ||
+    !quantityInput ||
+    !addItemButton ||
+    !itemsBody ||
+    !itemCountLabel ||
+    !clearItemsButton ||
+    !discountInput ||
+    !taxRateInput ||
+    !notesInput ||
+    !subtotalOutput ||
+    !discountOutput ||
+    !taxOutput ||
+    !grandTotalOutput ||
+    !resetButton ||
+    !previewButton
+  ) {
+    console.error("Invoice: One or more required HTML elements are missing.");
+    return;
+  }
+
   // --------------------------------------------------
   // CONFIGURATION
   // --------------------------------------------------
 
-  const FIREBASE_CONFIG_URL =
-    "https://restaurant-billing-config.yadavsubba2003.workers.dev/api/firebase-config";
+  const OWNER_UID = "20wif9y7LQhBZgFPDsAlrQpFjnI2";
 
-  /*
-   * Dedicated database branch for invoice verification.
-   * This does not overwrite the other application's data.
-   */
-const VERIFICATION_DATABASE_PATH =
-  "publicInvoiceVerification";
+  const INVOICES_PATH = "restaurantBilling/invoices";
+  const COUNTERS_PATH = "restaurantBilling/invoiceCounters";
+  const VERIFICATION_PATH = "publicInvoiceVerification";
 
-  const VERIFICATION_PAGE =
-    new URL("verify-invoice.html", window.location.href).href.split("?")[0];
+  const VERIFICATION_PAGE = new URL(
+    "verify-invoice.html",
+    window.location.href
+  ).href.split("?")[0];
 
   const MAX_QUANTITY = 9999;
   const MAX_PRICE = 99999999;
@@ -97,6 +120,8 @@ const VERIFICATION_DATABASE_PATH =
   });
 
   const cart = new Map();
+
+  let firebaseServicesPromise = null;
 
   // --------------------------------------------------
   // HELPERS
@@ -139,18 +164,16 @@ const VERIFICATION_DATABASE_PATH =
     return `${hours}:${minutes}`;
   }
 
-  function generateDemoInvoiceNumber() {
-    const date = localDateString().replace(/-/g, "");
-
-    const suffix = Math.random()
-      .toString(36)
-      .slice(2, 7)
-      .toUpperCase();
-
-    return `DEMO-${date}-${suffix}`;
-  }
-
   function generateVerificationId() {
+    if (
+      !window.crypto ||
+      typeof window.crypto.getRandomValues !== "function"
+    ) {
+      throw new Error(
+        "Secure verification IDs require HTTPS. Open the website using its secure URL."
+      );
+    }
+
     const bytes = new Uint8Array(24);
     window.crypto.getRandomValues(bytes);
 
@@ -185,6 +208,13 @@ const VERIFICATION_DATABASE_PATH =
     delete invoiceMessage.dataset.type;
   }
 
+  function setInvoiceStatus(message, className = "pill pending") {
+    if (!invoiceStatus) return;
+
+    invoiceStatus.textContent = message;
+    invoiceStatus.className = className;
+  }
+
   // --------------------------------------------------
   // INITIALISE INVOICE DETAILS
   // --------------------------------------------------
@@ -192,14 +222,19 @@ const VERIFICATION_DATABASE_PATH =
   function initialiseInvoiceDetails() {
     const now = new Date();
 
-    invoiceNumberInput.value = generateDemoInvoiceNumber();
+    /*
+     * A final invoice number is allocated from Firebase
+     * when the owner generates and saves the invoice.
+     * Preview drafts do not consume invoice numbers.
+     */
+
+    invoiceNumberInput.value = "Assigned when saved";
+    invoiceNumberInput.readOnly = true;
+
     invoiceDateInput.value = localDateString(now);
     invoiceTimeInput.value = localTimeString(now);
 
-    if (invoiceStatus) {
-      invoiceStatus.textContent = "Draft";
-      invoiceStatus.className = "pill pending";
-    }
+    setInvoiceStatus("Draft");
   }
 
   // --------------------------------------------------
@@ -223,7 +258,6 @@ const VERIFICATION_DATABASE_PATH =
     }
 
     const label = option.textContent.trim();
-
     const priceMatch = label.match(/₹\s*([\d,]+(?:\.\d{1,2})?)/);
 
     if (!priceMatch) {
@@ -495,7 +529,6 @@ const VERIFICATION_DATABASE_PATH =
   }
 
   addItemButton.addEventListener("click", addSelectedProduct);
-
   productSelect.addEventListener("change", clearMessage);
 
   // --------------------------------------------------
@@ -683,7 +716,11 @@ const VERIFICATION_DATABASE_PATH =
     }
 
     if (!getPaymentMethod()) {
-      showMessage("Please select Cash or UPI as the payment method.", "error");
+      showMessage(
+        "Please select Cash or UPI as the payment method.",
+        "error"
+      );
+
       return false;
     }
 
@@ -694,7 +731,7 @@ const VERIFICATION_DATABASE_PATH =
   // BUILD INVOICE SNAPSHOT
   // --------------------------------------------------
 
-  function buildInvoiceData() {
+  function buildInvoiceData(invoiceNumber = "DRAFT") {
     const totals = calculateTotals();
     const dateParts = invoiceDateInput.value.split("-");
 
@@ -703,7 +740,7 @@ const VERIFICATION_DATABASE_PATH =
       : invoiceDateInput.value;
 
     return {
-      invoiceNumber: invoiceNumberInput.value,
+      invoiceNumber,
       invoiceDate: invoiceDateInput.value,
       formattedDate,
       invoiceTime: invoiceTimeInput.value,
@@ -736,10 +773,8 @@ const VERIFICATION_DATABASE_PATH =
   }
 
   // --------------------------------------------------
-  // FIREBASE CONFIGURATION
+  // FIREBASE SHARED SERVICES
   // --------------------------------------------------
-
-  let firebaseServicesPromise = null;
 
   async function getFirebaseServices() {
     if (firebaseServicesPromise) {
@@ -747,63 +782,45 @@ const VERIFICATION_DATABASE_PATH =
     }
 
     firebaseServicesPromise = (async () => {
-      const response = await fetch(FIREBASE_CONFIG_URL, {
-        method: "GET",
-        headers: {
-          Accept: "application/json"
-        },
-        cache: "no-store"
-      });
+      const firebase = window.restaurantFirebase;
 
-      if (!response.ok) {
-        throw new Error("Unable to load Firebase configuration.");
-      }
-
-      const config = await response.json();
-
-      const requiredFields = [
-        "apiKey",
-        "authDomain",
-        "databaseURL",
-        "projectId",
-        "appId"
-      ];
-
-      const missingFields = requiredFields.filter(
-        field => !config[field]
-      );
-
-      if (missingFields.length > 0) {
+      if (!firebase || !firebase.ready) {
         throw new Error(
-          `Firebase configuration is missing: ${missingFields.join(", ")}`
+          "Firebase is not initialised. Check js/firebase-config.js."
         );
       }
 
-      const [
-        appModule,
-        authModule
-      ] = await Promise.all([
-        import(
-          "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js"
-        ),
-        import(
-          "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js"
-        )
-      ]);
+      await firebase.ready;
 
-      const existingApp = appModule.getApps().find(
-        app => app.name === "[DEFAULT]"
-      );
+      if (firebase.error) {
+        throw new Error(
+          firebase.error.message || "Firebase failed to initialise."
+        );
+      }
 
-      const app = existingApp ||
-        appModule.initializeApp(config);
+      const sdk = firebase.sdk;
 
-      const auth = authModule.getAuth(app);
+      if (
+        !sdk ||
+        !sdk.auth ||
+        !sdk.database ||
+        !firebase.app
+      ) {
+        throw new Error(
+          "The shared Firebase Authentication or Database SDK is unavailable."
+        );
+      }
+
+      const auth = firebase.auth || sdk.auth.getAuth(firebase.app);
+      const db = firebase.db || sdk.database.getDatabase(firebase.app);
 
       return {
-        config,
+        app: firebase.app,
+        config: firebase.config,
         auth,
-        onAuthStateChanged: authModule.onAuthStateChanged
+        db,
+        authSDK: sdk.auth,
+        dbSDK: sdk.database
       };
     })();
 
@@ -816,81 +833,246 @@ const VERIFICATION_DATABASE_PATH =
   }
 
   // --------------------------------------------------
-  // GET AUTHENTICATED FIREBASE USER
+  // GET AUTHENTICATED OWNER
   // --------------------------------------------------
 
-  async function getAuthenticatedUser(auth, onAuthStateChanged) {
+  async function getAuthenticatedUser(services) {
+    const { auth, authSDK } = services;
+
+    function validateOwner(user) {
+      if (!user) {
+        throw new Error(
+          "Please sign in before generating a verified invoice."
+        );
+      }
+
+      if (user.uid !== OWNER_UID) {
+        throw new Error(
+          "This account is not authorised to generate invoices."
+        );
+      }
+
+      return user;
+    }
+
     if (auth.currentUser) {
-      return auth.currentUser;
+      return validateOwner(auth.currentUser);
     }
 
     return new Promise((resolve, reject) => {
       let unsubscribe = null;
+      let settled = false;
+
+      const finish = (callback, value) => {
+        if (settled) return;
+
+        settled = true;
+        window.clearTimeout(timeout);
+
+        if (typeof unsubscribe === "function") {
+          unsubscribe();
+        }
+
+        callback(value);
+      };
 
       const timeout = window.setTimeout(() => {
-        if (unsubscribe) unsubscribe();
-
-        reject(
+        finish(
+          reject,
           new Error(
             "Authentication timed out. Please sign in and try again."
           )
         );
       }, 10000);
 
-      unsubscribe = onAuthStateChanged(
+      unsubscribe = authSDK.onAuthStateChanged(
         auth,
         user => {
-          window.clearTimeout(timeout);
-
-          if (unsubscribe) unsubscribe();
-
-          if (user) {
-            resolve(user);
-          } else {
-            reject(
-              new Error(
-                "Please sign in before generating a verified invoice."
-              )
-            );
+          try {
+            finish(resolve, validateOwner(user));
+          } catch (error) {
+            finish(reject, error);
           }
         },
-        error => {
-          window.clearTimeout(timeout);
-
-          if (unsubscribe) unsubscribe();
-
-          reject(error);
-        }
+        error => finish(reject, error)
       );
     });
   }
 
   // --------------------------------------------------
-  // SAVE MINIMAL VERIFICATION RECORD
+  // READ EXISTING INVOICES TO PREVENT NUMBER REUSE
   // --------------------------------------------------
 
-  async function saveVerificationRecord(data, verificationId) {
-    const services = await getFirebaseServices();
+  async function getHighestExistingSequence(services, year) {
+    const { db, dbSDK } = services;
 
-    const user = await getAuthenticatedUser(
-      services.auth,
-      services.onAuthStateChanged
+    const invoicesRef = dbSDK.ref(db, INVOICES_PATH);
+    const snapshot = await dbSDK.get(invoicesRef);
+
+    if (!snapshot.exists()) {
+      return 0;
+    }
+
+    const value = snapshot.val();
+
+    const records = Array.isArray(value)
+      ? value
+      : Object.values(value || {});
+
+    let highest = 0;
+
+    const numberPattern = new RegExp(
+      `^INV-${year}-(\\d+)$`,
+      "i"
     );
+
+    for (const record of records) {
+      if (!record || typeof record !== "object") {
+        continue;
+      }
+
+      const number = String(
+        record.invoiceNumber || record.invoiceNo || ""
+      ).trim();
+
+      const match = number.match(numberPattern);
+
+      if (!match) continue;
+
+      const sequence = Number(match[1]);
+
+      if (Number.isSafeInteger(sequence)) {
+        highest = Math.max(highest, sequence);
+      }
+    }
+
+    return highest;
+  }
+
+  // --------------------------------------------------
+  // ATOMIC SEQUENTIAL INVOICE NUMBER
+  // --------------------------------------------------
+
+  async function allocateInvoiceNumber(services, invoiceDate) {
+    const { db, dbSDK } = services;
+
+    const year = String(invoiceDate).slice(0, 4);
+
+    if (!/^\d{4}$/.test(year)) {
+      throw new Error("A valid invoice year is required.");
+    }
+
+    /*
+     * Scan saved invoice records in case invoices already exist
+     * but the sequence counter has not yet been created.
+     */
+
+    const highestExisting = await getHighestExistingSequence(
+      services,
+      year
+    );
+
+    const counterRef = dbSDK.ref(
+      db,
+      `${COUNTERS_PATH}/${year}`
+    );
+
+    /*
+     * runTransaction atomically increments the counter.
+     * Concurrent invoice generation requests will not receive
+     * the same sequence number.
+     */
+
+    const result = await dbSDK.runTransaction(
+      counterRef,
+      currentValue => {
+        const current = Number(currentValue);
+
+        const safeCurrent =
+          Number.isSafeInteger(current) && current >= 0
+            ? current
+            : 0;
+
+        return Math.max(safeCurrent, highestExisting) + 1;
+      },
+      {
+        applyLocally: false
+      }
+    );
+
+    if (!result.committed || !result.snapshot) {
+      throw new Error(
+        "Firebase could not allocate a unique invoice number. Please try again."
+      );
+    }
+
+    const sequence = Number(result.snapshot.val());
+
+    if (!Number.isSafeInteger(sequence) || sequence < 1) {
+      throw new Error("Firebase returned an invalid invoice sequence.");
+    }
+
+    return `INV-${year}-${String(sequence).padStart(4, "0")}`;
+  }
+
+  // --------------------------------------------------
+  // SAVE COMPLETE INVOICE TO FIREBASE
+  // --------------------------------------------------
+
+  async function saveInvoiceRecord(
+    services,
+    user,
+    data,
+    verificationId,
+    verificationUrl
+  ) {
+    const { db, dbSDK } = services;
+
+    const invoicesRef = dbSDK.ref(db, INVOICES_PATH);
+    const newInvoiceRef = dbSDK.push(invoicesRef);
+
+    const createdAt = new Date().toISOString();
+
+    const record = {
+      ...data,
+
+      id: newInvoiceRef.key,
+      verificationId,
+      verificationUrl,
+
+      recordStatus: "valid",
+      paymentStatus: "recorded",
+
+      ownerUid: user.uid,
+      createdAt,
+      createdAtMs: Date.now()
+    };
+
+    await dbSDK.set(newInvoiceRef, record);
+
+    return {
+      key: newInvoiceRef.key,
+      record
+    };
+  }
+
+  // --------------------------------------------------
+  // SAVE MINIMAL PUBLIC VERIFICATION RECORD
+  // --------------------------------------------------
+
+  async function saveVerificationRecord(
+    services,
+    user,
+    data,
+    verificationId
+  ) {
+    const { config, auth } = services;
 
     const idToken = await user.getIdToken();
 
-    /*
-     * Public verification record deliberately excludes:
-     * - Customer name and phone number
-     * - Staff information
-     * - Internal application data
-     *
-     * The verification page will display the saved item,
-     * quantity, price, totals and record status.
-     */
-
     const publicRecord = {
       verificationId,
+
       invoiceNumber: data.invoiceNumber,
       invoiceDate: data.invoiceDate,
       invoiceTime: data.invoiceTime,
@@ -913,14 +1095,24 @@ const VERIFICATION_DATABASE_PATH =
       },
 
       recordStatus: "valid",
-      createdAt: new Date().toISOString(),
-      ownerUid: user.uid
+      createdAt: new Date().toISOString()
     };
 
-    const databaseUrl = services.config.databaseURL.replace(/\/+$/, "");
+    if (!auth.currentUser || auth.currentUser.uid !== user.uid) {
+      throw new Error(
+        "Your login session changed. Please sign in again."
+      );
+    }
+
+    const databaseUrl = String(config.databaseURL || "")
+      .replace(/\/+$/, "");
+
+    if (!databaseUrl) {
+      throw new Error("Firebase Database URL is missing.");
+    }
 
     const recordUrl =
-      `${databaseUrl}/${VERIFICATION_DATABASE_PATH}/${encodeURIComponent(verificationId)}.json` +
+      `${databaseUrl}/${VERIFICATION_PATH}/${encodeURIComponent(verificationId)}.json` +
       `?auth=${encodeURIComponent(idToken)}`;
 
     const response = await fetch(recordUrl, {
@@ -932,14 +1124,15 @@ const VERIFICATION_DATABASE_PATH =
     });
 
     if (!response.ok) {
-      let errorMessage = "Firebase could not save the verification record.";
+      let errorMessage =
+        "Firebase could not save the verification record.";
 
       try {
         const errorData = await response.json();
 
         if (errorData.error === "Permission denied") {
           errorMessage =
-            "Firebase denied this write. Check the Realtime Database rules for the invoice verification path.";
+            "Firebase denied the verification write. Check your Realtime Database rules.";
         }
       } catch {
         // Keep the general error message.
@@ -950,9 +1143,13 @@ const VERIFICATION_DATABASE_PATH =
 
     const savedRecord = await response.json();
 
-    if (!savedRecord || savedRecord.verificationId !== verificationId) {
+    if (
+      !savedRecord ||
+      savedRecord.verificationId !== verificationId ||
+      savedRecord.invoiceNumber !== data.invoiceNumber
+    ) {
       throw new Error(
-        "The verification record could not be confirmed after saving."
+        "Firebase did not confirm the correct verification record."
       );
     }
 
@@ -1376,16 +1573,12 @@ const VERIFICATION_DATABASE_PATH =
 
         <main class="invoice">
 
-          <!-- BUSINESS HEADER -->
-
           <header class="section business-header">
             <h1 class="business-name">[Business Name]</h1>
             <p class="business-details">Business Address</p>
             <p class="business-details">Contact Number</p>
             <h2 class="invoice-title">INVOICE</h2>
           </header>
-
-          <!-- INVOICE DETAILS -->
 
           <section class="section">
             <h3 class="section-title">Invoice Details</h3>
@@ -1413,8 +1606,6 @@ const VERIFICATION_DATABASE_PATH =
             </div>
           </section>
 
-          <!-- CUSTOMER DETAILS -->
-
           <section class="section">
             <h3 class="section-title">Customer Details</h3>
 
@@ -1432,8 +1623,6 @@ const VERIFICATION_DATABASE_PATH =
               </div>
             </div>
           </section>
-
-          <!-- ITEMS -->
 
           <section class="section table-section">
             <table>
@@ -1458,8 +1647,6 @@ const VERIFICATION_DATABASE_PATH =
               </tbody>
             </table>
           </section>
-
-          <!-- FULL-WIDTH TOTALS -->
 
           <section class="section">
             <div class="summary-inner">
@@ -1487,8 +1674,6 @@ const VERIFICATION_DATABASE_PATH =
             </div>
           </section>
 
-          <!-- FULL-WIDTH PAYMENT DETAILS -->
-
           <section class="section">
             <h3 class="section-title">Payment Details</h3>
 
@@ -1500,20 +1685,16 @@ const VERIFICATION_DATABASE_PATH =
 
               <div class="payment-item">
                 <span class="label">Payment Status:</span>
-                Paid
+                Recorded
               </div>
             </div>
           </section>
-
-          <!-- QR BELOW TOTALS AND PAYMENT -->
 
           <section class="qr-section">
             ${qrMarkup}
           </section>
 
           ${notesMarkup}
-
-          <!-- FOOTER -->
 
           <footer class="section footer">
             <strong>Thank you for visiting!</strong>
@@ -1543,7 +1724,10 @@ const VERIFICATION_DATABASE_PATH =
                   } else if (container) {
                     container.textContent = "";
                     container.className = "qr-pending";
-                    container.setAttribute("aria-label", "QR code could not be loaded");
+                    container.setAttribute(
+                      "aria-label",
+                      "QR code could not be loaded"
+                    );
                   }
                 })();
               <\/script>
@@ -1567,12 +1751,18 @@ const VERIFICATION_DATABASE_PATH =
   // DISPLAY THE INVOICE
   // --------------------------------------------------
 
-  function writeInvoiceToWindow(previewWindow, data, verification = null) {
+  function writeInvoiceToWindow(
+    previewWindow,
+    data,
+    verification = null
+  ) {
     try {
       previewWindow.document.open();
+
       previewWindow.document.write(
         buildPrintableInvoice(data, verification)
       );
+
       previewWindow.document.close();
 
       return true;
@@ -1601,7 +1791,7 @@ const VERIFICATION_DATABASE_PATH =
   previewButton.addEventListener("click", () => {
     if (!validateInvoice()) return;
 
-    const data = buildInvoiceData();
+    const data = buildInvoiceData("DRAFT");
     const previewWindow = window.open("", "_blank");
 
     if (!previewWindow) {
@@ -1616,13 +1806,13 @@ const VERIFICATION_DATABASE_PATH =
     writeInvoiceToWindow(previewWindow, data, null);
 
     showMessage(
-      "Preview opened. Generate the invoice to create its verification QR.",
+      "Draft preview opened. A permanent invoice number is assigned when you generate and save the invoice.",
       "info"
     );
   });
 
   // --------------------------------------------------
-  // GENERATE VERIFIED INVOICE
+  // GENERATE AND SAVE VERIFIED INVOICE
   // --------------------------------------------------
 
   form.addEventListener("submit", async event => {
@@ -1630,13 +1820,11 @@ const VERIFICATION_DATABASE_PATH =
 
     if (!validateInvoice()) return;
 
-    const data = buildInvoiceData();
-
     /*
-     * Open the window during the user's direct click so that
-     * the browser is less likely to block the popup while
-     * Firebase is saving the verification record.
+     * Open the window before awaiting Firebase,
+     * preventing most browser popup-blocking issues.
      */
+
     const previewWindow = window.open("", "_blank");
 
     if (!previewWindow) {
@@ -1648,10 +1836,16 @@ const VERIFICATION_DATABASE_PATH =
       return;
     }
 
-    previewWindow.document.write(
-      "<!DOCTYPE html><html><head><title>Generating invoice</title></head><body style='font-family:Arial;padding:30px'>Generating invoice verification...</body></html>"
-    );
-
+    previewWindow.document.open();
+    previewWindow.document.write(`
+      <!DOCTYPE html>
+      <html lang="en">
+      <head><title>Generating invoice</title></head>
+      <body style="font-family:Arial;padding:30px">
+        Saving invoice and creating verification record...
+      </body>
+      </html>
+    `);
     previewWindow.document.close();
 
     const submitButton = form.querySelector(
@@ -1662,18 +1856,65 @@ const VERIFICATION_DATABASE_PATH =
       submitButton.disabled = true;
     }
 
-    if (invoiceStatus) {
-      invoiceStatus.textContent = "Generating";
-      invoiceStatus.className = "pill pending";
-    }
+    setInvoiceStatus("Saving");
+
+    let savedInvoiceKey = null;
+    let verificationId = null;
 
     try {
-      const verificationId = generateVerificationId();
+      const services = await getFirebaseServices();
+      const user = await getAuthenticatedUser(services);
+
+      /*
+       * Build the invoice from the current cart, then assign
+       * its number through the atomic Firebase counter.
+       */
+
+      const data = buildInvoiceData("PENDING");
+
+      data.invoiceNumber = await allocateInvoiceNumber(
+        services,
+        data.invoiceDate
+      );
+
+      invoiceNumberInput.value = data.invoiceNumber;
+
+      verificationId = generateVerificationId();
+
+      const verificationUrl =
+        `${VERIFICATION_PAGE}?vid=${encodeURIComponent(verificationId)}`;
+
+      /*
+       * Save the canonical invoice first.
+       * The public QR record is written afterwards.
+       */
+
+      const saved = await saveInvoiceRecord(
+        services,
+        user,
+        data,
+        verificationId,
+        verificationUrl
+      );
+
+      savedInvoiceKey = saved.key;
 
       const verification = await saveVerificationRecord(
+        services,
+        user,
         data,
         verificationId
       );
+
+      /*
+       * Confirm both records refer to the same invoice number.
+       */
+
+      if (!verification.verificationId || !data.invoiceNumber) {
+        throw new Error(
+          "Invoice verification could not be confirmed."
+        );
+      }
 
       const opened = writeInvoiceToWindow(
         previewWindow,
@@ -1681,19 +1922,44 @@ const VERIFICATION_DATABASE_PATH =
         verification
       );
 
-      if (!opened) return;
-
-      if (invoiceStatus) {
-        invoiceStatus.textContent = "Generated";
-        invoiceStatus.className = "pill paid";
+      if (!opened) {
+        throw new Error(
+          "The invoice was saved, but the printable preview could not be rendered. Check the invoice record before retrying."
+        );
       }
 
+      setInvoiceStatus("Generated", "pill paid");
+
       showMessage(
-        "Invoice generated and its verification record was saved successfully.",
+        `Invoice ${data.invoiceNumber} generated and saved successfully.`,
         "success"
       );
     } catch (error) {
       console.error("Invoice generation failed:", error);
+
+      /*
+       * If the public verification write fails after saving the
+       * invoice, try to remove the incomplete invoice record.
+       * The allocated sequence number is intentionally not reused.
+       */
+
+      if (savedInvoiceKey && !verificationId) {
+        try {
+          const services = await getFirebaseServices();
+
+          await services.dbSDK.remove(
+            services.dbSDK.ref(
+              services.db,
+              `${INVOICES_PATH}/${savedInvoiceKey}`
+            )
+          );
+        } catch (rollbackError) {
+          console.error(
+            "Could not remove the incomplete invoice:",
+            rollbackError
+          );
+        }
+      }
 
       try {
         previewWindow.close();
@@ -1701,14 +1967,11 @@ const VERIFICATION_DATABASE_PATH =
         // Ignore closing errors.
       }
 
-      if (invoiceStatus) {
-        invoiceStatus.textContent = "Draft";
-        invoiceStatus.className = "pill pending";
-      }
+      setInvoiceStatus("Draft");
 
       showMessage(
         error.message ||
-          "Unable to save the invoice verification record. Please try again.",
+          "Unable to save the invoice. Please check Firebase and try again.",
         "error"
       );
     } finally {
@@ -1746,7 +2009,6 @@ const VERIFICATION_DATABASE_PATH =
     quantityInput.value = "1";
     discountInput.value = "0";
     taxRateInput.value = "0";
-
     productSelect.value = "";
 
     initialiseInvoiceDetails();
