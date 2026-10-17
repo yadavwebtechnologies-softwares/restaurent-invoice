@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#ffffff">
+  <meta name="description" content="Manage and review business invoices.">
 
   <title>Invoices | Restaurant Billing</title>
 
@@ -28,8 +29,8 @@
       <div class="brand-mark">B</div>
 
       <div class="brand-text">
-        <h1>[Business Name]</h1>
-        <span>Restaurant Billing</span>
+        <h1 id="sidebarBusinessName">Loading business...</h1>
+        <span id="sidebarBusinessTagline">Restaurant Billing</span>
       </div>
     </div>
 
@@ -105,15 +106,19 @@
     <div class="sidebar-footer">
       <div class="target-card">
         <div class="label">Today's Target</div>
-        <div class="value">₹25,000</div>
+        <div class="value" id="dailyTargetValue">—</div>
 
         <div class="target-track">
-          <div class="target-fill"></div>
+          <div
+            class="target-fill"
+            id="dailyTargetProgress"
+            style="width:0%"
+          ></div>
         </div>
 
         <div class="target-meta">
-          <span>Progress</span>
-          <span>Demo</span>
+          <span id="dailyTargetStatus">Not configured</span>
+          <span id="dailyTargetRemaining">—</span>
         </div>
       </div>
     </div>
@@ -158,11 +163,11 @@
 
         <button class="profile" type="button">
           <div>
-            <div class="name">[Owner Name]</div>
-            <div class="role">Owner</div>
+            <div class="name" id="ownerDisplayName">Loading account...</div>
+            <div class="role" id="ownerDisplayRole">Owner</div>
           </div>
 
-          <div class="avatar">O</div>
+          <div class="avatar" id="ownerAvatar">O</div>
         </button>
 
       </div>
@@ -177,7 +182,7 @@
 
         <div>
           <h2>Invoice Management</h2>
-          <p>Find, review, export and print your restaurant invoices.</p>
+          <p>Find, review, export and print your saved invoices.</p>
         </div>
 
         <div class="page-actions">
@@ -207,8 +212,8 @@
 
       </section>
 
-      <!-- SUMMARY CARDS -->
-      <section class="kpis">
+      <!-- LIVE SUMMARY CARDS -->
+      <section class="kpis" aria-label="Invoice summaries">
 
         <div class="kpi">
           <div class="kpi-top">
@@ -222,8 +227,10 @@
           </div>
 
           <div class="kpi-label">Total Invoices</div>
-          <div class="kpi-value" id="totalInvoicesValue">5</div>
-          <div class="kpi-sub">Invoices in this demo list</div>
+          <div class="kpi-value" id="totalInvoicesValue">—</div>
+          <div class="kpi-sub" id="totalInvoicesDescription">
+            Loading saved invoice records...
+          </div>
         </div>
 
         <div class="kpi">
@@ -237,8 +244,10 @@
           </div>
 
           <div class="kpi-label">Invoice Value</div>
-          <div class="kpi-value" id="invoiceValueTotal">₹2,840</div>
-          <div class="kpi-sub">Total value of listed invoices</div>
+          <div class="kpi-value" id="invoiceValueTotal">—</div>
+          <div class="kpi-sub" id="invoiceValueDescription">
+            Calculating from saved records...
+          </div>
         </div>
 
         <div class="kpi">
@@ -253,8 +262,10 @@
           </div>
 
           <div class="kpi-label">Generated</div>
-          <div class="kpi-value" id="generatedInvoicesValue">4</div>
-          <div class="kpi-sub">Successfully generated invoices</div>
+          <div class="kpi-value" id="generatedInvoicesValue">—</div>
+          <div class="kpi-sub" id="generatedInvoicesDescription">
+            Loading invoice statuses...
+          </div>
         </div>
 
         <div class="kpi">
@@ -269,8 +280,10 @@
           </div>
 
           <div class="kpi-label">Cancelled</div>
-          <div class="kpi-value" id="cancelledInvoicesValue">1</div>
-          <div class="kpi-sub">Cancelled invoice records</div>
+          <div class="kpi-value" id="cancelledInvoicesValue">—</div>
+          <div class="kpi-sub" id="cancelledInvoicesDescription">
+            Loading invoice statuses...
+          </div>
         </div>
 
       </section>
@@ -281,11 +294,11 @@
         <div class="card-head">
           <div>
             <h3>All Invoices</h3>
-            <p>Search and filter invoice records.</p>
+            <p>Search and filter invoices saved in your billing database.</p>
           </div>
 
-          <span class="pill paid" id="invoiceRecordCount">
-            5 Records
+          <span class="pill pending" id="invoiceRecordCount">
+            Loading...
           </span>
         </div>
 
@@ -298,7 +311,6 @@
 
               <input
                 class="btn btn-outline"
-                style="text-align:left;"
                 type="search"
                 id="invoiceSearch"
                 name="search"
@@ -332,6 +344,7 @@
               <select
                 class="btn btn-outline"
                 id="invoiceDatePreset"
+                name="datePreset"
                 aria-label="Filter by date range"
               >
                 <option value="all">All Dates</option>
@@ -355,7 +368,6 @@
               id="customDateRange"
               class="page-actions"
               hidden
-              style="margin-top:14px;"
             >
 
               <label class="form-field">
@@ -386,12 +398,12 @@
 
         </div>
 
-        <!-- BULK ACTIONS -->
+        <!-- TABLE ACTIONS -->
         <div class="card-head">
 
           <div>
             <h3>Invoice Records</h3>
-            <p>Invoice details are retained as business records.</p>
+            <p>Records are loaded from the billing database.</p>
           </div>
 
           <div class="page-actions">
@@ -417,7 +429,7 @@
 
         </div>
 
-        <!-- TABLE -->
+        <!-- LIVE INVOICE TABLE -->
         <div class="table-wrap">
 
           <table class="inv-table" id="invoicesTable">
@@ -443,366 +455,12 @@
               </tr>
             </thead>
 
-            <tbody id="invoicesTableBody">
-
-              <tr
-                data-invoice-id="INV-20261017-001"
-                data-invoice-date="2026-10-17"
-                data-status="generated"
-                data-payment="upi"
-                data-total="850"
-                data-item-count="4"
-                data-customer="Rahul Das"
-              >
-                <td>
-                  <input
-                    type="checkbox"
-                    class="invoice-select"
-                    aria-label="Select invoice INV-20261017-001"
-                  >
-                </td>
-
-                <td>
-                  <div class="cust-name">INV-20261017-001</div>
-                  <div class="cust-sub">Restaurant order</div>
-                </td>
-
-                <td>
-                  <div class="cust-name">Rahul Das</div>
-                  <div class="cust-sub">[Customer Phone]</div>
-                </td>
-
-                <td>
-                  <div>17 Oct 2026</div>
-                  <div class="cust-sub">12:15 PM</div>
-                </td>
-
-                <td>4 items</td>
-                <td><span class="pill paid">UPI</span></td>
-                <td class="num">₹850.00</td>
-                <td><span class="pill paid">Generated</span></td>
-
-                <td>
-                  <div class="page-actions">
-                    <button
-                      class="btn-icon"
-                      type="button"
-                      data-action="view"
-                      data-invoice-id="INV-20261017-001"
-                      aria-label="View invoice INV-20261017-001"
-                      title="View invoice"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/>
-                        <circle cx="12" cy="12" r="3"/>
-                      </svg>
-                    </button>
-
-                    <button
-                      class="btn-icon"
-                      type="button"
-                      data-action="print"
-                      data-invoice-id="INV-20261017-001"
-                      aria-label="Print invoice INV-20261017-001"
-                      title="Print invoice"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M6 9V2h12v7"/>
-                        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
-                        <path d="M6 14h12v8H6z"/>
-                      </svg>
-                    </button>
-                  </div>
+            <tbody id="invoicesTableBody" aria-live="polite">
+              <tr id="invoiceLoadingRow">
+                <td colspan="9" style="text-align:center;padding:36px 16px;">
+                  Loading invoice records from Firebase...
                 </td>
               </tr>
-
-              <tr
-                data-invoice-id="INV-20261017-002"
-                data-invoice-date="2026-10-17"
-                data-status="generated"
-                data-payment="cash"
-                data-total="620"
-                data-item-count="3"
-                data-customer="Priya Sharma"
-              >
-                <td>
-                  <input
-                    type="checkbox"
-                    class="invoice-select"
-                    aria-label="Select invoice INV-20261017-002"
-                  >
-                </td>
-
-                <td>
-                  <div class="cust-name">INV-20261017-002</div>
-                  <div class="cust-sub">Restaurant order</div>
-                </td>
-
-                <td>
-                  <div class="cust-name">Priya Sharma</div>
-                  <div class="cust-sub">[Customer Phone]</div>
-                </td>
-
-                <td>
-                  <div>17 Oct 2026</div>
-                  <div class="cust-sub">11:42 AM</div>
-                </td>
-
-                <td>3 items</td>
-                <td><span class="pill pending">Cash</span></td>
-                <td class="num">₹620.00</td>
-                <td><span class="pill paid">Generated</span></td>
-
-                <td>
-                  <div class="page-actions">
-                    <button
-                      class="btn-icon"
-                      type="button"
-                      data-action="view"
-                      data-invoice-id="INV-20261017-002"
-                      aria-label="View invoice INV-20261017-002"
-                      title="View invoice"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/>
-                        <circle cx="12" cy="12" r="3"/>
-                      </svg>
-                    </button>
-
-                    <button
-                      class="btn-icon"
-                      type="button"
-                      data-action="print"
-                      data-invoice-id="INV-20261017-002"
-                      aria-label="Print invoice INV-20261017-002"
-                      title="Print invoice"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M6 9V2h12v7"/>
-                        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
-                        <path d="M6 14h12v8H6z"/>
-                      </svg>
-                    </button>
-                  </div>
-                </td>
-              </tr>
-
-              <tr
-                data-invoice-id="INV-20261016-003"
-                data-invoice-date="2026-10-16"
-                data-status="generated"
-                data-payment="upi"
-                data-total="490"
-                data-item-count="2"
-                data-customer="Amit Roy"
-              >
-                <td>
-                  <input
-                    type="checkbox"
-                    class="invoice-select"
-                    aria-label="Select invoice INV-20261016-003"
-                  >
-                </td>
-
-                <td>
-                  <div class="cust-name">INV-20261016-003</div>
-                  <div class="cust-sub">Restaurant order</div>
-                </td>
-
-                <td>
-                  <div class="cust-name">Amit Roy</div>
-                  <div class="cust-sub">[Customer Phone]</div>
-                </td>
-
-                <td>
-                  <div>16 Oct 2026</div>
-                  <div class="cust-sub">08:20 PM</div>
-                </td>
-
-                <td>2 items</td>
-                <td><span class="pill paid">UPI</span></td>
-                <td class="num">₹490.00</td>
-                <td><span class="pill paid">Generated</span></td>
-
-                <td>
-                  <div class="page-actions">
-                    <button
-                      class="btn-icon"
-                      type="button"
-                      data-action="view"
-                      data-invoice-id="INV-20261016-003"
-                      aria-label="View invoice INV-20261016-003"
-                      title="View invoice"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/>
-                        <circle cx="12" cy="12" r="3"/>
-                      </svg>
-                    </button>
-
-                    <button
-                      class="btn-icon"
-                      type="button"
-                      data-action="print"
-                      data-invoice-id="INV-20261016-003"
-                      aria-label="Print invoice INV-20261016-003"
-                      title="Print invoice"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M6 9V2h12v7"/>
-                        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
-                        <path d="M6 14h12v8H6z"/>
-                      </svg>
-                    </button>
-                  </div>
-                </td>
-              </tr>
-
-              <tr
-                data-invoice-id="INV-20261016-004"
-                data-invoice-date="2026-10-16"
-                data-status="generated"
-                data-payment="cash"
-                data-total="380"
-                data-item-count="2"
-                data-customer="Neha Das"
-              >
-                <td>
-                  <input
-                    type="checkbox"
-                    class="invoice-select"
-                    aria-label="Select invoice INV-20261016-004"
-                  >
-                </td>
-
-                <td>
-                  <div class="cust-name">INV-20261016-004</div>
-                  <div class="cust-sub">Restaurant order</div>
-                </td>
-
-                <td>
-                  <div class="cust-name">Neha Das</div>
-                  <div class="cust-sub">[Customer Phone]</div>
-                </td>
-
-                <td>
-                  <div>16 Oct 2026</div>
-                  <div class="cust-sub">01:10 PM</div>
-                </td>
-
-                <td>2 items</td>
-                <td><span class="pill pending">Cash</span></td>
-                <td class="num">₹380.00</td>
-                <td><span class="pill paid">Generated</span></td>
-
-                <td>
-                  <div class="page-actions">
-                    <button
-                      class="btn-icon"
-                      type="button"
-                      data-action="view"
-                      data-invoice-id="INV-20261016-004"
-                      aria-label="View invoice INV-20261016-004"
-                      title="View invoice"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/>
-                        <circle cx="12" cy="12" r="3"/>
-                      </svg>
-                    </button>
-
-                    <button
-                      class="btn-icon"
-                      type="button"
-                      data-action="print"
-                      data-invoice-id="INV-20261016-004"
-                      aria-label="Print invoice INV-20261016-004"
-                      title="Print invoice"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M6 9V2h12v7"/>
-                        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
-                        <path d="M6 14h12v8H6z"/>
-                      </svg>
-                    </button>
-                  </div>
-                </td>
-              </tr>
-
-              <tr
-                data-invoice-id="INV-20261015-005"
-                data-invoice-date="2026-10-15"
-                data-status="cancelled"
-                data-payment="cash"
-                data-total="500"
-                data-item-count="3"
-                data-customer="Rohan Das"
-              >
-                <td>
-                  <input
-                    type="checkbox"
-                    class="invoice-select"
-                    aria-label="Select invoice INV-20261015-005"
-                  >
-                </td>
-
-                <td>
-                  <div class="cust-name">INV-20261015-005</div>
-                  <div class="cust-sub">Restaurant order</div>
-                </td>
-
-                <td>
-                  <div class="cust-name">Rohan Das</div>
-                  <div class="cust-sub">[Customer Phone]</div>
-                </td>
-
-                <td>
-                  <div>15 Oct 2026</div>
-                  <div class="cust-sub">07:35 PM</div>
-                </td>
-
-                <td>3 items</td>
-                <td><span class="pill pending">Cash</span></td>
-                <td class="num">₹500.00</td>
-                <td><span class="pill cancelled">Cancelled</span></td>
-
-                <td>
-                  <div class="page-actions">
-                    <button
-                      class="btn-icon"
-                      type="button"
-                      data-action="view"
-                      data-invoice-id="INV-20261015-005"
-                      aria-label="View invoice INV-20261015-005"
-                      title="View invoice"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/>
-                        <circle cx="12" cy="12" r="3"/>
-                      </svg>
-                    </button>
-                  </div>
-                </td>
-              </tr>
-
             </tbody>
 
           </table>
@@ -812,8 +470,8 @@
         <!-- TABLE FOOTER -->
         <div class="card-head">
 
-          <p id="invoicePaginationInfo">
-            Showing 5 demo records
+          <p id="invoicePaginationInfo" aria-live="polite">
+            Loading invoice records...
           </p>
 
           <div class="page-actions">
@@ -831,6 +489,7 @@
               type="button"
               id="currentInvoicePage"
               aria-current="page"
+              disabled
             >
               1
             </button>
@@ -847,11 +506,19 @@
 
         </div>
 
+        <div
+          id="invoicesPageStatus"
+          class="card-body"
+          role="status"
+          aria-live="polite"
+          hidden
+        ></div>
+
       </section>
 
       <!-- PAGE FOOTER -->
       <footer class="page-footer">
-        <span>[Business Name] · Restaurant Billing</span>
+        <span id="businessFooterName">Restaurant Billing</span>
         <span>Invoice Management</span>
       </footer>
 
@@ -859,15 +526,17 @@
   </div>
 </div>
 
-<!-- Shared interface functionality -->
+<!-- Shared interface -->
 <script src="script.js" defer></script>
 
-<!-- Invoice Management page-specific functionality -->
+<!-- Firebase initialisation must execute before page-specific logic -->
+<script src="js/firebase-config.js" defer></script>
+<script src="js/auth.js" defer></script>
+<script src="js/guard.js" defer></script>
+<script src="js/logout.js" defer></script>
+
+<!-- Loads and manages the real invoice records -->
 <script src="js/invoices.js" defer></script>
-  <script src="js/firebase-config.js"></script>
-<script src="js/auth.js"></script>
-<script src="js/guard.js"></script>
-  <script src="js/logout.js"></script>
 
 </body>
 </html>
