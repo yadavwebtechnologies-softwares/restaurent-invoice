@@ -78,8 +78,8 @@
    * Dedicated database branch for invoice verification.
    * This does not overwrite the other application's data.
    */
-  const VERIFICATION_DATABASE_PATH =
-    "restaurantBilling/publicInvoices";
+const VERIFICATION_DATABASE_PATH =
+  "publicInvoiceVerification";
 
   const VERIFICATION_PAGE =
     new URL("verify-invoice.html", window.location.href).href.split("?")[0];
