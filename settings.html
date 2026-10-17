@@ -1,0 +1,2654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#ffffff">
+
+  <meta
+    name="description"
+    content="Central control room for restaurant billing, invoices, products and business preferences."
+  >
+
+  <title>Settings | Restaurant Billing</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet"
+  >
+
+  <link rel="stylesheet" href="style.css">
+
+  <style>
+    /* Page-specific presentation.
+       Universal styles remain in style.css. */
+
+    .settings-layout {
+      display: grid;
+      grid-template-columns: 220px minmax(0, 1fr);
+      gap: 22px;
+      align-items: start;
+    }
+
+    .settings-nav {
+      position: sticky;
+      top: 86px;
+      padding: 12px;
+    }
+
+    .settings-nav a {
+      display: flex;
+      align-items: center;
+      min-height: 39px;
+      padding: 9px 11px;
+      margin-bottom: 3px;
+      border-radius: 5px;
+      text-decoration: none;
+      color: #4b5563;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .settings-nav a:hover,
+    .settings-nav a.active {
+      background: #f3f4f6;
+      color: #111827;
+    }
+
+    .settings-nav a.active {
+      font-weight: 700;
+    }
+
+    .settings-nav-label {
+      margin: 15px 10px 7px;
+      color: #6b7280;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .7px;
+      text-transform: uppercase;
+    }
+
+    .settings-section {
+      scroll-margin-top: 90px;
+      margin-bottom: 22px;
+    }
+
+    .settings-section .card-head {
+      gap: 16px;
+    }
+
+    .settings-fields {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .settings-fields.one-column {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .settings-fields.three-column {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .settings-field {
+      min-width: 0;
+    }
+
+    .settings-field > label,
+    .settings-field > .field-label {
+      display: block;
+      margin-bottom: 7px;
+      color: #374151;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .settings-control {
+      width: 100%;
+      min-height: 40px;
+      padding: 9px 11px;
+      border: 1px solid #d1d5db;
+      border-radius: 5px;
+      background: #ffffff;
+      color: #111827;
+      font: inherit;
+      font-size: 13px;
+    }
+
+    .settings-control:focus {
+      outline: 2px solid #9ca3af;
+      outline-offset: 1px;
+      border-color: #6b7280;
+    }
+
+    .settings-control:disabled {
+      background: #f3f4f6;
+      color: #6b7280;
+      cursor: not-allowed;
+    }
+
+    textarea.settings-control {
+      min-height: 88px;
+      resize: vertical;
+    }
+
+    .field-help {
+      display: block;
+      margin-top: 6px;
+      color: #6b7280;
+      font-size: 11px;
+      line-height: 1.6;
+    }
+
+    .settings-divider {
+      height: 1px;
+      margin: 22px 0;
+      background: #e5e7eb;
+    }
+
+    .settings-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 24px;
+      padding-top: 17px;
+      border-top: 1px solid #e5e7eb;
+    }
+
+    .settings-actions .settings-status {
+      flex: 1 1 200px;
+      margin: 0;
+      color: #6b7280;
+      font-size: 12px;
+    }
+
+    .settings-notice {
+      padding: 13px 15px;
+      border: 1px solid #d1d5db;
+      border-radius: 5px;
+      background: #fafafa;
+      color: #4b5563;
+      font-size: 12px;
+      line-height: 1.7;
+    }
+
+    .settings-notice strong {
+      display: block;
+      margin-bottom: 4px;
+      color: #111827;
+    }
+
+    .setting-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 16px 0;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .setting-row:first-child {
+      padding-top: 0;
+    }
+
+    .setting-row:last-child {
+      padding-bottom: 0;
+      border-bottom: 0;
+    }
+
+    .setting-row-title {
+      margin: 0 0 5px;
+      color: #111827;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .setting-row-description {
+      max-width: 540px;
+      margin: 0;
+      color: #6b7280;
+      font-size: 12px;
+      line-height: 1.65;
+    }
+
+    .switch {
+      position: relative;
+      display: inline-flex;
+      flex: 0 0 auto;
+      align-items: center;
+      width: 42px;
+      height: 24px;
+    }
+
+    .switch input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+    }
+
+    .switch-track {
+      position: absolute;
+      inset: 0;
+      border: 1px solid #d1d5db;
+      border-radius: 20px;
+      background: #e5e7eb;
+      cursor: pointer;
+      transition: background .15s ease;
+    }
+
+    .switch-track::before {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #ffffff;
+      box-shadow: 0 1px 2px #0000001f;
+      content: "";
+      transition: transform .15s ease;
+    }
+
+    .switch input:checked + .switch-track {
+      background: #111827;
+      border-color: #111827;
+    }
+
+    .switch input:checked + .switch-track::before {
+      transform: translateX(18px);
+    }
+
+    .switch input:focus-visible + .switch-track {
+      outline: 2px solid #6b7280;
+      outline-offset: 3px;
+    }
+
+    .upload-area {
+      padding: 20px;
+      border: 1px dashed #d1d5db;
+      border-radius: 5px;
+      background: #fafafa;
+    }
+
+    .upload-preview {
+      display: flex;
+      min-height: 100px;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 15px;
+      padding: 12px;
+      border: 1px solid #e5e7eb;
+      border-radius: 5px;
+      background: #ffffff;
+    }
+
+    .upload-preview img {
+      display: none;
+      max-width: 100%;
+      max-height: 100px;
+      object-fit: contain;
+    }
+
+    .upload-placeholder {
+      color: #6b7280;
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .settings-stat {
+      padding: 15px;
+      border: 1px solid #e5e7eb;
+      border-radius: 5px;
+    }
+
+    .settings-stat-label {
+      color: #6b7280;
+      font-size: 11px;
+    }
+
+    .settings-stat-value {
+      margin-top: 7px;
+      color: #111827;
+      font-size: 21px;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+
+    .settings-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .settings-hidden {
+      display: none !important;
+    }
+
+    .settings-danger {
+      border-color: #d1d5db;
+    }
+
+    .settings-danger .card-head h3 {
+      color: #111827;
+    }
+
+    .settings-toast {
+      position: fixed;
+      right: 20px;
+      bottom: 20px;
+      z-index: 1000;
+      width: min(380px, calc(100% - 40px));
+      padding: 14px 16px;
+      border: 1px solid #d1d5db;
+      border-radius: 5px;
+      background: #ffffff;
+      color: #111827;
+      box-shadow: 0 8px 30px #00000012;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .settings-toast[hidden] {
+      display: none;
+    }
+
+    @media (max-width: 1000px) {
+      .settings-layout {
+        grid-template-columns: 190px minmax(0, 1fr);
+        gap: 15px;
+      }
+
+      .settings-fields.three-column {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 760px) {
+      .settings-layout {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .settings-nav {
+        position: static;
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 5px;
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+
+      .settings-nav a {
+        flex: 0 0 auto;
+        margin: 0;
+      }
+
+      .settings-nav-label {
+        display: none;
+      }
+
+      .settings-fields,
+      .settings-fields.three-column,
+      .settings-list {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .setting-row {
+        gap: 12px;
+      }
+
+      .settings-actions {
+        justify-content: flex-start;
+      }
+
+      .settings-actions .settings-status {
+        flex-basis: 100%;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .switch-track,
+      .switch-track::before {
+        transition: none;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+
+    <div class="brand">
+      <div class="brand-mark">B</div>
+
+      <div class="brand-text">
+        <h1>[Business Name]</h1>
+        <span>Restaurant Billing</span>
+      </div>
+    </div>
+
+    <div class="nav-section">Main</div>
+
+    <a class="nav-item" href="index.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="7" height="9" rx="1.5"/>
+        <rect x="14" y="3" width="7" height="5" rx="1.5"/>
+        <rect x="14" y="12" width="7" height="9" rx="1.5"/>
+        <rect x="3" y="16" width="7" height="5" rx="1.5"/>
+      </svg>
+      Dashboard
+    </a>
+
+    <a class="nav-item" href="new-invoice.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <path d="M14 2v6h6M12 11v6M9 14h6"/>
+      </svg>
+      New Invoice
+    </a>
+
+    <a class="nav-item" href="invoices.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <path d="M14 2v6h6M8 13h8M8 17h5"/>
+      </svg>
+      Invoices
+    </a>
+
+    <a class="nav-item" href="reports.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 3v18h18"/>
+        <path d="M7 14l4-4 3 3 5-6"/>
+      </svg>
+      Reports & Analytics
+    </a>
+
+    <div class="nav-section">Manage</div>
+
+    <a class="nav-item" href="products.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 7l-8-4-8 4 8 4 8-4z"/>
+        <path d="M4 7v10l8 4 8-4V7"/>
+        <path d="M12 11v10"/>
+      </svg>
+      Products
+    </a>
+
+    <a class="nav-item" href="categories.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 7h18M3 12h18M3 17h12"/>
+      </svg>
+      Categories
+    </a>
+
+    <a class="nav-item active" href="settings.html" aria-current="page">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+        <path d="m4.93 4.93 2.12 2.12m9.9 9.9 2.12 2.12m0-14.14-2.12 2.12m-9.9 9.9-2.12 2.12"/>
+      </svg>
+      Settings
+    </a>
+
+    <div class="sidebar-footer">
+      <div class="target-card">
+        <div class="label">System</div>
+        <div class="value">Control Room</div>
+
+        <div class="target-track">
+          <div class="target-fill"></div>
+        </div>
+
+        <div class="target-meta">
+          <span>Configuration</span>
+          <span>Settings</span>
+        </div>
+      </div>
+    </div>
+
+  </aside>
+
+  <div class="overlay" id="overlay"></div>
+
+  <!-- MAIN AREA -->
+  <div class="main">
+
+    <!-- TOPBAR -->
+    <header class="topbar">
+
+      <button
+        class="menu-btn"
+        id="menuBtn"
+        type="button"
+        aria-label="Open navigation menu"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2" stroke-linecap="round">
+          <path d="M3 6h18M3 12h18M3 18h18"/>
+        </svg>
+      </button>
+
+      <div class="crumbs">
+        <span>System</span>
+        <span class="sep">/</span>
+        <span class="current">Settings</span>
+      </div>
+
+      <div class="topbar-right">
+
+        <button
+          class="btn-icon"
+          type="button"
+          aria-label="Notifications"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+            <path d="M13.7 21a2 2 0 0 1-3.4 0"/>
+          </svg>
+        </button>
+
+        <button class="profile" type="button">
+          <div>
+            <div class="name">[Owner Name]</div>
+            <div class="role">Owner</div>
+          </div>
+
+          <div class="avatar">O</div>
+        </button>
+
+      </div>
+
+    </header>
+
+    <!-- CONTENT -->
+    <main class="content">
+
+      <!-- PAGE HEADING -->
+      <section class="page-head">
+
+        <div>
+          <h2>System Control Room</h2>
+
+          <p>
+            Configure your business, billing workflow, invoice appearance,
+            product rules and reporting preferences.
+          </p>
+        </div>
+
+        <div class="page-actions">
+
+          <button
+            class="btn btn-soft"
+            type="button"
+            id="exportSettingsBtn"
+          >
+            Export Settings
+          </button>
+
+          <button
+            class="btn btn-primary"
+            type="button"
+            id="refreshSettingsBtn"
+          >
+            Refresh
+          </button>
+
+        </div>
+
+      </section>
+
+      <!-- STATUS NOTICE -->
+      <section class="settings-notice" style="margin-bottom:22px;">
+
+        <strong>Configuration Workspace</strong>
+
+        Changes should be saved to the application's settings database
+        before they affect the rest of the software. The initial frontend
+        version provides the control-room interface. Permanent saving,
+        account security and cross-page configuration will be connected
+        through the backend integration phase.
+
+      </section>
+
+      <!-- SETTINGS BODY -->
+      <div class="settings-layout">
+
+        <!-- SETTINGS NAVIGATION -->
+        <nav class="card settings-nav" aria-label="Settings sections">
+
+          <div class="settings-nav-label">Business</div>
+
+          <a class="active" href="#business-profile">Business Profile</a>
+          <a href="#brand-identity">Brand Identity</a>
+
+          <div class="settings-nav-label">Billing</div>
+
+          <a href="#invoice-settings">Invoice Configuration</a>
+          <a href="#tax-pricing">Tax & Pricing</a>
+          <a href="#payment-settings">Payment & UPI</a>
+          <a href="#billing-preferences">Billing Preferences</a>
+
+          <div class="settings-nav-label">Operations</div>
+
+          <a href="#product-settings">Product & Inventory</a>
+          <a href="#report-settings">Reports & Analytics</a>
+
+          <div class="settings-nav-label">System</div>
+
+          <a href="#data-management">Data Management</a>
+          <a href="#account-security">Account & Security</a>
+
+        </nav>
+
+        <!-- SETTINGS CONTENT -->
+        <div>
+
+          <!-- ======================================= -->
+          <!-- 1. BUSINESS PROFILE -->
+          <!-- ======================================= -->
+
+          <section
+            class="card settings-section"
+            id="business-profile"
+          >
+
+            <div class="card-head">
+
+              <div>
+                <h3>Business Profile</h3>
+                <p>Information used throughout invoices and reports.</p>
+              </div>
+
+              <span class="pill pending">Configuration</span>
+
+            </div>
+
+            <div class="card-body">
+
+              <form id="businessProfileForm">
+
+                <div class="settings-fields">
+
+                  <div class="settings-field">
+                    <label for="businessName">Business Name *</label>
+
+                    <input
+                      class="settings-control"
+                      type="text"
+                      id="businessName"
+                      name="businessName"
+                      maxlength="150"
+                      autocomplete="organization"
+                      placeholder="Restaurant or business name"
+                      required
+                    >
+                  </div>
+
+                  <div class="settings-field">
+                    <label for="businessLegalName">
+                      Legal Business Name
+                    </label>
+
+                    <input
+                      class="settings-control"
+                      type="text"
+                      id="businessLegalName"
+                      name="legalName"
+                      maxlength="180"
+                      placeholder="Optional registered name"
+                    >
+                  </div>
+
+                  <div class="settings-field">
+                    <label for="businessPhone">Contact Phone</label>
+
+                    <input
+                      class="settings-control"
+                      type="tel"
+                      id="businessPhone"
+                      name="phone"
+                      maxlength="25"
+                      autocomplete="tel"
+                      placeholder="Business contact number"
+                    >
+                  </div>
+
+                  <div class="settings-field">
+                    <label for="businessEmail">Business Email</label>
+
+                    <input
+                      class="settings-control"
+                      type="email"
+                      id="businessEmail"
+                      name="email"
+                      maxlength="150"
+                      autocomplete="email"
+                      placeholder="business@example.com"
+                    >
+                  </div>
+
+                  <div class="settings-field">
+                    <label for="businessWebsite">Website</label>
+
+                    <input
+                      class="settings-control"
+                      type="url"
+                      id="businessWebsite"
+                      name="website"
+                      maxlength="250"
+                      placeholder="https://example.com"
+                    >
+                  </div>
+
+                  <div class="settings-field">
+                    <label for="businessGstin">GSTIN</label>
+
+                    <input
+                      class="settings-control"
+                      type="text"
+                      id="businessGstin"
+                      name="gstin"
+                      maxlength="15"
+                      autocomplete="off"
+                      placeholder="Optional GSTIN"
+                    >
+
+                    <small class="field-help">
+                      Enter this only when applicable to your business.
+                    </small>
+                  </div>
+
+                  <div class="settings-field">
+                    <label for="businessAddress">Address</label>
+
+                    <textarea
+                      class="settings-control"
+                      id="businessAddress"
+                      name="address"
+                      maxlength="500"
+                      autocomplete="street-address"
+                      placeholder="Building, street and locality"
+                    ></textarea>
+                  </div>
+
+                  <div class="settings-field">
+                    <label for="businessAddressLine2">
+                      Additional Address Details
+                    </label>
+
+                    <textarea
+                      class="settings-control"
+                      id="businessAddressLine2"
+                      name="addressLine2"
+                      maxlength="300"
+                      placeholder="Landmark or additional address"
+                    ></textarea>
+                  </div>
+
+                  <div class="settings-field">
+                    <label for="businessCity">City / Town</label>
+
+                    <input
+                      class="settings-control"
+                      type="text"
+                      id="businessCity"
+                      name="city"
+                      maxlength="100"
+                      autocomplete="address-level2"
+                      placeholder="City or town"
+                    >
+                  </div>
+
+                  <div class="settings-field">
+                    <label for="businessState">State</label>
+
+                    <input
+                      class="settings-control"
+                      type="text"
+                      id="businessState"
+                      name="state"
+                      maxlength="100"
+                      autocomplete="address-level1"
+                      placeholder="State or province"
+                    >
+                  </div>
+
+                  <div class="settings-field">
+                    <label for="businessPostalCode">Postal Code</label>
+
+                    <input
+                      class="settings-control"
+                      type="text"
+                      id="businessPostalCode"
+                      name="postalCode"
+                      maxlength="20"
+                      autocomplete="postal-code"
+                      placeholder="Postal or ZIP code"
+                    >
+                  </div>
+
+                  <div class="settings-field">
+                    <label for="businessCountry">Country</label>
+
+                    <select
+                      class="settings-control"
+                      id="businessCountry"
+                      name="country"
+                    >
+                      <option value="IN">India</option>
+                      <option value="US">United States</option>
+                      <option value="GB">United Kingdom</option>
+                      <option value="BD">Bangladesh</option>
+                      <option value="NP">Nepal</option>
+                      <option value="OTHER">Other</option>
+                    </select>
+                  </div>
+
+                </div>
+
+                <div class="settings-actions">
+
+                  <p
+                    class="settings-status"
+                    id="businessProfileStatus"
+                    role="status"
+                  >
+                    Business profile has not been saved yet.
+                  </p>
+
+                  <button
+                    class="btn btn-soft"
+                    type="reset"
+                  >
+                    Reset Form
+                  </button>
+
+                  <button
+                    class="btn btn-primary"
+                    type="submit"
+                  >
+                    Save Business Profile
+                  </button>
+
+                </div>
+
+              </form>
+
+            </div>
+
+          </section>
+
+          <!-- ======================================= -->
+          <!-- 2. BRAND IDENTITY -->
+          <!-- ======================================= -->
+
+          <section
+            class="card settings-section"
+            id="brand-identity"
+          >
+
+            <div class="card-head">
+
+              <div>
+                <h3>Brand Identity</h3>
+                <p>Control the business logo and invoice branding.</p>
+              </div>
+
+            </div>
+
+            <div class="card-body">
+
+              <form id="brandSettingsForm">
+
+                <div class="settings-fields">
+
+                  <div class="settings-field">
+                    <span class="field-label">Business Logo</span>
+
+                    <div class="upload-area">
+
+                      <div class="upload-preview">
+
+                        <img
+                          id="businessLogoPreview"
+                          alt="Business logo preview"
+                        >
+
+                        <div
+                          class="upload-placeholder"
+                          id="businessLogoPlaceholder"
+                        >
+                          <strong>Logo preview</strong>
+                          <p>Uploaded logo will appear here.</p>
+                        </div>
+
+                      </div>
+
+                      <input
+                        class="settings-control"
+                        type="file"
+                        id="businessLogoFile"
+                        name="logo"
+                        accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                      >
+
+                      <small class="field-help">
+                        PNG, JPG, WebP or SVG. Recommended file size:
+                        up to 1 MB. Large images should be uploaded to
+                        managed storage rather than stored in a settings record.
+                      </small>
+
+                      <button
+                        class="btn btn-soft btn-sm"
+                        type="button"
+                        id="removeBusinessLogoBtn"
+                        style="margin-top:12px;"
+                      >
+                        Remove Selected Logo
+                      </button>
+
+                    </div>
+                  </div>
+
+                  <div class="settings-field">
+
+                    <label for="brandDisplayName">
+                      Invoice Display Name
+                    </label>
+
+                    <input
+                      class="settings-control"
+                      type="text"
+                      id="brandDisplayName"
+                      name="displayName"
+                      maxlength="150"
+                      placeholder="Name shown on invoices"
+                    >
+
+                    <small class="field-help">
+                      If blank, the Business Name will be used.
+                    </small>
+
+                    <div class="settings-divider"></div>
+
+                    <label for="invoiceFooterMessage">
+                      Invoice Footer Message
+                    </label>
+
+                    <textarea
+                      class="settings-control"
+                      id="invoiceFooterMessage"
+                      name="footerMessage"
+                      maxlength="300"
+                      placeholder="Thank you for your business."
+                    ></textarea>
+
+                    <small class="field-help">
+                      This message appears at the bottom of printed invoices.
+                    </small>
+
+                  </div>
+
+                </div>
+
+                <div class="settings-actions">
+
+                  <p
+                    class="settings-status"
+                    id="brandSettingsStatus"
+                    role="status"
+                  >
+                    Branding settings have not been saved.
+                  </p>
+
+                  <button
+                    class="btn btn-primary"
+                    type="submit"
+                  >
+                    Save Branding
+                  </button>
+
+                </div>
+
+              </form>
+
+            </div>
+
+          </section>
+
+          <!-- ======================================= -->
+          <!-- 3. INVOICE CONFIGURATION -->
+          <!-- ======================================= -->
+
+          <section
+            class="card settings-section"
+            id="invoice-settings"
+          >
+
+            <div class="card-head">
+
+              <div>
+                <h3>Invoice Configuration</h3>
+                <p>Control invoice numbering, print preferences and invoice details.</p>
+              </div>
+
+              <span class="pill paid">A4 Format</span>
+
+            </div>
+
+            <div class="card-body">
+
+              <form id="invoiceSettingsForm">
+
+                <div class="settings-fields">
+
+                  <div class="settings-field">
+                    <label for="invoicePrefix">Invoice Number Prefix</label>
+
+                    <input
+                      class="settings-control"
+                      type="text"
+                      id="invoicePrefix"
+                      name="prefix"
+                      maxlength="20"
+                      placeholder="INV"
+                    >
+
+                    <small class="field-help">
+                      Example: INV-2026-000001.
+                    </small>
+                  </div>
+
+                  <div class="settings-field">
+                    <label for="invoiceSequence">Next Invoice Number</label>
+
+                    <input
+                      class="settings-control"
+                      type="number"
+                      id="invoiceSequence"
+                      name="sequence"
+                      min="1"
+                      max="999999999"
+                      step="1"
+                      value="1"
+                    >
+
+                    <small class="field-help">
+                      The backend must allocate invoice numbers safely
+                      to avoid duplicates.
+                    </small>
+                  </div>
+
+                  <div class="settings-field">
+                    <label for="invoiceDateFormat">Invoice Date Format</label>
+
+                    <select
+                      class="settings-control"
+                      id="invoiceDateFormat"
+                      name="dateFormat"
+                    >
+                      <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+                      <option value="DD MMM YYYY">17 Oct 2026</option>
+                      <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+                      <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+                    </select>
+                  </div>
+
+                  <div class="settings-field">
+                    <label for="invoicePaperSize">Paper Size</label>
+
+                    <select
+                      class="settings-control"
+                      id="invoicePaperSize"
+                      name="paperSize"
+                      disabled
+                    >
+                      <option value="A4">A4 Portrait</option>
+                    </select>
+
+                    <small class="field-help">
+                      The current approved invoice format remains A4.
+                    </small>
+                  </div>
+
+                </div>
+
+                <div class="settings-divider"></div>
+
+                <div class="setting-row">
+
+                  <div>
+                    <h4 class="setting-row-title">Display Business Logo</h4>
+
+                    <p class="setting-row-description">
+                      Show the saved business logo on the invoice.
+                    </p>
+                  </div>
+
+                  <label class="switch">
+                    <input
+                      type="checkbox"
+                      id="invoiceShowLogo"
+                      name="showLogo"
+                      checked
+                    >
+                    <span class="switch-track"></span>
+                  </label>
+
+                </div>
+
+                <div class="setting-row">
+
+                  <div>
+                    <h4 class="setting-row-title">
+                      Display Customer Phone
+                    </h4>
+
+                    <p class="setting-row-description">
+                      Include the customer's phone number when provided.
+                    </p>
+                  </div>
+
+                  <label class="switch">
+                    <input
+                      type="checkbox"
+                      id="invoiceShowCustomerPhone"
+                      name="showCustomerPhone"
+                      checked
+                    >
+                    <span class="switch-track"></span>
+                  </label>
+
+                </div>
+
+                <div class="setting-row">
+
+                  <div>
+                    <h4 class="setting-row-title">Display Invoice Notes</h4>
+
+                    <p class="setting-row-description">
+                      Show optional notes entered while creating an invoice.
+                    </p>
+                  </div>
+
+                  <label class="switch">
+                    <input
+                      type="checkbox"
+                      id="invoiceShowNotes"
+                      name="showNotes"
+                      checked
+                    >
+                    <span class="switch-track"></span>
+                  </label>
+
+                </div>
+
+                <div class="setting-row">
+
+                  <div>
+                    <h4 class="setting-row-title">Display UPI QR</h4>
+
+                    <p class="setting-row-description">
+                      Show the configured UPI QR image below the Grand Total,
+                      aligned to the right without additional text beside it.
+                    </p>
+                  </div>
+
+                  <label class="switch">
+                    <input
+                      type="checkbox"
+                      id="invoiceShowUPIQR"
+                      name="showUPIQR"
+                      checked
+                    >
+                    <span class="switch-track"></span>
+                  </label>
+
+                </div>
+
+                <div class="settings-actions">
+
+                  <p
+                    class="settings-status"
+                    id="invoiceSettingsStatus"
+                    role="status"
+                  >
+                    Invoice preferences have not been saved.
+                  </p>
+
+                  <button
+                    class="btn btn-primary"
+                    type="submit"
+                  >
+                    Save Invoice Settings
+                  </button>
+
+                </div>
+
+              </form>
+
+            </div>
+
+          </section>
+
+          <!-- ======================================= -->
+          <!-- 4. TAX AND PRICING -->
+          <!-- ======================================= -->
+
+          <section
+            class="card settings-section"
+            id="tax-pricing"
+          >
+
+            <div class="card-head">
+
+              <div>
+                <h3>Tax & Pricing</h3>
+                <p>Configure default billing calculations and discount limits.</p>
+              </div>
+
+            </div>
+
+            <div class="card-body">
+
+              <form id="taxPricingForm">
+
+                <div class="setting-row">
+
+                  <div>
+                    <h4 class="setting-row-title">Enable Tax Calculation</h4>
+
+                    <p class="setting-row-description">
+                      Apply the configured tax rate to new invoices.
+                    </p>
+                  </div>
+
+                  <label class="switch">
+                    <input
+                      type="checkbox"
+                      id="taxEnabled"
+                      name="taxEnabled"
+                    >
+                    <span class="switch-track"></span>
+                  </label>
+
+                </div>
+
+                <div class="settings-divider"></div>
+
+                <div class="settings-fields">
+
+                  <div class="settings-field">
+
+                    <label for="defaultTaxRate">Default Tax Rate (%)</label>
+
+                    <input
+                      class="settings-control"
+                      type="number"
+                      id="defaultTaxRate"
+                      name="taxRate"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      value="0"
+                    >
+
+                    <small class="field-help">
+                      Enter the applicable rate determined for your business.
+                    </small>
+
+                  </div>
+
+                  <div class="settings-field">
+
+                    <label for="defaultDiscountLimit">
+                      Default Maximum Discount (₹)
+                    </label>
+
+                    <input
+                      class="settings-control"
+                      type="number"
+                      id="defaultDiscountLimit"
+                      name="discountLimit"
+                      min="0"
+                      max="99999999"
+                      step="0.01"
+                      value="0"
+                    >
+
+                    <small class="field-help">
+                      Zero can be configured to mean no discount allowance.
+                      The invoice module must enforce this setting.
+                    </small>
+
+                  </div>
+
+                  <div class="settings-field">
+
+                    <label for="defaultDiscountType">
+                      Discount Input Type
+                    </label>
+
+                    <select
+                      class="settings-control"
+                      id="defaultDiscountType"
+                      name="discountType"
+                    >
+                      <option value="amount">Fixed Amount</option>
+                      <option value="percentage">Percentage</option>
+                    </select>
+
+                  </div>
+
+                  <div class="settings-field">
+
+                    <label for="defaultTaxDisplay">
+                      Tax Display
+                    </label>
+
+                    <select
+                      class="settings-control"
+                      id="defaultTaxDisplay"
+                      name="taxDisplay"
+                    >
+                      <option value="summary">Tax in Billing Summary</option>
+                      <option value="line">Show Tax Per Item</option>
+                    </select>
+
+                  </div>
+
+                </div>
+
+                <div class="settings-divider"></div>
+
+                <div class="settings-notice">
+
+                  <strong>Tax configuration</strong>
+
+                  The owner is responsible for configuring the applicable
+                  tax rates and invoice disclosures. Saving a rate here
+                  does not establish tax compliance automatically.
+
+                </div>
+
+                <div class="settings-actions">
+
+                  <p
+                    class="settings-status"
+                    id="taxPricingStatus"
+                    role="status"
+                  >
+                    Pricing defaults have not been saved.
+                  </p>
+
+                  <button
+                    class="btn btn-primary"
+                    type="submit"
+                  >
+                    Save Tax & Pricing
+                  </button>
+
+                </div>
+
+              </form>
+
+            </div>
+
+          </section>
+
+          <!-- ======================================= -->
+          <!-- 5. PAYMENT AND UPI -->
+          <!-- ======================================= -->
+
+          <section
+            class="card settings-section"
+            id="payment-settings"
+          >
+
+            <div class="card-head">
+
+              <div>
+                <h3>Payment & UPI Configuration</h3>
+                <p>Configure the UPI details and payment QR used for billing.</p>
+              </div>
+
+              <span class="pill paid">Cash / UPI</span>
+
+            </div>
+
+            <div class="card-body">
+
+              <div class="settings-notice" style="margin-bottom:20px;">
+
+                <strong>Supported Payment Methods</strong>
+
+                The billing workflow supports only Cash and UPI.
+                No card, credit-payment or separate payment-management
+                workflow is configured in this project.
+
+              </div>
+
+              <form id="paymentSettingsForm">
+
+                <div class="settings-fields">
+
+                  <div class="settings-field">
+
+                    <label for="upiPayeeName">UPI Payee Name</label>
+
+                    <input
+                      class="settings-control"
+                      type="text"
+                      id="upiPayeeName"
+                      name="upiPayeeName"
+                      maxlength="120"
+                      placeholder="Name shown by the UPI payment app"
+                    >
+
+                  </div>
+
+                  <div class="settings-field">
+
+                    <label for="upiVpa">UPI ID / VPA</label>
+
+                    <input
+                      class="settings-control"
+                      type="text"
+                      id="upiVpa"
+                      name="upiVpa"
+                      maxlength="120"
+                      autocomplete="off"
+                      placeholder="example@bank"
+                    >
+
+                    <small class="field-help">
+                      Enter the business's verified UPI ID.
+                    </small>
+
+                  </div>
+
+                  <div class="settings-field">
+
+                    <label for="upiMerchantReference">
+                      Merchant Reference
+                    </label>
+
+                    <input
+                      class="settings-control"
+                      type="text"
+                      id="upiMerchantReference"
+                      name="merchantReference"
+                      maxlength="100"
+                      placeholder="Optional business reference"
+                    >
+
+                    <small class="field-help">
+                      Do not enter a bank password, PIN or OTP.
+                    </small>
+
+                  </div>
+
+                  <div class="settings-field">
+
+                    <label for="upiQRImage">UPI QR Image</label>
+
+                    <input
+                      class="settings-control"
+                      type="file"
+                      id="upiQRImage"
+                      name="upiQRImage"
+                      accept="image/png,image/jpeg,image/webp"
+                    >
+
+                    <small class="field-help">
+                      Upload the actual QR obtained from your verified
+                      payment provider. A generic placeholder must not
+                      be presented as a working payment QR.
+                    </small>
+
+                  </div>
+
+                </div>
+
+                <div class="settings-divider"></div>
+
+                <div class="settings-fields">
+
+                  <div class="settings-field">
+
+                    <span class="field-label">UPI QR Preview</span>
+
+                    <div class="upload-area">
+
+                      <div class="upload-preview">
+
+                        <img
+                          id="upiQRPreview"
+                          alt="UPI payment QR preview"
+                        >
+
+                        <div
+                          class="upload-placeholder"
+                          id="upiQRPlaceholder"
+                        >
+                          <strong>No QR selected</strong>
+                          <p>Upload the verified business UPI QR.</p>
+                        </div>
+
+                      </div>
+
+                      <button
+                        class="btn btn-soft btn-sm"
+                        type="button"
+                        id="removeUPIQRBtn"
+                      >
+                        Remove Selected QR
+                      </button>
+
+                    </div>
+
+                  </div>
+
+                  <div class="settings-field">
+
+                    <div class="setting-row">
+
+                      <div>
+                        <h4 class="setting-row-title">
+                          Allow UPI Payment Option
+                        </h4>
+
+                        <p class="setting-row-description">
+                          UPI remains a supported payment option on
+                          the invoice page.
+                        </p>
+                      </div>
+
+                      <label class="switch">
+                        <input
+                          type="checkbox"
+                          id="upiPaymentEnabled"
+                          name="upiEnabled"
+                          checked
+                        >
+
+                        <span class="switch-track"></span>
+                      </label>
+
+                    </div>
+
+                    <div class="setting-row">
+
+                      <div>
+                        <h4 class="setting-row-title">
+                          Display QR on Invoice
+                        </h4>
+
+                        <p class="setting-row-description">
+                          Display the configured QR in the approved
+                          invoice position, below Grand Total.
+                        </p>
+                      </div>
+
+                      <label class="switch">
+                        <input
+                          type="checkbox"
+                          id="upiQRDisplayEnabled"
+                          name="upiQRDisplay"
+                          checked
+                        >
+
+                        <span class="switch-track"></span>
+                      </label>
+
+                    </div>
+
+                    <div class="settings-notice" style="margin-top:20px;">
+
+                      <strong>Payment verification</strong>
+
+                      Displaying a QR does not confirm that a customer
+                      paid. This software records the payment method
+                      selected by the owner; automated payment
+                      confirmation would require a verified provider
+                      integration.
+
+                    </div>
+
+                  </div>
+
+                </div>
+
+                <div class="settings-actions">
+
+                  <p
+                    class="settings-status"
+                    id="paymentSettingsStatus"
+                    role="status"
+                  >
+                    Payment configuration has not been saved.
+                  </p>
+
+                  <button
+                    class="btn btn-primary"
+                    type="submit"
+                  >
+                    Save Payment Settings
+                  </button>
+
+                </div>
+
+              </form>
+
+            </div>
+
+          </section>
+
+          <!-- ======================================= -->
+          <!-- 6. BILLING PREFERENCES -->
+          <!-- ======================================= -->
+
+          <section
+            class="card settings-section"
+            id="billing-preferences"
+          >
+
+            <div class="card-head">
+
+              <div>
+                <h3>Billing Preferences</h3>
+                <p>Set defaults for the new invoice workflow.</p>
+              </div>
+
+            </div>
+
+            <div class="card-body">
+
+              <form id="billingPreferencesForm">
+
+                <div class="settings-fields">
+
+                  <div class="settings-field">
+
+                    <label for="defaultOrderType">
+                      Default Order Type
+                    </label>
+
+                    <select
+                      class="settings-control"
+                      id="defaultOrderType"
+                      name="orderType"
+                    >
+                      <option value="dine-in">Dine In</option>
+                      <option value="takeaway">Takeaway</option>
+                      <option value="delivery">Delivery</option>
+                    </select>
+
+                  </div>
+
+                  <div class="settings-field">
+
+                    <label for="defaultCurrency">
+                      Invoice Currency
+                    </label>
+
+                    <select
+                      class="settings-control"
+                      id="defaultCurrency"
+                      name="currency"
+                    >
+                      <option value="INR">INR — Indian Rupee (₹)</option>
+                      <option value="USD">USD — US Dollar ($)</option>
+                      <option value="GBP">GBP — Pound Sterling (£)</option>
+                      <option value="EUR">EUR — Euro (€)</option>
+                      <option value="BDT">BDT — Bangladeshi Taka</option>
+                      <option value="NPR">NPR — Nepalese Rupee</option>
+                    </select>
+
+                    <small class="field-help">
+                      Currency formatting only; this does not perform
+                      currency conversion.
+                    </small>
+
+                  </div>
+
+                  <div class="settings-field">
+
+                    <label for="businessTimezone">
+                      Business Time Zone
+                    </label>
+
+                    <select
+                      class="settings-control"
+                      id="businessTimezone"
+                      name="timezone"
+                    >
+                      <option value="Asia/Kolkata">
+                        Asia/Kolkata (India)
+                      </option>
+                      <option value="Asia/Dhaka">
+                        Asia/Dhaka (Bangladesh)
+                      </option>
+                      <option value="Asia/Kathmandu">
+                        Asia/Kathmandu (Nepal)
+                      </option>
+                      <option value="Europe/London">
+                        Europe/London
+                      </option>
+                      <option value="America/New_York">
+                        America/New_York
+                      </option>
+                      <option value="UTC">UTC</option>
+                    </select>
+
+                  </div>
+
+                  <div class="settings-field">
+
+                    <label for="defaultInvoiceDate">
+                      Default Invoice Date
+                    </label>
+
+                    <select
+                      class="settings-control"
+                      id="defaultInvoiceDate"
+                      name="invoiceDate"
+                    >
+                      <option value="today">Current Business Date</option>
+                      <option value="manual">Require Manual Selection</option>
+                    </select>
+
+                  </div>
+
+                </div>
+
+                <div class="settings-divider"></div>
+
+                <div class="setting-row">
+
+                  <div>
+                    <h4 class="setting-row-title">
+                      Require Customer Name
+                    </h4>
+
+                    <p class="setting-row-description">
+                      Prevent invoice generation until the customer
+                      name is entered.
+                    </p>
+                  </div>
+
+                  <label class="switch">
+                    <input
+                      type="checkbox"
+                      id="requireCustomerName"
+                      name="requireCustomerName"
+                    >
+
+                    <span class="switch-track"></span>
+                  </label>
+
+                </div>
+
+                <div class="setting-row">
+
+                  <div>
+                    <h4 class="setting-row-title">
+                      Allow Custom Invoice Discount
+                    </h4>
+
+                    <p class="setting-row-description">
+                      Allow the owner to enter a discount when creating
+                      a new invoice, within the configured limit.
+                    </p>
+                  </div>
+
+                  <label class="switch">
+                    <input
+                      type="checkbox"
+                      id="allowInvoiceDiscount"
+                      name="allowDiscount"
+                      checked
+                    >
+
+                    <span class="switch-track"></span>
+                  </label>
+
+                </div>
+
+                <div class="settings-actions">
+
+                  <p
+                    class="settings-status"
+                    id="billingPreferencesStatus"
+                    role="status"
+                  >
+                    Billing preferences have not been saved.
+                  </p>
+
+                  <button
+                    class="btn btn-primary"
+                    type="submit"
+                  >
+                    Save Billing Preferences
+                  </button>
+
+                </div>
+
+              </form>
+
+            </div>
+
+          </section>
+
+          <!-- ======================================= -->
+          <!-- 7. PRODUCT AND INVENTORY -->
+          <!-- ======================================= -->
+
+          <section
+            class="card settings-section"
+            id="product-settings"
+          >
+
+            <div class="card-head">
+
+              <div>
+                <h3>Product & Inventory Rules</h3>
+                <p>Configure stock alerts and product availability behaviour.</p>
+              </div>
+
+            </div>
+
+            <div class="card-body">
+
+              <form id="productSettingsForm">
+
+                <div class="settings-fields">
+
+                  <div class="settings-field">
+
+                    <label for="lowStockThreshold">
+                      Low Stock Threshold
+                    </label>
+
+                    <input
+                      class="settings-control"
+                      type="number"
+                      id="lowStockThreshold"
+                      name="lowStockThreshold"
+                      min="0"
+                      max="999999999"
+                      step="1"
+                      value="10"
+                    >
+
+                    <small class="field-help">
+                      Warn when tracked stock reaches this level.
+                    </small>
+
+                  </div>
+
+                  <div class="settings-field">
+
+                    <label for="stockUnit">
+                      Default Stock Unit
+                    </label>
+
+                    <select
+                      class="settings-control"
+                      id="stockUnit"
+                      name="stockUnit"
+                    >
+                      <option value="units">Units</option>
+                      <option value="pieces">Pieces</option>
+                      <option value="portions">Portions</option>
+                      <option value="kg">Kilograms</option>
+                      <option value="g">Grams</option>
+                      <option value="l">Litres</option>
+                      <option value="ml">Millilitres</option>
+                    </select>
+
+                    <small class="field-help">
+                      This is a default. Different products may need
+                      their own unit.
+                    </small>
+
+                  </div>
+
+                  <div class="settings-field">
+
+                    <label for="skuPrefix">SKU Prefix</label>
+
+                    <input
+                      class="settings-control"
+                      type="text"
+                      id="skuPrefix"
+                      name="skuPrefix"
+                      maxlength="20"
+                      placeholder="SKU"
+                    >
+
+                  </div>
+
+                  <div class="settings-field">
+
+                    <label for="outOfStockBehaviour">
+                      Out-of-Stock Behaviour
+                    </label>
+
+                    <select
+                      class="settings-control"
+                      id="outOfStockBehaviour"
+                      name="outOfStockBehaviour"
+                    >
+                      <option value="disable">Disable Product for Billing</option>
+                      <option value="warn">Allow with Owner Warning</option>
+                    </select>
+
+                  </div>
+
+                </div>
+
+                <div class="settings-divider"></div>
+
+                <div class="setting-row">
+
+                  <div>
+                    <h4 class="setting-row-title">
+                      Automatic SKU Generation
+                    </h4>
+
+                    <p class="setting-row-description">
+                      Generate unique product codes when new products
+                      are added.
+                    </p>
+                  </div>
+
+                  <label class="switch">
+                    <input
+                      type="checkbox"
+                      id="automaticSku"
+                      name="automaticSku"
+                      checked
+                    >
+
+                    <span class="switch-track"></span>
+                  </label>
+
+                </div>
+
+                <div class="setting-row">
+
+                  <div>
+                    <h4 class="setting-row-title">
+                      Enable Stock Tracking
+                    </h4>
+
+                    <p class="setting-row-description">
+                      Track inventory quantities for products configured
+                      to maintain stock.
+                    </p>
+                  </div>
+
+                  <label class="switch">
+                    <input
+                      type="checkbox"
+                      id="stockTrackingEnabled"
+                      name="stockTracking"
+                      checked
+                    >
+
+                    <span class="switch-track"></span>
+                  </label>
+
+                </div>
+
+                <div class="setting-row">
+
+                  <div>
+                    <h4 class="setting-row-title">
+                      Warn About Low Stock
+                    </h4>
+
+                    <p class="setting-row-description">
+                      Display low-stock warnings in the dashboard
+                      and relevant product views.
+                    </p>
+                  </div>
+
+                  <label class="switch">
+                    <input
+                      type="checkbox"
+                      id="lowStockAlertsEnabled"
+                      name="lowStockAlerts"
+                      checked
+                    >
+
+                    <span class="switch-track"></span>
+                  </label>
+
+                </div>
+
+                <div class="setting-row">
+
+                  <div>
+                    <h4 class="setting-row-title">
+                      Deduct Stock Automatically
+                    </h4>
+
+                    <p class="setting-row-description">
+                      Enable stock deduction after an invoice is
+                      successfully saved. This requires valid product
+                      stock records and must prevent duplicate deductions.
+                    </p>
+                  </div>
+
+                  <label class="switch">
+                    <input
+                      type="checkbox"
+                      id="automaticStockDeduction"
+                      name="automaticStockDeduction"
+                    >
+
+                    <span class="switch-track"></span>
+                  </label>
+
+                </div>
+
+                <div class="settings-actions">
+
+                  <p
+                    class="settings-status"
+                    id="productSettingsStatus"
+                    role="status"
+                  >
+                    Product settings have not been saved.
+                  </p>
+
+                  <button
+                    class="btn btn-primary"
+                    type="submit"
+                  >
+                    Save Product Settings
+                  </button>
+
+                </div>
+
+              </form>
+
+            </div>
+
+          </section>
+
+          <!-- ======================================= -->
+          <!-- 8. REPORTS AND ANALYTICS -->
+          <!-- ======================================= -->
+
+          <section
+            class="card settings-section"
+            id="report-settings"
+          >
+
+            <div class="card-head">
+
+              <div>
+                <h3>Reports & Analytics Preferences</h3>
+                <p>Control initial reporting views and comparison defaults.</p>
+              </div>
+
+            </div>
+
+            <div class="card-body">
+
+              <form id="reportSettingsForm">
+
+                <div class="settings-fields">
+
+                  <div class="settings-field">
+
+                    <label for="defaultReportPeriod">
+                      Default Reporting Period
+                    </label>
+
+                    <select
+                      class="settings-control"
+                      id="defaultReportPeriod"
+                      name="defaultPeriod"
+                    >
+                      <option value="today">Today</option>
+                      <option value="7days" selected>Last 7 Days</option>
+                      <option value="30days">Last 30 Days</option>
+                      <option value="month">This Month</option>
+                      <option value="previousMonth">Previous Month</option>
+                      <option value="year">This Year</option>
+                      <option value="all">All Available Data</option>
+                    </select>
+
+                  </div>
+
+                  <div class="settings-field">
+
+                    <label for="defaultChartInterval">
+                      Default Chart Interval
+                    </label>
+
+                    <select
+                      class="settings-control"
+                      id="defaultChartInterval"
+                      name="chartInterval"
+                    >
+                      <option value="hour">Hourly</option>
+                      <option value="day" selected>Daily</option>
+                      <option value="week">Weekly</option>
+                      <option value="month">Monthly</option>
+                    </select>
+
+                  </div>
+
+                  <div class="settings-field">
+
+                    <label for="comparisonMode">
+                      Comparison Mode
+                    </label>
+
+                    <select
+                      class="settings-control"
+                      id="comparisonMode"
+                      name="comparisonMode"
+                    >
+                      <option value="previous">Previous Comparable Period</option>
+                      <option value="lastYear">Same Period Last Year</option>
+                      <option value="none">No Comparison</option>
+                    </select>
+
+                  </div>
+
+                  <div class="settings-field">
+
+                    <label for="productRankingMetric">
+                      Product Ranking Metric
+                    </label>
+
+                    <select
+                      class="settings-control"
+                      id="productRankingMetric"
+                      name="rankingMetric"
+                    >
+                      <option value="revenue">Revenue</option>
+                      <option value="quantity">Units Sold</option>
+                      <option value="orders">Number of Invoices</option>
+                    </select>
+
+                  </div>
+
+                </div>
+
+                <div class="settings-divider"></div>
+
+                <div class="setting-row">
+
+                  <div>
+                    <h4 class="setting-row-title">
+                      Show Automated Business Insights
+                    </h4>
+
+                    <p class="setting-row-description">
+                      Enable data-based findings about top products,
+                      sales trends and peak business hours.
+                    </p>
+                  </div>
+
+                  <label class="switch">
+                    <input
+                      type="checkbox"
+                      id="businessInsightsEnabled"
+                      name="businessInsights"
+                      checked
+                    >
+
+                    <span class="switch-track"></span>
+                  </label>
+
+                </div>
+
+                <div class="setting-row">
+
+                  <div>
+                    <h4 class="setting-row-title">
+                      Show Period Comparisons
+                    </h4>
+
+                    <p class="setting-row-description">
+                      Compare revenue and invoice counts with a
+                      previous comparable period when data is available.
+                    </p>
+                  </div>
+
+                  <label class="switch">
+                    <input
+                      type="checkbox"
+                      id="periodComparisonsEnabled"
+                      name="periodComparisons"
+                      checked
+                    >
+
+                    <span class="switch-track"></span>
+                  </label>
+
+                </div>
+
+                <div class="settings-actions">
+
+                  <p
+                    class="settings-status"
+                    id="reportSettingsStatus"
+                    role="status"
+                  >
+                    Reporting preferences have not been saved.
+                  </p>
+
+                  <button
+                    class="btn btn-primary"
+                    type="submit"
+                  >
+                    Save Report Settings
+                  </button>
+
+                </div>
+
+              </form>
+
+            </div>
+
+          </section>
+
+          <!-- ======================================= -->
+          <!-- 9. DATA MANAGEMENT -->
+          <!-- ======================================= -->
+
+          <section
+            class="card settings-section"
+            id="data-management"
+          >
+
+            <div class="card-head">
+
+              <div>
+                <h3>Data Management</h3>
+                <p>Manage exports and operational backup procedures.</p>
+              </div>
+
+            </div>
+
+            <div class="card-body">
+
+              <div class="settings-list">
+
+                <div class="settings-stat">
+                  <div class="settings-stat-label">
+                    Storage Connection
+                  </div>
+
+                  <div class="settings-stat-value" id="storageConnectionStatus">
+                    Demo Mode
+                  </div>
+
+                  <small class="field-help">
+                    Live backend connection will be shown after integration.
+                  </small>
+                </div>
+
+                <div class="settings-stat">
+                  <div class="settings-stat-label">
+                    Last Backup
+                  </div>
+
+                  <div class="settings-stat-value" id="lastBackupStatus">
+                    Not available
+                  </div>
+
+                  <small class="field-help">
+                    Backup status must come from the real backend.
+                  </small>
+                </div>
+
+              </div>
+
+              <div class="settings-divider"></div>
+
+              <div class="setting-row">
+
+                <div>
+                  <h4 class="setting-row-title">
+                    Export Application Settings
+                  </h4>
+
+                  <p class="setting-row-description">
+                    Download configured business preferences as a JSON file.
+                    Secrets and authentication credentials must never be
+                    included in this export.
+                  </p>
+                </div>
+
+                <button
+                  class="btn btn-soft"
+                  id="downloadSettingsBackupBtn"
+                  type="button"
+                >
+                  Export JSON
+                </button>
+
+              </div>
+
+              <div class="setting-row">
+
+                <div>
+                  <h4 class="setting-row-title">
+                    Export Business Records
+                  </h4>
+
+                  <p class="setting-row-description">
+                    Export available invoice or product reports separately.
+                    A complete backup requires backend-supported export.
+                  </p>
+                </div>
+
+                <a class="btn btn-soft" href="invoices.html">
+                  View Invoices
+                </a>
+
+              </div>
+
+              <div class="setting-row">
+
+                <div>
+                  <h4 class="setting-row-title">
+                    Import Application Settings
+                  </h4>
+
+                  <p class="setting-row-description">
+                    Prepare a settings file for future import functionality.
+                    Import must validate every field before applying changes.
+                  </p>
+                </div>
+
+                <label class="btn btn-soft" for="settingsImportFile">
+                  Select JSON
+                </label>
+
+                <input
+                  class="settings-hidden"
+                  type="file"
+                  id="settingsImportFile"
+                  accept=".json,application/json"
+                >
+
+              </div>
+
+              <div
+                class="settings-notice"
+                style="margin-top:20px;"
+              >
+
+                <strong>Backup limitation</strong>
+
+                A settings export is not a complete database backup.
+                Invoice records, uploaded assets and product stock need
+                separate backend-supported backup procedures.
+
+              </div>
+
+              <div
+                class="settings-actions"
+                style="justify-content:flex-start;"
+              >
+
+                <p
+                  class="settings-status"
+                  id="dataManagementStatus"
+                  role="status"
+                >
+                  No backup has been created in this demo session.
+                </p>
+
+              </div>
+
+            </div>
+
+          </section>
+
+          <!-- ======================================= -->
+          <!-- 10. ACCOUNT AND SECURITY -->
+          <!-- ======================================= -->
+
+          <section
+            class="card settings-section"
+            id="account-security"
+          >
+
+            <div class="card-head">
+
+              <div>
+                <h3>Account & Security</h3>
+                <p>Review account information and security configuration.</p>
+              </div>
+
+              <span class="pill pending" id="accountSecurityStatus">
+                Demo Mode
+              </span>
+
+            </div>
+
+            <div class="card-body">
+
+              <div class="settings-list">
+
+                <div class="settings-stat">
+                  <div class="settings-stat-label">
+                    Signed-In Account
+                  </div>
+
+                  <div class="settings-stat-value" id="currentAccountEmail">
+                    Not Connected
+                  </div>
+
+                  <small class="field-help">
+                    Actual account details require Firebase Authentication.
+                  </small>
+                </div>
+
+                <div class="settings-stat">
+                  <div class="settings-stat-label">
+                    Access Role
+                  </div>
+
+                  <div class="settings-stat-value" id="currentAccountRole">
+                    Not Verified
+                  </div>
+
+                  <small class="field-help">
+                    The backend must verify account permissions.
+                  </small>
+                </div>
+
+              </div>
+
+              <div class="settings-divider"></div>
+
+              <div class="setting-row">
+
+                <div>
+                  <h4 class="setting-row-title">
+                    Firebase Authentication
+                  </h4>
+
+                  <p class="setting-row-description">
+                    Sign-in and identity verification will be managed
+                    by Firebase Authentication.
+                  </p>
+                </div>
+
+                <span class="pill pending">
+                  Integration Pending
+                </span>
+
+              </div>
+
+              <div class="setting-row">
+
+                <div>
+                  <h4 class="setting-row-title">
+                    Database Access Rules
+                  </h4>
+
+                  <p class="setting-row-description">
+                    The backend must enforce owner permissions.
+                    Hiding interface controls is not a security measure.
+                  </p>
+                </div>
+
+                <span class="pill pending">
+                  Integration Pending
+                </span>
+
+              </div>
+
+              <div class="setting-row">
+
+                <div>
+                  <h4 class="setting-row-title">
+                    Session Timeout
+                  </h4>
+
+                  <p class="setting-row-description">
+                    Configure inactivity timeout after backend authentication
+                    is integrated. Server-side authorization remains required.
+                  </p>
+                </div>
+
+                <label class="settings-field" style="width:130px;">
+                  <span class="settings-hidden">Session timeout</span>
+
+                  <select
+                    class="settings-control"
+                    id="sessionTimeout"
+                    name="sessionTimeout"
+                    aria-label="Session timeout"
+                  >
+                    <option value="5">5 minutes</option>
+                    <option value="10" selected>10 minutes</option>
+                    <option value="15">15 minutes</option>
+                    <option value="30">30 minutes</option>
+                  </select>
+                </label>
+
+              </div>
+
+              <div class="settings-notice" style="margin-top:20px;">
+
+                <strong>Security rule</strong>
+
+                Passwords, service-account credentials, private API keys
+                and privileged database credentials must not be stored
+                in this settings form or committed to GitHub.
+
+              </div>
+
+              <div class="settings-actions">
+
+                <p
+                  class="settings-status"
+                  id="accountSettingsStatus"
+                  role="status"
+                >
+                  Account security has not been configured in this demo.
+                </p>
+
+                <button
+                  class="btn btn-primary"
+                  id="saveAccountSettingsBtn"
+                  type="button"
+                >
+                  Save Session Preference
+                </button>
+
+              </div>
+
+            </div>
+
+          </section>
+
+          <!-- ======================================= -->
+          <!-- UNSAVED CHANGES NOTICE -->
+          <!-- ======================================= -->
+
+          <section class="card">
+
+            <div class="card-body">
+
+              <h3>Configuration Status</h3>
+
+              <p
+                class="kpi-sub"
+                id="globalSettingsStatus"
+                style="margin-top:10px;line-height:1.8;"
+              >
+                The settings interface is ready. Permanent saving
+                and synchronization with other pages will be added
+                through js/settings.js and backend integration.
+              </p>
+
+            </div>
+
+          </section>
+
+        </div>
+
+      </div>
+
+      <!-- FOOTER -->
+      <footer class="page-footer">
+        <span>[Business Name] · Restaurant Billing</span>
+        <span>System Control Room</span>
+      </footer>
+
+    </main>
+
+  </div>
+
+</div>
+
+<!-- STATUS MESSAGE -->
+<div
+  class="settings-toast"
+  id="settingsToast"
+  role="status"
+  aria-live="polite"
+  hidden
+></div>
+
+<!-- SHARED FUNCTIONALITY -->
+<script src="script.js" defer></script>
+
+<!-- SETTINGS PAGE-SPECIFIC FUNCTIONALITY -->
+<script src="js/settings.js" defer></script>
+
+</body>
+</html>
