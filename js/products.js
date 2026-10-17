@@ -7,13 +7,19 @@
  *
  * Firebase Realtime Database integration.
  * No demo products or local product persistence.
+ *
+ * Products:   restaurantBilling/products
+ * Categories: restaurantBilling/categories
  */
 
 (() => {
   const ADMIN_UID = "20wif9y7LQhBZgFPDsAlrQpFjnI2";
   const PRODUCTS_PATH = "restaurantBilling/products";
+  const CATEGORIES_PATH = "restaurantBilling/categories";
 
-  const table = document.getElementById("productsTable");
+  const $ = id => document.getElementById(id);
+
+  const table = $("productsTable");
   const tbody = table?.querySelector("tbody");
 
   if (!table || !tbody) {
@@ -21,12 +27,15 @@
     return;
   }
 
-  const $ = id => document.getElementById(id);
+  // --------------------------------------------------
+  // DOM REFERENCES
+  // --------------------------------------------------
 
   const searchInput = $("productSearch");
   const categoryFilter = $("categoryFilter");
   const availabilityFilter = $("availabilityFilter");
   const filtersForm = $("productFilters");
+
   const addProductButton = $("addProductBtn");
   const exportButton = $("exportProductsBtn");
   const selectAllCheckbox = $("selectAllProducts");
@@ -39,14 +48,28 @@
     minimumFractionDigits: 2
   });
 
+  // --------------------------------------------------
+  // STATE
+  // --------------------------------------------------
+
   let db = null;
   let databaseSDK = null;
+
   let products = [];
-  let unsubscribeProducts = null;
-  let dialog = null;
-  let saving = false;
-  let loading = true;
+  let categories = [];
+
+  let loadingProducts = true;
+  let loadingCategories = true;
   let databaseError = null;
+  let saving = false;
+
+  let unsubscribeAuth = null;
+  let unsubscribeProducts = null;
+  let unsubscribeCategories = null;
+
+  let authStarted = false;
+  let currentUser = null;
+  let dialog = null;
 
   // --------------------------------------------------
   // HELPERS
@@ -70,19 +93,8 @@
     return currency.format(Number(value) || 0);
   }
 
-  function validProduct(product) {
-    return Boolean(
-      product &&
-      typeof product.name === "string" &&
-      product.name.trim() &&
-      typeof product.category === "string" &&
-      product.category.trim() &&
-      Number.isFinite(Number(product.price)) &&
-      Number(product.price) >= 0 &&
-      Number.isSafeInteger(Number(product.stock)) &&
-      Number(product.stock) >= 0 &&
-      typeof product.active === "boolean"
-    );
+  function isLowStock(product) {
+    return product.stock <= 10;
   }
 
   function showMessage(message, type = "info") {
@@ -95,6 +107,7 @@
       element.setAttribute("aria-live", "polite");
       element.style.cssText =
         "margin:12px 0;padding:10px 12px;border:1px solid #d1d5db;border-radius:5px;font-size:13px;";
+
       table.closest(".card")?.prepend(element);
     }
 
@@ -119,22 +132,54 @@
     button.textContent = busy ? busyText : normalText;
   }
 
-  function isLowStock(product) {
-    return product.stock > 0 && product.stock <= 10;
+  function validProductRecord(product) {
+    return Boolean(
+      product &&
+      typeof product.name === "string" &&
+      product.name.trim() &&
+      typeof product.category === "string" &&
+      product.category.trim() &&
+      Number.isFinite(Number(product.price)) &&
+      Number(product.price) >= 0 &&
+      Number.isSafeInteger(Number(product.stock)) &&
+      Number(product.stock) >= 0 &&
+      typeof product.active === "boolean"
+    );
   }
 
-  function createFallbackSku() {
-    return `SKU-${Date.now().toString(36).toUpperCase()}`;
+  function validCategoryRecord(category) {
+    return Boolean(
+      category &&
+      typeof category.name === "string" &&
+      category.name.trim()
+    );
   }
 
-  function categoriesFromProducts() {
-    return [...new Set(
-      products.map(product => product.category.trim()).filter(Boolean)
-    )].sort((a, b) => a.localeCompare(b));
+  function getActiveCategories() {
+    return categories
+      .filter(category => category.active)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  function getCategoryByName(name) {
+    return categories.find(
+      category => normalise(category.name) === normalise(name)
+    );
+  }
+
+  function createSKU() {
+    const prefix = `SKU-${Date.now().toString(36).toUpperCase()}`;
+    const existing = new Set(products.map(product => normalise(product.sku)));
+
+    if (!existing.has(normalise(prefix))) {
+      return prefix;
+    }
+
+    return `${prefix}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
   }
 
   // --------------------------------------------------
-  // REALTIME DATABASE INITIALISATION
+  // FIREBASE INITIALISATION
   // --------------------------------------------------
 
   async function initialiseFirebase() {
@@ -152,7 +197,7 @@
       }
 
       if (!window.restaurantAuth?.watchAuth) {
-        throw new Error("Authentication service is unavailable.");
+        throw new Error("Firebase Authentication is unavailable.");
       }
 
       db = firebase.db;
@@ -161,26 +206,41 @@
         "https://www.gstatic.com/firebasejs/12.19.0/firebase-database.js"
       );
 
-      await window.restaurantAuth.watchAuth(user => {
+      if (authStarted) return;
+      authStarted = true;
+
+      const result = await window.restaurantAuth.watchAuth(user => {
         if (!user || user.uid !== ADMIN_UID) {
-          unsubscribeProducts?.();
-          unsubscribeProducts = null;
+          stopDatabaseListeners();
+
+          currentUser = null;
           products = [];
-          loading = false;
+          categories = [];
+
+          loadingProducts = false;
+          loadingCategories = false;
 
           renderProducts();
           showMessage("Administrator authentication is required.", "error");
           return;
         }
 
-        startProductsListener();
+        currentUser = user;
+        startDatabaseListeners();
       });
+
+      if (typeof result === "function") {
+        unsubscribeAuth = result;
+      }
     } catch (error) {
       console.error("Products: Firebase initialisation failed.", error);
 
-      loading = false;
       databaseError = error;
+      loadingProducts = false;
+      loadingCategories = false;
+
       products = [];
+      categories = [];
 
       renderProducts();
 
@@ -191,54 +251,96 @@
     }
   }
 
-  function startProductsListener() {
-    if (unsubscribeProducts || !db || !databaseSDK) return;
+  function stopDatabaseListeners() {
+    unsubscribeProducts?.();
+    unsubscribeCategories?.();
 
-    const productsRef = databaseSDK.ref(db, PRODUCTS_PATH);
+    unsubscribeProducts = null;
+    unsubscribeCategories = null;
+
+    loadingProducts = true;
+    loadingCategories = true;
+  }
+
+  // --------------------------------------------------
+  // LIVE PRODUCT DATA
+  // --------------------------------------------------
+
+  function startDatabaseListeners() {
+    if (!db || !databaseSDK || !currentUser) return;
+
+    if (unsubscribeProducts || unsubscribeCategories) return;
+
+    loadingProducts = true;
+    loadingCategories = true;
+    databaseError = null;
 
     unsubscribeProducts = databaseSDK.onValue(
-      productsRef,
+      databaseSDK.ref(db, PRODUCTS_PATH),
       snapshot => {
-        const data = snapshot.val();
+        const data = snapshot.val() || {};
 
-        products = data && typeof data === "object"
-          ? Object.entries(data)
-              .filter(([, value]) => validProduct(value))
-              .map(([id, value]) => ({
-                id,
-                name: value.name.trim(),
-                description: String(value.description || ""),
-                category: value.category.trim(),
-                sku: String(value.sku || ""),
-                price: Number(value.price),
-                stock: Number(value.stock),
-                active: value.active,
-                createdAt: value.createdAt || null,
-                updatedAt: value.updatedAt || null
-              }))
-          : [];
+        products = Object.entries(data)
+          .filter(([, record]) => validProductRecord(record))
+          .map(([id, record]) => ({
+            id,
+            name: record.name.trim(),
+            description: String(record.description || ""),
+            category: record.category.trim(),
+            sku: String(record.sku || ""),
+            price: Number(record.price),
+            stock: Number(record.stock),
+            active: record.active,
+            createdAt: record.createdAt || null,
+            updatedAt: record.updatedAt || null
+          }));
 
-        loading = false;
-        databaseError = null;
+        loadingProducts = false;
 
-        updateCategoryOptions();
-        updateFormCategories();
+        updateCategoryFilter();
+        updateCategoryDropdown();
         renderProducts();
       },
-      error => {
-        console.error("Products: Database read failed.", error);
+      handleDatabaseError
+    );
 
-        loading = false;
-        databaseError = error;
-        products = [];
+    // Listen to the master category collection independently.
+    unsubscribeCategories = databaseSDK.onValue(
+      databaseSDK.ref(db, CATEGORIES_PATH),
+      snapshot => {
+        const data = snapshot.val() || {};
 
+        categories = Object.entries(data)
+          .filter(([, record]) => validCategoryRecord(record))
+          .map(([id, record]) => ({
+            id,
+            name: record.name.trim(),
+            description: String(record.description || ""),
+            active: record.active !== false,
+            createdAt: record.createdAt || null,
+            updatedAt: record.updatedAt || null
+          }));
+
+        loadingCategories = false;
+
+        updateCategoryFilter();
+        updateCategoryDropdown();
         renderProducts();
+      },
+      handleDatabaseError
+    );
+  }
 
-        showMessage(
-          "Could not load products. Verify your Firebase Rules and admin sign-in.",
-          "error"
-        );
-      }
+  function handleDatabaseError(error) {
+    console.error("Products: Firebase database error.", error);
+
+    databaseError = error;
+
+    renderProducts();
+
+    showMessage(
+      "Unable to read or update Firebase data. Check your connection and database Rules.",
+      "error"
     );
   }
 
@@ -252,8 +354,8 @@
     const summary = [
       products.length,
       products.filter(product => product.active).length,
-      products.filter(product => product.active && product.stock <= 10).length,
-      categoriesFromProducts().length
+      products.filter(product => product.active && isLowStock(product)).length,
+      categories.length
     ];
 
     values.forEach((element, index) => {
@@ -264,36 +366,292 @@
   }
 
   // --------------------------------------------------
-  // DYNAMIC CATEGORY FILTER
+  // FILTER DROPDOWN
   // --------------------------------------------------
 
-  function updateCategoryOptions() {
+  function updateCategoryFilter() {
     if (!categoryFilter) return;
 
     const previousValue = categoryFilter.value;
-    const categories = categoriesFromProducts();
+
+    const names = [...new Set(
+      categories.map(category => category.name)
+    )].sort((a, b) => a.localeCompare(b));
 
     categoryFilter.innerHTML = `
       <option value="">All Categories</option>
-      ${categories.map(category => `
-        <option value="${escapeHTML(category)}">${escapeHTML(category)}</option>
+      ${names.map(name => `
+        <option value="${escapeHTML(name)}">${escapeHTML(name)}</option>
       `).join("")}
     `;
 
-    if (categories.includes(previousValue)) {
+    if (names.includes(previousValue)) {
       categoryFilter.value = previousValue;
     }
   }
 
-  function updateFormCategories() {
-    const datalist = $("productCategoryOptions");
+  // --------------------------------------------------
+  // ADD / EDIT DIALOG
+  // --------------------------------------------------
 
-    if (!datalist) return;
+  function createProductDialog() {
+    const element = document.createElement("dialog");
 
-    datalist.innerHTML = categoriesFromProducts().map(category => `
-      <option value="${escapeHTML(category)}"></option>
-    `).join("");
+    element.id = "productDialog";
+    element.setAttribute("aria-labelledby", "productDialogTitle");
+
+    element.style.cssText = `
+      width:min(560px,calc(100% - 28px));
+      max-width:560px;
+      max-height:90vh;
+      overflow-y:auto;
+      border:1px solid #e5e7eb;
+      border-radius:8px;
+      padding:24px;
+      color:#111827;
+      background:#fff;
+    `;
+
+    element.innerHTML = `
+      <div class="card-head">
+        <div>
+          <h3 id="productDialogTitle">Add Product</h3>
+          <p id="productDialogDescription">Enter the product details.</p>
+        </div>
+
+        <button type="button" class="btn-icon" id="closeProductDialog"
+          aria-label="Close dialog">×</button>
+      </div>
+
+      <form id="productForm">
+        <input type="hidden" id="editProductId">
+
+        <div style="display:grid;gap:16px;margin-top:20px;">
+          <label for="productName">
+            Product Name *
+            <input class="btn btn-outline"
+              style="display:block;width:100%;margin-top:6px;text-align:left;"
+              type="text" id="productName" maxlength="100"
+              required autocomplete="off" placeholder="Enter product name">
+          </label>
+
+          <label for="productDescription">
+            Description
+            <input class="btn btn-outline"
+              style="display:block;width:100%;margin-top:6px;text-align:left;"
+              type="text" id="productDescription" maxlength="200"
+              placeholder="Optional description">
+          </label>
+
+          <label for="productCategory">
+            Category *
+            <select class="btn btn-outline"
+              style="display:block;width:100%;margin-top:6px;text-align:left;"
+              id="productCategory" required>
+              <option value="">Loading categories...</option>
+            </select>
+            <small id="productCategoryHelp"
+              style="display:block;margin-top:6px;color:#6b7280;font-size:12px;">
+              Categories are loaded from Firebase.
+            </small>
+          </label>
+
+          <label for="productSKU">
+            SKU
+            <input class="btn btn-outline"
+              style="display:block;width:100%;margin-top:6px;text-align:left;"
+              type="text" id="productSKU" maxlength="50"
+              autocomplete="off" placeholder="Optional product code">
+          </label>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+            <label for="productPrice">
+              Price (₹) *
+              <input class="btn btn-outline"
+                style="display:block;width:100%;margin-top:6px;text-align:left;"
+                type="number" id="productPrice" min="0"
+                max="99999999" step="0.01" required placeholder="0.00">
+            </label>
+
+            <label for="productStock">
+              Stock Quantity *
+              <input class="btn btn-outline"
+                style="display:block;width:100%;margin-top:6px;text-align:left;"
+                type="number" id="productStock" min="0"
+                max="999999999" step="1" required value="0">
+            </label>
+          </div>
+
+          <label for="productStatus">
+            Availability
+            <select class="btn btn-outline"
+              style="display:block;width:100%;margin-top:6px;text-align:left;"
+              id="productStatus">
+              <option value="active">Active — Available for billing</option>
+              <option value="inactive">Inactive — Hidden from billing</option>
+            </select>
+          </label>
+
+          <p id="productFormMessage" role="alert" aria-live="polite"
+            style="margin:0;font-size:13px;"></p>
+        </div>
+
+        <div class="page-actions" style="justify-content:flex-end;margin-top:24px;">
+          <button type="button" class="btn btn-soft" id="cancelProductDialog">
+            Cancel
+          </button>
+
+          <button type="submit" class="btn btn-primary" id="saveProductButton">
+            Save Product
+          </button>
+        </div>
+      </form>
+    `;
+
+    document.body.appendChild(element);
+    return element;
   }
+
+  dialog = createProductDialog();
+
+  const productForm = $("productForm");
+
+  // --------------------------------------------------
+  // MASTER CATEGORY DROPDOWN
+  // --------------------------------------------------
+
+  function updateCategoryDropdown(currentProductCategory = "") {
+    const select = $("productCategory");
+    const help = $("productCategoryHelp");
+
+    if (!select) return;
+
+    const previousValue = select.value;
+
+    select.innerHTML = "";
+
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+
+    if (loadingCategories) {
+      placeholder.textContent = "Loading categories...";
+    } else if (databaseError) {
+      placeholder.textContent = "Categories could not be loaded";
+    } else {
+      placeholder.textContent = "Select a category";
+    }
+
+    select.appendChild(placeholder);
+
+    const activeCategories = getActiveCategories();
+    const currentCategory = currentProductCategory
+      ? getCategoryByName(currentProductCategory)
+      : null;
+
+    // Show all active master categories when creating a product.
+    activeCategories.forEach(category => {
+      const option = document.createElement("option");
+      option.value = category.name;
+      option.textContent = category.name;
+      select.appendChild(option);
+    });
+
+    // When editing an older product, preserve its existing category
+    // even if the category has since been deactivated.
+    if (
+      currentCategory &&
+      !currentCategory.active &&
+      !activeCategories.some(category =>
+        normalise(category.name) === normalise(currentCategory.name)
+      )
+    ) {
+      const option = document.createElement("option");
+      option.value = currentCategory.name;
+      option.textContent = `${currentCategory.name} (Inactive — current product)`;
+      select.appendChild(option);
+    }
+
+    if (currentProductCategory) {
+      const matchingOption = Array.from(select.options).find(
+        option => normalise(option.value) === normalise(currentProductCategory)
+      );
+
+      if (matchingOption) {
+        select.value = matchingOption.value;
+      }
+    } else if (
+      previousValue &&
+      Array.from(select.options).some(option => option.value === previousValue)
+    ) {
+      select.value = previousValue;
+    }
+
+    select.disabled = loadingCategories || Boolean(databaseError);
+
+    if (loadingCategories) {
+      help.textContent = "Loading master categories from Firebase.";
+    } else if (databaseError) {
+      help.textContent = "Unable to load categories. Check Firebase access.";
+    } else if (activeCategories.length === 0) {
+      help.textContent = "No active categories found. Add one on the Categories page first.";
+    } else {
+      help.textContent = "Choose an active category from the Categories page.";
+    }
+  }
+
+  function openProductDialog(product = null) {
+    productForm.reset();
+
+    $("productFormMessage").textContent = "";
+    $("editProductId").value = product?.id || "";
+
+    $("productDialogTitle").textContent =
+      product ? "Edit Product" : "Add Product";
+
+    $("productDialogDescription").textContent =
+      product ? "Update the product details." : "Create a new product.";
+
+    $("saveProductButton").textContent =
+      product ? "Update Product" : "Save Product";
+
+    $("productName").value = product?.name || "";
+    $("productDescription").value = product?.description || "";
+    $("productSKU").value = product?.sku || "";
+    $("productPrice").value = product?.price ?? "";
+    $("productStock").value = product?.stock ?? 0;
+
+    $("productStatus").value =
+      product?.active === false ? "inactive" : "active";
+
+    updateCategoryDropdown(product?.category || "");
+
+    if (typeof dialog.showModal !== "function") {
+      showMessage("This browser does not support the product dialog.", "error");
+      return;
+    }
+
+    dialog.showModal();
+    $("productName").focus();
+  }
+
+  function closeProductDialog() {
+    if (dialog?.open) {
+      dialog.close();
+    }
+  }
+
+  $("closeProductDialog").addEventListener("click", closeProductDialog);
+  $("cancelProductDialog").addEventListener("click", closeProductDialog);
+
+  dialog.addEventListener("click", event => {
+    if (event.target === dialog) {
+      closeProductDialog();
+    }
+  });
+
+  addProductButton?.addEventListener("click", () => {
+    openProductDialog();
+  });
 
   // --------------------------------------------------
   // SEARCH AND FILTERS
@@ -305,14 +663,14 @@
     const availability = availabilityFilter?.value || "";
 
     return products.filter(product => {
-      const searchable = [
+      const searchableText = [
         product.name,
         product.description,
         product.category,
         product.sku
       ].map(normalise).join(" ");
 
-      const matchesSearch = !search || searchable.includes(search);
+      const matchesSearch = !search || searchableText.includes(search);
       const matchesCategory = !category || product.category === category;
 
       const matchesAvailability =
@@ -325,12 +683,12 @@
   }
 
   // --------------------------------------------------
-  // RENDER DATABASE PRODUCTS
+  // RENDER PRODUCTS
   // --------------------------------------------------
 
   function renderProducts() {
-    if (loading) {
-      showTableMessage("Loading products...");
+    if (loadingProducts || loadingCategories) {
+      showTableMessage("Loading products and categories from Firebase...");
       updateSummary();
       return;
     }
@@ -363,32 +721,22 @@
       if (product.active && product.stock === 0) {
         stockHTML = '<span class="pill cancelled">Out of Stock</span>';
       } else if (product.active && isLowStock(product)) {
-        stockHTML = `
-          ${product.stock}
-          <span class="pill pending">Low Stock</span>
-        `;
+        stockHTML = `${product.stock} <span class="pill pending">Low Stock</span>`;
       }
 
       return `
         <tr data-product-id="${escapeHTML(product.id)}">
           <td>
-            <input
-              type="checkbox"
-              class="product-select"
-              aria-label="Select ${escapeHTML(product.name)}"
-            >
+            <input type="checkbox" class="product-select"
+              aria-label="Select ${escapeHTML(product.name)}">
           </td>
 
           <td>
             <div class="cust">
-              <div class="cust-avatar">
-                ${escapeHTML(product.name.charAt(0).toUpperCase())}
-              </div>
+              <div class="cust-avatar">${escapeHTML(product.name.charAt(0).toUpperCase())}</div>
               <div>
                 <div class="cust-name">${escapeHTML(product.name)}</div>
-                <div class="cust-sub">
-                  ${escapeHTML(product.description || "No description")}
-                </div>
+                <div class="cust-sub">${escapeHTML(product.description || "No description")}</div>
               </div>
             </div>
           </td>
@@ -400,14 +748,9 @@
           <td><span class="pill ${statusClass}">${statusText}</span></td>
 
           <td>
-            <button
-              class="btn-icon"
-              type="button"
-              data-action="edit"
-              data-product-id="${escapeHTML(product.id)}"
-              aria-label="Edit ${escapeHTML(product.name)}"
-              title="Edit product"
-            >
+            <button class="btn-icon" type="button"
+              data-action="edit" data-product-id="${escapeHTML(product.id)}"
+              aria-label="Edit ${escapeHTML(product.name)}" title="Edit product">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M12 20h9"/>
@@ -415,14 +758,9 @@
               </svg>
             </button>
 
-            <button
-              class="btn-icon"
-              type="button"
-              data-action="delete"
-              data-product-id="${escapeHTML(product.id)}"
-              aria-label="Delete ${escapeHTML(product.name)}"
-              title="Delete product"
-            >
+            <button class="btn-icon" type="button"
+              data-action="delete" data-product-id="${escapeHTML(product.id)}"
+              aria-label="Delete ${escapeHTML(product.name)}" title="Delete product">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M3 6h18"/>
@@ -445,163 +783,30 @@
   }
 
   // --------------------------------------------------
-  // PRODUCT EDITOR
+  // SAVE / UPDATE PRODUCT
   // --------------------------------------------------
 
-  function createProductDialog() {
-    const element = document.createElement("dialog");
-
-    element.id = "productDialog";
-    element.setAttribute("aria-labelledby", "productDialogTitle");
-    element.style.cssText = `
-      width:min(560px,calc(100% - 28px));
-      max-width:560px;
-      max-height:90vh;
-      overflow-y:auto;
-      border:1px solid #e5e7eb;
-      border-radius:8px;
-      padding:24px;
-      color:#111827;
-      background:#fff;
-    `;
-
-    element.innerHTML = `
-      <div class="card-head">
-        <div>
-          <h3 id="productDialogTitle">Add Product</h3>
-          <p>Enter the product details.</p>
-        </div>
-        <button type="button" class="btn-icon" id="closeProductDialog"
-          aria-label="Close dialog">×</button>
-      </div>
-
-      <form id="productForm">
-        <input type="hidden" id="editProductId">
-
-        <div style="display:grid;gap:16px;margin-top:20px;">
-          <label>
-            Product Name *
-            <input class="btn btn-outline" style="display:block;width:100%;margin-top:6px;text-align:left;"
-              type="text" id="productName" maxlength="100" required autocomplete="off">
-          </label>
-
-          <label>
-            Description
-            <input class="btn btn-outline" style="display:block;width:100%;margin-top:6px;text-align:left;"
-              type="text" id="productDescription" maxlength="200">
-          </label>
-
-          <label>
-            Category *
-            <input class="btn btn-outline" style="display:block;width:100%;margin-top:6px;text-align:left;"
-              type="text" id="productCategory" list="productCategoryOptions"
-              maxlength="60" required autocomplete="off">
-            <datalist id="productCategoryOptions"></datalist>
-          </label>
-
-          <label>
-            SKU
-            <input class="btn btn-outline" style="display:block;width:100%;margin-top:6px;text-align:left;"
-              type="text" id="productSKU" maxlength="50" autocomplete="off">
-          </label>
-
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
-            <label>
-              Price (₹) *
-              <input class="btn btn-outline" style="display:block;width:100%;margin-top:6px;text-align:left;"
-                type="number" id="productPrice" min="0" max="99999999"
-                step="0.01" required>
-            </label>
-
-            <label>
-              Stock Quantity *
-              <input class="btn btn-outline" style="display:block;width:100%;margin-top:6px;text-align:left;"
-                type="number" id="productStock" min="0" max="999999999"
-                step="1" required>
-            </label>
-          </div>
-
-          <label>
-            Availability
-            <select class="btn btn-outline" style="display:block;width:100%;margin-top:6px;text-align:left;"
-              id="productStatus">
-              <option value="active">Active — Available for billing</option>
-              <option value="inactive">Inactive — Hidden from billing</option>
-            </select>
-          </label>
-        </div>
-
-        <p id="productFormMessage" role="alert" aria-live="polite"
-          style="margin-top:12px;"></p>
-
-        <div class="page-actions" style="justify-content:flex-end;margin-top:20px;">
-          <button type="button" class="btn btn-soft" id="cancelProductDialog">Cancel</button>
-          <button type="submit" class="btn btn-primary" id="saveProductButton">Save Product</button>
-        </div>
-      </form>
-    `;
-
-    document.body.appendChild(element);
-    return element;
-  }
-
-  function openProductDialog(product = null) {
-    const form = $("productForm");
-    form.reset();
-
-    $("productFormMessage").textContent = "";
-    $("editProductId").value = product?.id || "";
-    $("productDialogTitle").textContent = product ? "Edit Product" : "Add Product";
-    $("saveProductButton").textContent = product ? "Update Product" : "Save Product";
-
-    $("productName").value = product?.name || "";
-    $("productDescription").value = product?.description || "";
-    $("productCategory").value = product?.category || "";
-    $("productSKU").value = product?.sku || "";
-    $("productPrice").value = product?.price ?? "";
-    $("productStock").value = product?.stock ?? 0;
-    $("productStatus").value = product?.active === false ? "inactive" : "active";
-
-    updateFormCategories();
-
-    if (!dialog.open) dialog.showModal();
-    $("productName").focus();
-  }
-
-  function closeProductDialog() {
-    if (dialog?.open) dialog.close();
-  }
-
-  dialog = createProductDialog();
-
-  $("closeProductDialog").addEventListener("click", closeProductDialog);
-  $("cancelProductDialog").addEventListener("click", closeProductDialog);
-
-  addProductButton?.addEventListener("click", () => openProductDialog());
-
-  // --------------------------------------------------
-  // SAVE / UPDATE
-  // --------------------------------------------------
-
-  async function saveProduct(event) {
+  productForm.addEventListener("submit", async event => {
     event.preventDefault();
 
-    if (saving || !db || !databaseSDK) return;
+    if (saving || !db || !databaseSDK || !currentUser) return;
 
     const id = $("editProductId").value;
+    const existingProduct = products.find(product => product.id === id);
+
     const name = $("productName").value.trim();
     const description = $("productDescription").value.trim();
-    const category = $("productCategory").value.trim();
+    const categoryName = $("productCategory").value;
     let sku = $("productSKU").value.trim();
 
     const price = Number($("productPrice").value);
     const stock = Number($("productStock").value);
     const active = $("productStatus").value === "active";
-    const message = $("productFormMessage");
 
+    const message = $("productFormMessage");
     message.textContent = "";
 
-    if (!name || !category) {
+    if (!name || !categoryName) {
       message.textContent = "Product name and category are required.";
       return;
     }
@@ -616,37 +821,60 @@
       return;
     }
 
-    const duplicateName = products.some(product =>
-      product.id !== id &&
-      normalise(product.name) === normalise(name) &&
-      normalise(product.category) === normalise(category)
-    );
+    // The selected category must exist in the master Categories list.
+    const selectedCategory = getCategoryByName(categoryName);
 
-    if (duplicateName) {
-      message.textContent = "This product already exists in the same category.";
+    if (!selectedCategory) {
+      message.textContent =
+        "This category no longer exists. Refresh the list and choose another category.";
       return;
     }
 
-    if (!sku) sku = createFallbackSku();
+    // New products must use active categories.
+    // Existing products can retain their unchanged inactive category.
+    const keepingExistingInactiveCategory = Boolean(
+      existingProduct &&
+      !selectedCategory.active &&
+      normalise(existingProduct.category) === normalise(selectedCategory.name)
+    );
 
-    const duplicateSku = products.some(product =>
+    if (!selectedCategory.active && !keepingExistingInactiveCategory) {
+      message.textContent =
+        "This category is inactive. Choose an active category or activate it on the Categories page.";
+      return;
+    }
+
+    const duplicateName = products.some(product =>
+      product.id !== id &&
+      normalise(product.name) === normalise(name) &&
+      normalise(product.category) === normalise(categoryName)
+    );
+
+    if (duplicateName) {
+      message.textContent =
+        "A product with this name already exists in this category.";
+      return;
+    }
+
+    if (!sku) sku = createSKU();
+
+    const duplicateSKU = products.some(product =>
       product.id !== id &&
       product.sku &&
       normalise(product.sku) === normalise(sku)
     );
 
-    if (duplicateSku) {
+    if (duplicateSKU) {
       message.textContent = "This SKU is already assigned to another product.";
       return;
     }
 
     const now = new Date().toISOString();
-    const existingProduct = products.find(product => product.id === id);
 
     const record = {
       name,
       description,
-      category,
+      category: selectedCategory.name,
       sku,
       price,
       stock,
@@ -656,6 +884,7 @@
     };
 
     saving = true;
+
     setButtonBusy(
       $("saveProductButton"),
       true,
@@ -670,22 +899,27 @@
           record
         );
       } else {
-        const newRef = databaseSDK.push(
+        const newProductRef = databaseSDK.push(
           databaseSDK.ref(db, PRODUCTS_PATH)
         );
 
-        await databaseSDK.set(newRef, record);
+        await databaseSDK.set(newProductRef, record);
       }
 
       closeProductDialog();
-      showMessage(id ? "Product updated successfully." : "Product saved successfully.", "success");
+
+      showMessage(
+        id ? "Product updated successfully." : "Product saved successfully.",
+        "success"
+      );
     } catch (error) {
       console.error("Products: Save failed.", error);
 
       message.textContent =
-        "Could not save the product. Check your connection and database Rules.";
+        "Could not save the product. Check your connection and Firebase Rules.";
     } finally {
       saving = false;
+
       setButtonBusy(
         $("saveProductButton"),
         false,
@@ -693,12 +927,10 @@
         id ? "Update Product" : "Save Product"
       );
     }
-  }
-
-  $("productForm").addEventListener("submit", saveProduct);
+  });
 
   // --------------------------------------------------
-  // EDIT / DELETE
+  // EDIT / DELETE PRODUCT
   // --------------------------------------------------
 
   tbody.addEventListener("click", async event => {
@@ -710,7 +942,7 @@
     );
 
     if (!product) {
-      showMessage("Product not found. Refresh the list and try again.", "error");
+      showMessage("Product not found. Refresh and try again.", "error");
       return;
     }
 
@@ -721,7 +953,7 @@
 
     if (button.dataset.action === "delete") {
       const confirmed = window.confirm(
-        `Delete "${product.name}"?\n\nPreviously issued invoices must retain their saved product details.`
+        `Delete "${product.name}"?\n\nPreviously issued invoices should retain their saved product details.`
       );
 
       if (!confirmed) return;
@@ -743,7 +975,7 @@
   });
 
   // --------------------------------------------------
-  // SEARCH / FILTERS
+  // SEARCH AND FILTER EVENTS
   // --------------------------------------------------
 
   searchInput?.addEventListener("input", renderProducts);
@@ -755,7 +987,7 @@
   });
 
   // --------------------------------------------------
-  // SELECTION
+  // SELECT ALL
   // --------------------------------------------------
 
   selectAllCheckbox?.addEventListener("change", () => {
@@ -769,15 +1001,15 @@
   tbody.addEventListener("change", event => {
     if (!event.target.matches(".product-select")) return;
 
-    const checkboxes = [...tbody.querySelectorAll(".product-select")];
-    const count = checkboxes.filter(item => item.checked).length;
+    const boxes = [...tbody.querySelectorAll(".product-select")];
+    const selectedCount = boxes.filter(box => box.checked).length;
 
     if (selectAllCheckbox) {
       selectAllCheckbox.checked =
-        checkboxes.length > 0 && count === checkboxes.length;
+        boxes.length > 0 && selectedCount === boxes.length;
 
       selectAllCheckbox.indeterminate =
-        count > 0 && count < checkboxes.length;
+        selectedCount > 0 && selectedCount < boxes.length;
     }
   });
 
@@ -786,12 +1018,12 @@
   // --------------------------------------------------
 
   applyBulkActionButton?.addEventListener("click", async () => {
-    if (!db || !databaseSDK || saving) return;
+    if (!db || !databaseSDK || saving || !currentUser) return;
 
     const action = bulkActionSelect?.value;
 
     if (!["activate", "deactivate", "delete"].includes(action)) {
-      showMessage("Select a valid bulk action.", "error");
+      showMessage("Choose a supported bulk action.", "error");
       return;
     }
 
@@ -814,16 +1046,14 @@
 
     try {
       const updates = {};
+      const now = new Date().toISOString();
 
       selectedIds.forEach(id => {
         if (action === "delete") {
           updates[id] = null;
         } else {
-          const product = products.find(item => item.id === id);
-          if (product) {
-            updates[`${id}/active`] = action === "activate";
-            updates[`${id}/updatedAt`] = new Date().toISOString();
-          }
+          updates[`${id}/active`] = action === "activate";
+          updates[`${id}/updatedAt`] = now;
         }
       });
 
@@ -832,7 +1062,8 @@
         updates
       );
 
-      bulkActionSelect.value = "";
+      if (bulkActionSelect) bulkActionSelect.value = "";
+
       showMessage("Bulk action completed successfully.", "success");
     } catch (error) {
       console.error("Products: Bulk action failed.", error);
@@ -843,18 +1074,18 @@
   });
 
   // --------------------------------------------------
-  // CSV EXPORT
+  // EXPORT PRODUCTS TO CSV
   // --------------------------------------------------
 
   exportButton?.addEventListener("click", () => {
-    if (loading || databaseError) {
-      showMessage("Load products successfully before exporting.", "error");
+    if (loadingProducts || loadingCategories || databaseError) {
+      showMessage("Wait for Firebase data to load before exporting.", "error");
       return;
     }
 
-    const filtered = getFilteredProducts();
+    const records = getFilteredProducts();
 
-    if (!filtered.length) {
+    if (!records.length) {
       showMessage("There are no products to export.", "info");
       return;
     }
@@ -880,7 +1111,7 @@
       "Availability"
     ];
 
-    const rows = filtered.map(product => [
+    const rows = records.map(product => [
       product.id,
       product.name,
       product.description,
@@ -914,18 +1145,21 @@
   });
 
   // --------------------------------------------------
-  // START
+  // INITIALISE PAGE
   // --------------------------------------------------
 
-  // Remove the static sample product rows immediately.
   tbody.replaceChildren();
-
-  // Replace hardcoded category filter options with database categories.
-  updateCategoryOptions();
-
-  // Show empty summaries until real records load.
   updateSummary();
+  updateCategoryFilter();
+  updateCategoryDropdown();
 
   console.info("Products: Firebase integration starting.");
+
   initialiseFirebase();
+
+  window.addEventListener("beforeunload", () => {
+    unsubscribeProducts?.();
+    unsubscribeCategories?.();
+    unsubscribeAuth?.();
+  });
 })();
