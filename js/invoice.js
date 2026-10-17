@@ -1,27 +1,30 @@
+
 "use strict";
 
 /*
  * Restaurant Billing Software
  * File: js/invoice.js
  *
- * Phase 1: Frontend demo.
- *
  * Features:
- * - Product selection
- * - Add, update and remove invoice items
- * - Quantity validation
+ * - Product selection and cart management
  * - Automatic subtotal, discount, tax and grand total
- * - Cash / UPI payment selection
- * - Invoice validation
- * - A4 invoice preview and printing
+ * - Cash / UPI selection
+ * - Dynamic A4 invoice with the approved layout
+ * - Firebase Realtime Database verification record
+ * - Unique verification ID per generated invoice
+ * - Real QR code linking to the verification page
  *
- * Important:
- * - Demo products come from new-invoice.html.
- * - Invoice data is not permanently saved.
- * - Firebase Realtime Database integration comes later.
+ * IMPORTANT:
+ * - Product options must exist in new-invoice.html.
+ * - Firebase configuration is fetched from the Cloudflare Worker.
+ * - Firebase Authentication is required to save a verification record.
+ * - Only the minimum invoice details needed for verification are saved.
+ * - The verification page and database rules must be configured separately.
  */
 
 (() => {
+  "use strict";
+
   // --------------------------------------------------
   // DOM REFERENCES
   // --------------------------------------------------
@@ -45,10 +48,7 @@
   const quantityInput = document.getElementById("itemQuantity");
   const addItemButton = document.getElementById("addItemBtn");
 
-  const itemsTable = document.getElementById("invoiceItemsTable");
   const itemsBody = document.getElementById("invoiceItemsBody");
-  const emptyItemsRow = document.getElementById("emptyItemsRow");
-
   const itemCountLabel = document.getElementById("itemCount");
   const clearItemsButton = document.getElementById("clearItemsBtn");
 
@@ -66,11 +66,23 @@
 
   const resetButton = document.getElementById("resetInvoiceBtn");
   const previewButton = document.getElementById("previewInvoiceBtn");
-  const generateButton = document.getElementById("generateInvoiceBtn");
 
   // --------------------------------------------------
-  // CONSTANTS
+  // CONFIGURATION
   // --------------------------------------------------
+
+  const FIREBASE_CONFIG_URL =
+    "https://restaurant-billing-config.yadavsubba2003.workers.dev/api/firebase-config";
+
+  /*
+   * Dedicated database branch for invoice verification.
+   * This does not overwrite the other application's data.
+   */
+  const VERIFICATION_DATABASE_PATH =
+    "restaurantBilling/publicInvoices";
+
+  const VERIFICATION_PAGE =
+    new URL("verify-invoice.html", window.location.href).href.split("?")[0];
 
   const MAX_QUANTITY = 9999;
   const MAX_PRICE = 99999999;
@@ -84,18 +96,10 @@
     maximumFractionDigits: 2
   });
 
-  /*
-   * Map of product IDs to invoice line items.
-   *
-   * Each entry keeps a snapshot of the product name and price.
-   * Later, saved invoices must retain these snapshots even if
-   * the original product is renamed or its price changes.
-   */
-
   const cart = new Map();
 
   // --------------------------------------------------
-  // GENERAL HELPERS
+  // HELPERS
   // --------------------------------------------------
 
   function escapeHTML(value) {
@@ -146,7 +150,21 @@
     return `DEMO-${date}-${suffix}`;
   }
 
+  function generateVerificationId() {
+    const bytes = new Uint8Array(24);
+    window.crypto.getRandomValues(bytes);
+
+    return Array.from(bytes)
+      .map(byte => byte.toString(16).padStart(2, "0"))
+      .join("");
+  }
+
   function showMessage(message, type = "info") {
+    if (!invoiceMessage) {
+      console.log(message);
+      return;
+    }
+
     invoiceMessage.textContent = message;
     invoiceMessage.dataset.type = type;
     invoiceMessage.hidden = !message;
@@ -160,13 +178,15 @@
   }
 
   function clearMessage() {
+    if (!invoiceMessage) return;
+
     invoiceMessage.textContent = "";
     invoiceMessage.hidden = true;
     delete invoiceMessage.dataset.type;
   }
 
   // --------------------------------------------------
-  // INITIAL INVOICE DETAILS
+  // INITIALISE INVOICE DETAILS
   // --------------------------------------------------
 
   function initialiseInvoiceDetails() {
@@ -176,12 +196,14 @@
     invoiceDateInput.value = localDateString(now);
     invoiceTimeInput.value = localTimeString(now);
 
-    invoiceStatus.textContent = "Draft";
-    invoiceStatus.className = "pill pending";
+    if (invoiceStatus) {
+      invoiceStatus.textContent = "Draft";
+      invoiceStatus.className = "pill pending";
+    }
   }
 
   // --------------------------------------------------
-  // READ PRODUCT INFORMATION
+  // READ SELECTED PRODUCT
   // --------------------------------------------------
 
   function readSelectedProduct() {
@@ -202,13 +224,11 @@
 
     const label = option.textContent.trim();
 
-    const priceMatch = label.match(
-      /₹\s*([\d,]+(?:\.\d{1,2})?)/
-    );
+    const priceMatch = label.match(/₹\s*([\d,]+(?:\.\d{1,2})?)/);
 
     if (!priceMatch) {
       showMessage(
-        "The selected product has no valid demo price.",
+        "The selected product has no valid price.",
         "error"
       );
 
@@ -239,7 +259,7 @@
   }
 
   // --------------------------------------------------
-  // CART HELPERS
+  // CART AND CALCULATIONS
   // --------------------------------------------------
 
   function getCartQuantity() {
@@ -312,6 +332,17 @@
     };
   }
 
+  function updateTotals() {
+    const totals = calculateTotals();
+
+    subtotalOutput.textContent = formatMoney(totals.subtotal);
+    discountOutput.textContent = `−${formatMoney(totals.discount)}`;
+    taxOutput.textContent = formatMoney(totals.tax);
+    grandTotalOutput.textContent = formatMoney(totals.grandTotal);
+
+    return totals;
+  }
+
   // --------------------------------------------------
   // RENDER CART
   // --------------------------------------------------
@@ -324,7 +355,6 @@
         <tr id="emptyItemsRow">
           <td colspan="5" style="text-align:center;padding:36px 16px;">
             <strong>No items added yet</strong>
-
             <div style="margin-top:6px;">
               Select a product above to start the invoice.
             </div>
@@ -337,16 +367,11 @@
 
         return `
           <tr data-product-id="${escapeHTML(item.id)}">
-
             <td>
-              <div class="cust-name">
-                ${escapeHTML(item.name)}
-              </div>
+              <div class="cust-name">${escapeHTML(item.name)}</div>
             </td>
 
-            <td class="num">
-              ${formatMoney(item.price)}
-            </td>
+            <td class="num">${formatMoney(item.price)}</td>
 
             <td>
               <input
@@ -393,7 +418,6 @@
                 </svg>
               </button>
             </td>
-
           </tr>
         `;
       }).join("");
@@ -405,21 +429,6 @@
       `${quantity} item${quantity === 1 ? "" : "s"} added`;
 
     updateTotals();
-  }
-
-  // --------------------------------------------------
-  // UPDATE BILLING TOTALS
-  // --------------------------------------------------
-
-  function updateTotals() {
-    const totals = calculateTotals();
-
-    subtotalOutput.textContent = formatMoney(totals.subtotal);
-    discountOutput.textContent = `−${formatMoney(totals.discount)}`;
-    taxOutput.textContent = formatMoney(totals.tax);
-    grandTotalOutput.textContent = formatMoney(totals.grandTotal);
-
-    return totals;
   }
 
   // --------------------------------------------------
@@ -487,27 +496,20 @@
 
   addItemButton.addEventListener("click", addSelectedProduct);
 
-  productSelect.addEventListener("change", () => {
-    clearMessage();
-  });
+  productSelect.addEventListener("change", clearMessage);
 
   // --------------------------------------------------
-  // EDIT QUANTITY OR REMOVE CART ITEM
+  // EDIT QUANTITY / REMOVE PRODUCT
   // --------------------------------------------------
 
   itemsBody.addEventListener("change", event => {
     const input = event.target.closest(".invoice-line-quantity");
 
-    if (!input) {
-      return;
-    }
+    if (!input) return;
 
-    const id = input.dataset.productId;
-    const item = cart.get(id);
+    const item = cart.get(input.dataset.productId);
 
-    if (!item) {
-      return;
-    }
+    if (!item) return;
 
     const quantity = Number(input.value);
 
@@ -536,18 +538,9 @@
       'button[data-action="remove-item"]'
     );
 
-    if (!button) {
-      return;
-    }
+    if (!button) return;
 
-    const id = button.dataset.productId;
-    const item = cart.get(id);
-
-    if (!item) {
-      return;
-    }
-
-    cart.delete(id);
+    cart.delete(button.dataset.productId);
 
     clearMessage();
     renderCart();
@@ -558,15 +551,9 @@
   // --------------------------------------------------
 
   clearItemsButton.addEventListener("click", () => {
-    if (cart.size === 0) {
-      return;
-    }
+    if (cart.size === 0) return;
 
-    const confirmed = window.confirm(
-      "Remove all items from this invoice?"
-    );
-
-    if (!confirmed) {
+    if (!window.confirm("Remove all items from this invoice?")) {
       return;
     }
 
@@ -577,16 +564,18 @@
   });
 
   // --------------------------------------------------
-  // DISCOUNT AND TAX INPUTS
+  // DISCOUNT AND TAX
   // --------------------------------------------------
 
-  function handleCalculationInput() {
+  discountInput.addEventListener("input", () => {
     clearMessage();
     updateTotals();
-  }
+  });
 
-  discountInput.addEventListener("input", handleCalculationInput);
-  taxRateInput.addEventListener("input", handleCalculationInput);
+  taxRateInput.addEventListener("input", () => {
+    clearMessage();
+    updateTotals();
+  });
 
   // --------------------------------------------------
   // PAYMENT METHOD
@@ -597,17 +586,11 @@
       'input[name="paymentMethod"]:checked'
     );
 
-    if (!selected) {
-      return "";
-    }
+    if (!selected) return "";
 
     const method = selected.value.toLowerCase();
 
-    if (method !== "cash" && method !== "upi") {
-      return "";
-    }
-
-    return method;
+    return ["cash", "upi"].includes(method) ? method : "";
   }
 
   form.querySelectorAll('input[name="paymentMethod"]').forEach(input => {
@@ -622,24 +605,14 @@
     clearMessage();
 
     if (cart.size === 0) {
-      showMessage(
-        "Add at least one product before continuing.",
-        "error"
-      );
-
+      showMessage("Add at least one product before continuing.", "error");
       productSelect.focus();
       return false;
     }
 
-    if (!invoiceDateInput.value) {
-      showMessage("Please select the invoice date.", "error");
+    if (!invoiceDateInput.value || !invoiceTimeInput.value) {
+      showMessage("Please enter the invoice date and time.", "error");
       invoiceDateInput.focus();
-      return false;
-    }
-
-    if (!invoiceTimeInput.value) {
-      showMessage("Please select the invoice time.", "error");
-      invoiceTimeInput.focus();
       return false;
     }
 
@@ -653,17 +626,13 @@
       return false;
     }
 
-    const customerName = customerNameInput.value.trim();
-
-    if (customerName.length > 100) {
+    if (customerNameInput.value.trim().length > 100) {
       showMessage("Customer name is too long.", "error");
       customerNameInput.focus();
       return false;
     }
 
-    const customerPhone = customerPhoneInput.value.trim();
-
-    if (customerPhone.length > 20) {
+    if (customerPhoneInput.value.trim().length > 20) {
       showMessage("Phone number must not exceed 20 characters.", "error");
       customerPhoneInput.focus();
       return false;
@@ -713,14 +682,8 @@
       return false;
     }
 
-    const paymentMethod = getPaymentMethod();
-
-    if (!paymentMethod) {
-      showMessage(
-        "Please select Cash or UPI as the payment method.",
-        "error"
-      );
-
+    if (!getPaymentMethod()) {
+      showMessage("Please select Cash or UPI as the payment method.", "error");
       return false;
     }
 
@@ -728,25 +691,16 @@
   }
 
   // --------------------------------------------------
-  // BUILD AN INVOICE DATA SNAPSHOT
+  // BUILD INVOICE SNAPSHOT
   // --------------------------------------------------
 
   function buildInvoiceData() {
     const totals = calculateTotals();
-
     const dateParts = invoiceDateInput.value.split("-");
 
     const formattedDate = dateParts.length === 3
       ? `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`
       : invoiceDateInput.value;
-
-    const items = Array.from(cart.values()).map(item => ({
-      id: item.id,
-      name: item.name,
-      price: item.price,
-      quantity: item.quantity,
-      amount: roundMoney(item.price * item.quantity)
-    }));
 
     return {
       invoiceNumber: invoiceNumberInput.value,
@@ -754,17 +708,27 @@
       formattedDate,
       invoiceTime: invoiceTimeInput.value,
 
-      customerName: customerNameInput.value.trim() || "Walk-in Customer",
+      customerName:
+        customerNameInput.value.trim() || "Walk-in Customer",
+
       customerPhone: customerPhoneInput.value.trim(),
 
-      orderType: orderTypeInput.value,
+      orderType: orderTypeInput.value || "dine-in",
       paymentMethod: getPaymentMethod(),
 
-      items,
+      items: Array.from(cart.values()).map(item => ({
+        id: item.id,
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+        amount: roundMoney(item.price * item.quantity)
+      })),
+
       notes: notesInput.value.trim(),
 
       subtotal: totals.subtotal,
       discount: totals.discount,
+      taxableAmount: totals.taxableAmount,
       taxRate: totals.taxRate,
       tax: totals.tax,
       grandTotal: totals.grandTotal
@@ -772,7 +736,235 @@
   }
 
   // --------------------------------------------------
-  // INVOICE PREVIEW STYLES
+  // FIREBASE CONFIGURATION
+  // --------------------------------------------------
+
+  let firebaseServicesPromise = null;
+
+  async function getFirebaseServices() {
+    if (firebaseServicesPromise) {
+      return firebaseServicesPromise;
+    }
+
+    firebaseServicesPromise = (async () => {
+      const response = await fetch(FIREBASE_CONFIG_URL, {
+        method: "GET",
+        headers: {
+          Accept: "application/json"
+        },
+        cache: "no-store"
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to load Firebase configuration.");
+      }
+
+      const config = await response.json();
+
+      const requiredFields = [
+        "apiKey",
+        "authDomain",
+        "databaseURL",
+        "projectId",
+        "appId"
+      ];
+
+      const missingFields = requiredFields.filter(
+        field => !config[field]
+      );
+
+      if (missingFields.length > 0) {
+        throw new Error(
+          `Firebase configuration is missing: ${missingFields.join(", ")}`
+        );
+      }
+
+      const [
+        appModule,
+        authModule
+      ] = await Promise.all([
+        import(
+          "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js"
+        ),
+        import(
+          "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js"
+        )
+      ]);
+
+      const existingApp = appModule.getApps().find(
+        app => app.name === "[DEFAULT]"
+      );
+
+      const app = existingApp ||
+        appModule.initializeApp(config);
+
+      const auth = authModule.getAuth(app);
+
+      return {
+        config,
+        auth,
+        onAuthStateChanged: authModule.onAuthStateChanged
+      };
+    })();
+
+    try {
+      return await firebaseServicesPromise;
+    } catch (error) {
+      firebaseServicesPromise = null;
+      throw error;
+    }
+  }
+
+  // --------------------------------------------------
+  // GET AUTHENTICATED FIREBASE USER
+  // --------------------------------------------------
+
+  async function getAuthenticatedUser(auth, onAuthStateChanged) {
+    if (auth.currentUser) {
+      return auth.currentUser;
+    }
+
+    return new Promise((resolve, reject) => {
+      let unsubscribe = null;
+
+      const timeout = window.setTimeout(() => {
+        if (unsubscribe) unsubscribe();
+
+        reject(
+          new Error(
+            "Authentication timed out. Please sign in and try again."
+          )
+        );
+      }, 10000);
+
+      unsubscribe = onAuthStateChanged(
+        auth,
+        user => {
+          window.clearTimeout(timeout);
+
+          if (unsubscribe) unsubscribe();
+
+          if (user) {
+            resolve(user);
+          } else {
+            reject(
+              new Error(
+                "Please sign in before generating a verified invoice."
+              )
+            );
+          }
+        },
+        error => {
+          window.clearTimeout(timeout);
+
+          if (unsubscribe) unsubscribe();
+
+          reject(error);
+        }
+      );
+    });
+  }
+
+  // --------------------------------------------------
+  // SAVE MINIMAL VERIFICATION RECORD
+  // --------------------------------------------------
+
+  async function saveVerificationRecord(data, verificationId) {
+    const services = await getFirebaseServices();
+
+    const user = await getAuthenticatedUser(
+      services.auth,
+      services.onAuthStateChanged
+    );
+
+    const idToken = await user.getIdToken();
+
+    /*
+     * Public verification record deliberately excludes:
+     * - Customer name and phone number
+     * - Staff information
+     * - Internal application data
+     *
+     * The verification page will display the saved item,
+     * quantity, price, totals and record status.
+     */
+
+    const publicRecord = {
+      verificationId,
+      invoiceNumber: data.invoiceNumber,
+      invoiceDate: data.invoiceDate,
+      invoiceTime: data.invoiceTime,
+      orderType: data.orderType,
+      paymentMethod: data.paymentMethod,
+
+      items: data.items.map(item => ({
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+        amount: item.amount
+      })),
+
+      totals: {
+        subtotal: data.subtotal,
+        discount: data.discount,
+        taxRate: data.taxRate,
+        tax: data.tax,
+        grandTotal: data.grandTotal
+      },
+
+      recordStatus: "valid",
+      createdAt: new Date().toISOString(),
+      ownerUid: user.uid
+    };
+
+    const databaseUrl = services.config.databaseURL.replace(/\/+$/, "");
+
+    const recordUrl =
+      `${databaseUrl}/${VERIFICATION_DATABASE_PATH}/${encodeURIComponent(verificationId)}.json` +
+      `?auth=${encodeURIComponent(idToken)}`;
+
+    const response = await fetch(recordUrl, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(publicRecord)
+    });
+
+    if (!response.ok) {
+      let errorMessage = "Firebase could not save the verification record.";
+
+      try {
+        const errorData = await response.json();
+
+        if (errorData.error === "Permission denied") {
+          errorMessage =
+            "Firebase denied this write. Check the Realtime Database rules for the invoice verification path.";
+        }
+      } catch {
+        // Keep the general error message.
+      }
+
+      throw new Error(errorMessage);
+    }
+
+    const savedRecord = await response.json();
+
+    if (!savedRecord || savedRecord.verificationId !== verificationId) {
+      throw new Error(
+        "The verification record could not be confirmed after saving."
+      );
+    }
+
+    return {
+      verificationId,
+      verificationUrl:
+        `${VERIFICATION_PAGE}?vid=${encodeURIComponent(verificationId)}`
+    };
+  }
+
+  // --------------------------------------------------
+  // LOCKED A4 INVOICE CSS
   // --------------------------------------------------
 
   function getInvoiceStyles() {
@@ -782,288 +974,261 @@
       }
 
       html {
-        background: #f3f4f6;
+        background: #eeeeee;
       }
 
       body {
         margin: 0;
-        padding: 24px;
-        color: #111111;
-        background: #f3f4f6;
+        padding: 20px;
+        background: #eeeeee;
+        color: #222222;
         font-family: Arial, Helvetica, sans-serif;
-        font-size: 12px;
-        line-height: 1.5;
+        font-size: 13px;
       }
 
       .toolbar {
-        width: 210mm;
-        max-width: 100%;
-        margin: 0 auto 16px;
+        width: 100%;
+        max-width: 210mm;
+        margin: 0 auto 15px;
         display: flex;
         justify-content: flex-end;
-        gap: 10px;
+        gap: 8px;
       }
 
       .toolbar button {
-        padding: 10px 18px;
-        border: 1px solid #111111;
-        border-radius: 4px;
-        background: #111111;
+        padding: 10px 20px;
+        background: #222222;
         color: #ffffff;
+        border: 1px solid #222222;
+        border-radius: 6px;
+        font-size: 14px;
         font-weight: 600;
         cursor: pointer;
       }
 
       .toolbar .secondary {
         background: #ffffff;
-        color: #111111;
+        color: #222222;
       }
 
-      .sheet {
-        width: 210mm;
+      .invoice {
+        width: 100%;
+        max-width: 210mm;
         min-height: 297mm;
-        max-width: 100%;
         margin: 0 auto;
-        padding: 17mm 15mm 15mm;
+        padding: 10mm;
         background: #ffffff;
+        border: 1px solid #d5d5d5;
+        border-radius: 8px;
         overflow-wrap: anywhere;
       }
 
+      .section {
+        width: 100%;
+        padding: 12px;
+        margin-bottom: 12px;
+        border: 1px solid #bdbdbd;
+        border-radius: 7px;
+        break-inside: avoid;
+      }
+
       .business-header {
-        padding-bottom: 18px;
-        border-bottom: 2px solid #111111;
+        padding: 22px 12px;
+        text-align: center;
       }
 
       .business-name {
-        margin: 0;
-        font-size: 25px;
-        line-height: 1.2;
+        margin: 0 0 9px;
+        font-size: 30px;
+        line-height: 1.25;
         font-weight: 800;
-        letter-spacing: -0.5px;
+        overflow-wrap: anywhere;
       }
 
-      .business-meta {
-        margin-top: 7px;
-        color: #555555;
-        font-size: 11px;
+      .business-details {
+        margin: 4px 0;
+        font-size: 12px;
+        line-height: 1.5;
       }
 
-      .invoice-heading {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        gap: 20px;
-        margin: 23px 0;
-      }
-
-      .invoice-heading h2 {
-        margin: 0;
-        font-size: 20px;
-      }
-
-      .invoice-number {
-        text-align: right;
-      }
-
-      .invoice-number strong {
-        display: block;
-        font-size: 13px;
+      .invoice-title {
+        margin: 14px 0 0;
+        font-size: 21px;
+        font-weight: 700;
+        letter-spacing: 1px;
       }
 
       .section-title {
-        margin: 22px 0 9px;
-        font-size: 12px;
-        font-weight: 800;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
+        margin: 0 0 10px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #dddddd;
+        font-size: 14px;
+        font-weight: 700;
       }
 
-      .details-grid {
+      .info-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 15px 28px;
-        padding: 15px;
-        border: 1px solid #dddddd;
+        gap: 10px 20px;
       }
 
-      .detail-label {
-        display: block;
-        margin-bottom: 3px;
-        color: #666666;
-        font-size: 10px;
-        text-transform: uppercase;
+      .info-item {
+        min-width: 0;
+        line-height: 1.6;
+        overflow-wrap: anywhere;
       }
 
-      .detail-value {
-        font-size: 12px;
-        font-weight: 600;
+      .label {
+        font-weight: 700;
+      }
+
+      .table-section {
+        padding: 0;
+        overflow: hidden;
       }
 
       table {
         width: 100%;
+        table-layout: fixed;
         border-collapse: collapse;
-        margin-top: 12px;
       }
 
-      thead {
-        display: table-header-group;
+      th,
+      td {
+        padding: 11px 8px;
+        border-bottom: 1px solid #dddddd;
+        vertical-align: top;
+        overflow-wrap: anywhere;
       }
 
       th {
-        padding: 10px 7px;
-        border-top: 1px solid #111111;
-        border-bottom: 1px solid #111111;
-        background: #f5f5f5;
-        font-size: 10px;
+        background: #f2f2f2;
+        font-size: 12px;
         font-weight: 700;
         text-align: left;
       }
 
-      td {
-        padding: 10px 7px;
-        border-bottom: 1px solid #e5e5e5;
-        vertical-align: top;
-      }
-
-      tr {
-        break-inside: avoid;
-      }
-
-      .right {
-        text-align: right;
+      tbody tr:last-child td {
+        border-bottom: none;
       }
 
       .center {
         text-align: center;
       }
 
-      .summary {
+      .right {
+        text-align: right;
+      }
+
+      .item-col {
+        width: 39%;
+      }
+
+      .qty-col {
+        width: 12%;
+      }
+
+      .price-col {
+        width: 23%;
+      }
+
+      .amount-col {
+        width: 26%;
+      }
+
+      .summary-inner {
         width: 100%;
-        margin-top: 20px;
-        margin-left: auto;
-        page-break-inside: avoid;
+        max-width: none;
       }
 
       .summary-row {
         display: flex;
-        justify-content: flex-end;
-        gap: 35px;
-        margin: 7px 0;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        padding: 11px 10px;
+        border-bottom: 1px solid #e2e2e2;
+        line-height: 1.4;
       }
 
-      .summary-label {
-        width: 140px;
-        text-align: right;
-        color: #555555;
+      .summary-row span:first-child {
+        flex: 1;
       }
 
-      .summary-value {
-        width: 110px;
+      .summary-row span:last-child {
+        min-width: 95px;
         text-align: right;
-        font-weight: 600;
+        font-variant-numeric: tabular-nums;
       }
 
       .grand-total {
-        display: flex;
-        justify-content: flex-end;
-        gap: 35px;
-        margin-top: 12px;
-        padding: 13px 0;
-        border-top: 2px solid #111111;
-        border-bottom: 2px solid #111111;
-        font-size: 16px;
-        font-weight: 800;
-      }
-
-      .grand-total span:first-child {
-        width: 140px;
-        text-align: right;
-      }
-
-      .grand-total span:last-child {
-        width: 110px;
-        text-align: right;
-      }
-
-      .payment-info {
-        display: flex;
-        justify-content: space-between;
-        gap: 12px;
-        margin-top: 17px;
-        padding: 11px 12px;
-        border: 1px solid #dddddd;
-      }
-
-      .payment-label {
-        color: #666666;
-      }
-
-      .payment-value {
-        font-weight: 700;
-        text-transform: uppercase;
-      }
-
-      .notes {
-        margin-top: 20px;
-        padding: 12px;
-        border: 1px solid #dddddd;
-      }
-
-      .notes-title {
-        margin-bottom: 5px;
-        font-size: 10px;
-        font-weight: 800;
-        text-transform: uppercase;
-      }
-
-      .qr-row {
-        width: 100%;
-        display: flex;
-        justify-content: flex-end;
-        align-items: flex-start;
-        padding-top: 15px;
         margin-top: 8px;
+        padding: 15px 10px;
+        border: 1px solid #999999;
+        border-radius: 6px;
+        font-size: 19px;
+        font-weight: 800;
       }
 
-      .qr-placeholder {
-        width: 31mm;
-        height: 31mm;
-        padding: 3px;
-        border: 1px solid #cccccc;
-        background: #ffffff;
+      .payment-grid {
         display: grid;
-        grid-template-columns: repeat(13, 1fr);
-        grid-template-rows: repeat(13, 1fr);
-        gap: 0;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px 20px;
+        line-height: 1.6;
       }
 
-      .qr-cell {
-        background: #ffffff;
+      .payment-item {
+        min-width: 0;
+        overflow-wrap: anywhere;
       }
 
-      .qr-cell.dark {
-        background: #111111;
+      .qr-section {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        width: 100%;
+        margin: 0 0 12px;
+        padding: 0;
+        break-inside: avoid;
+      }
+
+      .qr-code {
+        width: 90px;
+        height: 90px;
+        flex: 0 0 90px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .qr-code canvas,
+      .qr-code img {
+        display: block;
+        width: 90px !important;
+        height: 90px !important;
+        max-width: 100%;
+        image-rendering: pixelated;
+      }
+
+      .qr-pending {
+        width: 90px;
+        height: 90px;
+        border: 1px dashed #888888;
+        border-radius: 6px;
       }
 
       .footer {
-        margin-top: 32px;
-        padding-top: 12px;
-        border-top: 1px solid #cccccc;
+        width: 100%;
+        margin-top: 8px;
+        padding: 14px 12px;
         text-align: center;
-        color: #555555;
-        font-size: 10px;
+        font-size: 12px;
+        line-height: 1.7;
       }
 
       .footer strong {
-        display: block;
-        margin-bottom: 4px;
-        color: #111111;
-        font-size: 11px;
-      }
-
-      .empty-value {
-        color: #777777;
-        font-weight: 400;
+        font-size: 14px;
       }
 
       @page {
@@ -1075,9 +1240,8 @@
         html,
         body {
           width: 210mm;
-          min-height: 297mm;
-          padding: 0;
           margin: 0;
+          padding: 0;
           background: #ffffff;
         }
 
@@ -1085,147 +1249,81 @@
           display: none !important;
         }
 
-        .sheet {
+        .invoice {
           width: 210mm;
           max-width: none;
           min-height: 297mm;
           margin: 0;
-          padding: 15mm 15mm 13mm;
-          overflow: visible;
+          padding: 10mm;
+          border: none;
+          border-radius: 0;
           box-shadow: none;
+          overflow: visible;
         }
 
-        * {
+        .section {
           -webkit-print-color-adjust: exact;
           print-color-adjust: exact;
         }
+
+        .table-section {
+          overflow: visible;
+        }
+
+        thead {
+          display: table-header-group;
+        }
+
+        tr {
+          break-inside: avoid;
+        }
       }
 
-      @media screen and (max-width: 620px) {
+      @media screen and (max-width: 600px) {
         body {
-          padding: 10px;
+          padding: 8px;
         }
 
-        .sheet {
-          width: 100%;
-          padding: 22px 16px;
-        }
-
-        .details-grid {
-          grid-template-columns: 1fr;
+        .invoice {
+          min-height: auto;
+          padding: 12px;
         }
 
         .business-name {
-          font-size: 21px;
+          font-size: 24px;
         }
 
-        .invoice-heading {
-          flex-direction: column;
-          gap: 10px;
+        .info-grid,
+        .payment-grid {
+          grid-template-columns: 1fr;
         }
 
-        .invoice-number {
-          text-align: left;
+        th,
+        td {
+          padding: 8px 4px;
+          font-size: 11px;
+        }
+
+        .summary-row {
+          padding: 10px 5px;
+        }
+
+        .grand-total {
+          font-size: 17px;
         }
       }
     `;
   }
 
   // --------------------------------------------------
-  // QR PLACEHOLDER
+  // PRINTABLE INVOICE HTML
   // --------------------------------------------------
 
-  /*
-   * This creates a visual QR-style placeholder only.
-   * It is NOT a scannable or payment-capable QR code.
-   *
-   * A real UPI QR must be created later using the business's
-   * verified UPI payment details.
-   *
-   * No text is displayed inside the QR placeholder.
-   */
-
-  function makeQRPlaceholder(seed) {
-    const size = 13;
-
-    function isFinderCell(row, column) {
-      const boxes = [
-        [0, 0],
-        [0, 8],
-        [8, 0]
-      ];
-
-      return boxes.some(([startRow, startColumn]) => (
-        row >= startRow &&
-        row < startRow + 5 &&
-        column >= startColumn &&
-        column < startColumn + 5
-      ));
-    }
-
-    function finderValue(row, column) {
-      const localRow = row % 8;
-      const localColumn = column % 8;
-
-      const edge =
-        localRow === 0 ||
-        localRow === 4 ||
-        localColumn === 0 ||
-        localColumn === 4;
-
-      const centre =
-        localRow >= 2 &&
-        localRow <= 3 &&
-        localColumn >= 2 &&
-        localColumn <= 3;
-
-      return edge || centre;
-    }
-
-    let cells = "";
-    let hash = 0;
-
-    for (const character of String(seed)) {
-      hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
-    }
-
-    for (let row = 0; row < size; row++) {
-      for (let column = 0; column < size; column++) {
-        let dark;
-
-        if (isFinderCell(row, column)) {
-          dark = finderValue(row, column);
-        } else {
-          hash = (hash * 1664525 + 1013904223) >>> 0;
-          dark = ((hash >>> 28) & 1) === 1;
-        }
-
-        cells += `<span class="qr-cell${dark ? " dark" : ""}"></span>`;
-      }
-    }
-
-    return `
-      <div
-        class="qr-placeholder"
-        role="img"
-        aria-label="Non-scannable QR placeholder"
-      >
-        ${cells}
-      </div>
-    `;
-  }
-
-  // --------------------------------------------------
-  // BUILD INVOICE HTML
-  // --------------------------------------------------
-
-  function buildPrintableInvoice(data) {
-    const businessName = "[Business Name]";
-
+  function buildPrintableInvoice(data, verification = null) {
     const orderTypeLabels = {
       "dine-in": "Dine In",
-      "takeaway": "Takeaway",
-      "delivery": "Delivery"
+      takeaway: "Takeaway",
+      delivery: "Delivery"
     };
 
     const paymentLabels = {
@@ -1233,22 +1331,25 @@
       upi: "UPI"
     };
 
-    const itemRows = data.items.map((item, index) => `
+    const itemRows = data.items.map(item => `
       <tr>
-        <td>${index + 1}</td>
         <td>${escapeHTML(item.name)}</td>
-        <td class="right">${formatMoney(item.price)}</td>
         <td class="center">${item.quantity}</td>
+        <td class="right">${formatMoney(item.price)}</td>
         <td class="right">${formatMoney(item.amount)}</td>
       </tr>
     `).join("");
 
+    const qrMarkup = verification
+      ? `<div id="invoiceQr" class="qr-code" aria-label="Invoice verification QR code"></div>`
+      : `<div class="qr-pending" aria-hidden="true"></div>`;
+
     const notesMarkup = data.notes
       ? `
-        <div class="notes">
-          <div class="notes-title">Notes</div>
+        <section class="section">
+          <h3 class="section-title">Notes</h3>
           <div>${escapeHTML(data.notes).replace(/\n/g, "<br>")}</div>
-        </div>
+        </section>
       `
       : "";
 
@@ -1257,177 +1358,198 @@
       <html lang="en">
       <head>
         <meta charset="UTF-8">
-
-        <meta
-          name="viewport"
-          content="width=device-width, initial-scale=1.0"
-        >
-
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Invoice ${escapeHTML(data.invoiceNumber)}</title>
-
-        <style>
-          ${getInvoiceStyles()}
-        </style>
+        <style>${getInvoiceStyles()}</style>
       </head>
 
       <body>
-
         <div class="toolbar">
           <button type="button" class="secondary" id="closePreview">
             Close
           </button>
 
           <button type="button" id="printInvoice">
-            Print Invoice
+            Print / Save as PDF
           </button>
         </div>
 
-        <main class="sheet">
+        <main class="invoice">
 
-          <header class="business-header">
-            <h1 class="business-name">
-              ${escapeHTML(businessName)}
-            </h1>
+          <!-- BUSINESS HEADER -->
 
-            <div class="business-meta">
-              Restaurant Billing
-            </div>
+          <header class="section business-header">
+            <h1 class="business-name">[Business Name]</h1>
+            <p class="business-details">Business Address</p>
+            <p class="business-details">Contact Number</p>
+            <h2 class="invoice-title">INVOICE</h2>
           </header>
 
-          <section class="invoice-heading">
-            <div>
-              <h2>Invoice</h2>
+          <!-- INVOICE DETAILS -->
 
-              <div style="margin-top:5px;color:#666;">
-                Thank you for your order.
-              </div>
-            </div>
+          <section class="section">
+            <h3 class="section-title">Invoice Details</h3>
 
-            <div class="invoice-number">
-              <strong>${escapeHTML(data.invoiceNumber)}</strong>
-
-              <div style="margin-top:4px;color:#555;">
-                Date: ${escapeHTML(data.formattedDate)}
+            <div class="info-grid">
+              <div class="info-item">
+                <span class="label">Invoice No:</span>
+                ${escapeHTML(data.invoiceNumber)}
               </div>
 
-              <div style="color:#555;">
-                Time: ${escapeHTML(data.invoiceTime)}
+              <div class="info-item">
+                <span class="label">Date:</span>
+                ${escapeHTML(data.formattedDate)}
               </div>
-            </div>
-          </section>
 
-          <div class="section-title">
-            Billing Details
-          </div>
-
-          <section class="details-grid">
-
-            <div>
-              <span class="detail-label">Customer Name</span>
-
-              <div class="detail-value">
-                ${escapeHTML(data.customerName)}
+              <div class="info-item">
+                <span class="label">Time:</span>
+                ${escapeHTML(data.invoiceTime)}
               </div>
-            </div>
 
-            <div>
-              <span class="detail-label">Phone Number</span>
-
-              <div class="detail-value">
-                ${data.customerPhone
-                  ? escapeHTML(data.customerPhone)
-                  : '<span class="empty-value">Not provided</span>'}
-              </div>
-            </div>
-
-            <div>
-              <span class="detail-label">Order Type</span>
-
-              <div class="detail-value">
+              <div class="info-item">
+                <span class="label">Order Type:</span>
                 ${escapeHTML(orderTypeLabels[data.orderType] || "Dine In")}
               </div>
             </div>
+          </section>
 
-            <div>
-              <span class="detail-label">Payment Method</span>
+          <!-- CUSTOMER DETAILS -->
 
-              <div class="detail-value">
-                ${escapeHTML(paymentLabels[data.paymentMethod] || "Cash")}
+          <section class="section">
+            <h3 class="section-title">Customer Details</h3>
+
+            <div class="info-grid">
+              <div class="info-item">
+                <span class="label">Customer:</span>
+                ${escapeHTML(data.customerName)}
+              </div>
+
+              <div class="info-item">
+                <span class="label">Contact:</span>
+                ${data.customerPhone
+                  ? escapeHTML(data.customerPhone)
+                  : "Not provided"}
               </div>
             </div>
-
           </section>
 
-          <div class="section-title">
-            Order Items
-          </div>
+          <!-- ITEMS -->
 
-          <table>
-            <thead>
-              <tr>
-                <th style="width:34px;">#</th>
-                <th>Product</th>
-                <th class="right">Unit Price</th>
-                <th class="center">Qty</th>
-                <th class="right">Amount</th>
-              </tr>
-            </thead>
+          <section class="section table-section">
+            <table>
+              <colgroup>
+                <col class="item-col">
+                <col class="qty-col">
+                <col class="price-col">
+                <col class="amount-col">
+              </colgroup>
 
-            <tbody>
-              ${itemRows}
-            </tbody>
-          </table>
+              <thead>
+                <tr>
+                  <th>Item Description</th>
+                  <th class="center">Qty</th>
+                  <th class="right">Price</th>
+                  <th class="right">Amount</th>
+                </tr>
+              </thead>
 
-          <section class="summary">
-
-            <div class="summary-row">
-              <span class="summary-label">Subtotal</span>
-
-              <span class="summary-value">
-                ${formatMoney(data.subtotal)}
-              </span>
-            </div>
-
-            <div class="summary-row">
-              <span class="summary-label">Discount</span>
-
-              <span class="summary-value">
-                −${formatMoney(data.discount)}
-              </span>
-            </div>
-
-            <div class="summary-row">
-              <span class="summary-label">
-                Tax (${data.taxRate.toFixed(2)}%)
-              </span>
-
-              <span class="summary-value">
-                ${formatMoney(data.tax)}
-              </span>
-            </div>
-
-            <div class="grand-total">
-              <span>Grand Total</span>
-
-              <span>
-                ${formatMoney(data.grandTotal)}
-              </span>
-            </div>
-
+              <tbody>
+                ${itemRows}
+              </tbody>
+            </table>
           </section>
 
-          <div class="qr-row">
-            ${makeQRPlaceholder(data.invoiceNumber)}
-          </div>
+          <!-- FULL-WIDTH TOTALS -->
+
+          <section class="section">
+            <div class="summary-inner">
+
+              <div class="summary-row">
+                <span>Subtotal</span>
+                <span>${formatMoney(data.subtotal)}</span>
+              </div>
+
+              <div class="summary-row">
+                <span>Discount</span>
+                <span>−${formatMoney(data.discount)}</span>
+              </div>
+
+              <div class="summary-row">
+                <span>Tax (${data.taxRate.toFixed(2)}%)</span>
+                <span>${formatMoney(data.tax)}</span>
+              </div>
+
+              <div class="summary-row grand-total">
+                <span>Grand Total</span>
+                <span>${formatMoney(data.grandTotal)}</span>
+              </div>
+
+            </div>
+          </section>
+
+          <!-- FULL-WIDTH PAYMENT DETAILS -->
+
+          <section class="section">
+            <h3 class="section-title">Payment Details</h3>
+
+            <div class="payment-grid">
+              <div class="payment-item">
+                <span class="label">Payment Method:</span>
+                ${escapeHTML(paymentLabels[data.paymentMethod] || "Cash")}
+              </div>
+
+              <div class="payment-item">
+                <span class="label">Payment Status:</span>
+                Paid
+              </div>
+            </div>
+          </section>
+
+          <!-- QR BELOW TOTALS AND PAYMENT -->
+
+          <section class="qr-section">
+            ${qrMarkup}
+          </section>
 
           ${notesMarkup}
 
-          <div class="footer">
+          <!-- FOOTER -->
+
+          <footer class="section footer">
             <strong>Thank you for visiting!</strong>
             We appreciate your business.
-          </div>
+          </footer>
 
         </main>
+
+        ${
+          verification
+            ? `
+              <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
+              <script>
+                (() => {
+                  const verifyUrl = ${JSON.stringify(verification.verificationUrl)};
+                  const container = document.getElementById("invoiceQr");
+
+                  if (window.QRCode && container) {
+                    new QRCode(container, {
+                      text: verifyUrl,
+                      width: 90,
+                      height: 90,
+                      colorDark: "#111111",
+                      colorLight: "#ffffff",
+                      correctLevel: QRCode.CorrectLevel.M
+                    });
+                  } else if (container) {
+                    container.textContent = "";
+                    container.className = "qr-pending";
+                    container.setAttribute("aria-label", "QR code could not be loaded");
+                  }
+                })();
+              <\/script>
+            `
+            : ""
+        }
 
         <script>
           document.getElementById("closePreview")
@@ -1436,38 +1558,32 @@
           document.getElementById("printInvoice")
             .addEventListener("click", () => window.print());
         <\/script>
-
       </body>
       </html>
     `;
   }
 
   // --------------------------------------------------
-  // OPEN INVOICE PREVIEW
+  // DISPLAY THE INVOICE
   // --------------------------------------------------
 
-  function openInvoicePreview(data) {
-    const previewWindow = window.open("", "_blank");
-
-    if (!previewWindow) {
-      showMessage(
-        "The invoice preview was blocked. Allow pop-ups for this site and try again.",
-        "error"
-      );
-
-      return false;
-    }
-
+  function writeInvoiceToWindow(previewWindow, data, verification = null) {
     try {
       previewWindow.document.open();
-      previewWindow.document.write(buildPrintableInvoice(data));
+      previewWindow.document.write(
+        buildPrintableInvoice(data, verification)
+      );
       previewWindow.document.close();
 
       return true;
     } catch (error) {
-      console.error("Unable to open invoice preview:", error);
+      console.error("Unable to render invoice:", error);
 
-      previewWindow.close();
+      try {
+        previewWindow.close();
+      } catch {
+        // Ignore window closing errors.
+      }
 
       showMessage(
         "Unable to create the invoice preview. Please try again.",
@@ -1479,52 +1595,131 @@
   }
 
   // --------------------------------------------------
-  // PREVIEW BUTTON
+  // PREVIEW WITHOUT SAVING
   // --------------------------------------------------
 
   previewButton.addEventListener("click", () => {
-    if (!validateInvoice()) {
-      return;
-    }
+    if (!validateInvoice()) return;
 
     const data = buildInvoiceData();
+    const previewWindow = window.open("", "_blank");
 
-    if (openInvoicePreview(data)) {
+    if (!previewWindow) {
       showMessage(
-        "Invoice preview opened. This demo invoice has not been saved.",
-        "success"
+        "The invoice preview was blocked. Allow pop-ups for this site and try again.",
+        "error"
       );
-    }
-  });
 
-  // --------------------------------------------------
-  // GENERATE INVOICE
-  // --------------------------------------------------
-
-  form.addEventListener("submit", event => {
-    event.preventDefault();
-
-    if (!validateInvoice()) {
       return;
     }
 
-    const data = buildInvoiceData();
-
-    if (!openInvoicePreview(data)) {
-      return;
-    }
-
-    invoiceStatus.textContent = "Preview Generated";
-    invoiceStatus.className = "pill paid";
+    writeInvoiceToWindow(previewWindow, data, null);
 
     showMessage(
-      "Invoice preview generated successfully. It is not permanently saved in this demo version.",
-      "success"
+      "Preview opened. Generate the invoice to create its verification QR.",
+      "info"
     );
   });
 
   // --------------------------------------------------
-  // RESET THE FORM
+  // GENERATE VERIFIED INVOICE
+  // --------------------------------------------------
+
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+
+    if (!validateInvoice()) return;
+
+    const data = buildInvoiceData();
+
+    /*
+     * Open the window during the user's direct click so that
+     * the browser is less likely to block the popup while
+     * Firebase is saving the verification record.
+     */
+    const previewWindow = window.open("", "_blank");
+
+    if (!previewWindow) {
+      showMessage(
+        "The invoice preview was blocked. Allow pop-ups for this site and try again.",
+        "error"
+      );
+
+      return;
+    }
+
+    previewWindow.document.write(
+      "<!DOCTYPE html><html><head><title>Generating invoice</title></head><body style='font-family:Arial;padding:30px'>Generating invoice verification...</body></html>"
+    );
+
+    previewWindow.document.close();
+
+    const submitButton = form.querySelector(
+      'button[type="submit"]'
+    );
+
+    if (submitButton) {
+      submitButton.disabled = true;
+    }
+
+    if (invoiceStatus) {
+      invoiceStatus.textContent = "Generating";
+      invoiceStatus.className = "pill pending";
+    }
+
+    try {
+      const verificationId = generateVerificationId();
+
+      const verification = await saveVerificationRecord(
+        data,
+        verificationId
+      );
+
+      const opened = writeInvoiceToWindow(
+        previewWindow,
+        data,
+        verification
+      );
+
+      if (!opened) return;
+
+      if (invoiceStatus) {
+        invoiceStatus.textContent = "Generated";
+        invoiceStatus.className = "pill paid";
+      }
+
+      showMessage(
+        "Invoice generated and its verification record was saved successfully.",
+        "success"
+      );
+    } catch (error) {
+      console.error("Invoice generation failed:", error);
+
+      try {
+        previewWindow.close();
+      } catch {
+        // Ignore closing errors.
+      }
+
+      if (invoiceStatus) {
+        invoiceStatus.textContent = "Draft";
+        invoiceStatus.className = "pill pending";
+      }
+
+      showMessage(
+        error.message ||
+          "Unable to save the invoice verification record. Please try again.",
+        "error"
+      );
+    } finally {
+      if (submitButton) {
+        submitButton.disabled = false;
+      }
+    }
+  });
+
+  // --------------------------------------------------
+  // RESET INVOICE
   // --------------------------------------------------
 
   resetButton.addEventListener("click", () => {
@@ -1552,12 +1747,12 @@
     discountInput.value = "0";
     taxRateInput.value = "0";
 
-    initialiseInvoiceDetails();
+    productSelect.value = "";
 
+    initialiseInvoiceDetails();
     clearMessage();
     renderCart();
 
-    productSelect.value = "";
     customerNameInput.focus();
   });
 
@@ -1566,12 +1761,11 @@
   // --------------------------------------------------
 
   initialiseInvoiceDetails();
+  renderCart();
 
-  if (itemsTable && emptyItemsRow) {
-    renderCart();
+  if (invoiceMessage) {
+    invoiceMessage.hidden = true;
   }
-
-  invoiceMessage.hidden = true;
 
   console.info("Invoice module initialised successfully.");
 })();
