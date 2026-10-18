@@ -1,394 +1,171 @@
-"use strict";
+/* =========================================================
+   RESTAURANT BILLING SOFTWARE
+   Live Dashboard
+   Database root: restaurantBilling/
+   No demo data, no hardcoded business secrets
+   ========================================================= */
 
-/*
- * Restaurant Billing Software
- * File: js/dashboard.js
- *
- * Firebase-connected owner dashboard.
- * Data source: restaurantBilling
- * No demo records or hardcoded sales figures.
- */
+(function () {
+  "use strict";
 
-(() => {
   const OWNER_UID = "20wif9y7LQhBZgFPDsAlrQpFjnI2";
-  const ROOT_PATH = "restaurantBilling";
+
+  const PATHS = Object.freeze({
+    invoices: "restaurantBilling/invoices",
+    products: "restaurantBilling/products",
+    categories: "restaurantBilling/categories",
+    settings: "restaurantBilling/settings"
+  });
+
+  const el = function (id) {
+    return document.getElementById(id);
+  };
+
+  const ui = window.restaurantUI;
+
+  let database = null;
+  let databaseAPI = null;
+  let subscriptions = [];
+  let stopped = false;
 
   const state = {
     invoices: [],
     products: [],
     categories: [],
-    settings: {},
-    loaded: new Set(),
-    errors: new Map(),
-    unsubscribers: [],
-    initialized: false
+    settings: null,
+    loaded: {
+      invoices: false,
+      products: false,
+      categories: false,
+      settings: false
+    },
+    errors: []
   };
 
-  const $ = id => document.getElementById(id);
+  /* ---------------------------------------------------------
+     1. General helpers
+     --------------------------------------------------------- */
 
   function setText(id, value) {
-    const element = $(id);
-    if (element) element.textContent = String(value ?? "");
-  }
-
-  function setStatus(message, type = "info") {
-    setText("dashboardStatus", message);
-
-    const element = $("dashboardStatus");
-
-    if (element) {
-      element.dataset.state = type;
-      element.setAttribute("role", type === "error" ? "alert" : "status");
+    if (ui && typeof ui.setText === "function") {
+      ui.setText(id, value);
+      return;
     }
 
-    setText(
-      "dashboardFooterStatus",
-      type === "error"
-        ? "Database status: error"
-        : type === "success"
-          ? "Database status: live"
-          : "Database status: connecting…"
-    );
+    const node = el(id);
+
+    if (node) {
+      node.textContent = String(value ?? "");
+    }
   }
 
-  function money(value) {
+  function formatMoney(value) {
     const amount = Number(value);
 
-    if (!Number.isFinite(amount)) return "—";
+    if (!Number.isFinite(amount)) {
+      return "—";
+    }
+
+    if (ui && typeof ui.formatCurrency === "function") {
+      return ui.formatCurrency(amount);
+    }
 
     return new Intl.NumberFormat("en-IN", {
       style: "currency",
       currency: "INR",
+      minimumFractionDigits: 2,
       maximumFractionDigits: 2
     }).format(amount);
   }
 
-  function number(value) {
-    const amount = Number(value);
-
-    return new Intl.NumberFormat("en-IN").format(
-      Number.isFinite(amount) ? amount : 0
-    );
-  }
-
-  function percent(value) {
-    if (!Number.isFinite(value)) return "—";
-
-    return `${value > 0 ? "+" : ""}${value.toFixed(1)}%`;
-  }
-
-  function escapeHTML(value) {
-    return String(value ?? "").replace(/[&<>"']/g, character => ({
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#39;"
-    })[character]);
-  }
-
-  function objectToArray(value) {
-    if (Array.isArray(value)) {
-      return value.filter(item => item && typeof item === "object");
+  function formatDate(value) {
+    if (value === null || value === undefined || value === "") {
+      return "—";
     }
 
-    if (!value || typeof value !== "object") return [];
+    const date = value instanceof Date
+      ? value
+      : new Date(value);
 
-    return Object.entries(value)
-      .filter(([, item]) => item && typeof item === "object")
-      .map(([key, item]) => ({
-        ...item,
-        id: item.id || key
-      }));
-  }
-
-  // --------------------------------------------------
-  // INVOICE DATA NORMALISATION
-  // --------------------------------------------------
-
-  function readAmount(invoice) {
-    const candidates = [
-      invoice.grandTotal,
-      invoice.totalAmount,
-      invoice.total,
-      invoice.amount,
-      invoice.finalAmount
-    ];
-
-    for (const candidate of candidates) {
-      if (candidate === null || candidate === undefined || candidate === "") {
-        continue;
-      }
-
-      const amount = Number(candidate);
-
-      if (Number.isFinite(amount)) return amount;
+    if (Number.isNaN(date.getTime())) {
+      return String(value);
     }
 
-    return 0;
+    return new Intl.DateTimeFormat("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric"
+    }).format(date);
   }
 
-  function readInvoiceDate(invoice) {
-    const dateValue =
-      invoice.createdAtMs ||
-      invoice.timestamp ||
-      invoice.createdAt ||
-      invoice.invoiceDate ||
-      invoice.date;
+  function localDateKey(date) {
+    return [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, "0"),
+      String(date.getDate()).padStart(2, "0")
+    ].join("-");
+  }
 
-    if (typeof dateValue === "number") {
-      const parsed = new Date(dateValue);
-      return Number.isNaN(parsed.getTime()) ? null : parsed;
+  function toDate(value) {
+    if (value instanceof Date) {
+      return Number.isNaN(value.getTime()) ? null : value;
     }
 
-    if (typeof dateValue === "string" && dateValue.trim()) {
-      const value = dateValue.trim();
-      const dateOnly = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (typeof value === "number" && Number.isFinite(value)) {
+      const date = new Date(value);
 
-      if (dateOnly) {
-        const parsed = new Date(
-          Number(dateOnly[1]),
-          Number(dateOnly[2]) - 1,
-          Number(dateOnly[3])
-        );
+      return Number.isNaN(date.getTime()) ? null : date;
+    }
 
-        return Number.isNaN(parsed.getTime()) ? null : parsed;
-      }
+    if (typeof value === "string" && value.trim()) {
+      const date = new Date(value);
 
-      const parsed = new Date(value);
-
-      return Number.isNaN(parsed.getTime()) ? null : parsed;
+      return Number.isNaN(date.getTime()) ? null : date;
     }
 
     return null;
   }
 
-  function readCustomer(invoice) {
-    const customer =
-      invoice.customerName ||
-      invoice.customer?.name ||
-      invoice.customer;
-
-    return typeof customer === "string" && customer.trim()
-      ? customer.trim()
-      : "Customer not specified";
-  }
-
-  function readInvoiceNumber(invoice) {
-    return (
-      invoice.invoiceNumber ||
-      invoice.number ||
-      invoice.id ||
-      "Invoice number unavailable"
-    );
-  }
-
-  function readInvoiceStatus(invoice) {
-    const raw = String(
-      invoice.recordStatus ||
-      invoice.status ||
-      invoice.invoiceStatus ||
-      ""
-    ).toLowerCase();
-
-    if (["cancelled", "canceled", "void", "deleted"].includes(raw)) {
-      return "Cancelled";
+  function entries(data) {
+    if (!data || typeof data !== "object") {
+      return [];
     }
 
-    if (["draft", "pending", "unpaid", "due"].includes(raw)) {
-      return "Pending";
+    if (Array.isArray(data)) {
+      return data
+        .map(function (value, index) {
+          if (!value || typeof value !== "object") {
+            return null;
+          }
+
+          return {
+            ...value,
+            _recordKey: value._recordKey || String(index)
+          };
+        })
+        .filter(Boolean);
     }
 
-    if (
-      [
-        "valid",
-        "generated",
-        "recorded",
-        "complete",
-        "completed",
-        "paid"
-      ].includes(raw)
-    ) {
-      return "Recorded";
-    }
-
-    return invoice.invoiceNumber ? "Recorded" : "Unclassified";
+    return Object.entries(data)
+      .filter(function (entry) {
+        return entry[1] && typeof entry[1] === "object";
+      })
+      .map(function (entry) {
+        return {
+          ...entry[1],
+          _recordKey: entry[0]
+        };
+      });
   }
 
-  function isCancelled(invoice) {
-    return readInvoiceStatus(invoice) === "Cancelled";
-  }
-
-  function validInvoices() {
-    return state.invoices.filter(invoice =>
-      invoice &&
-      typeof invoice === "object" &&
-      !isCancelled(invoice)
-    );
-  }
-
-  function paymentStatus(invoice) {
-    return String(
-      invoice.paymentStatus ||
-      invoice.payment?.status ||
-      invoice.paymentState ||
-      ""
-    ).toLowerCase();
-  }
-
-  function isExplicitlyPaid(invoice) {
-    return ["paid", "complete", "completed", "settled"].includes(
-      paymentStatus(invoice)
-    );
-  }
-
-  function isExplicitlyPending(invoice) {
-    return [
-      "pending",
-      "unpaid",
-      "due",
-      "partial",
-      "partially-paid"
-    ].includes(paymentStatus(invoice));
-  }
-
-  function readPaymentMethod(invoice) {
-    const method =
-      invoice.paymentMethod ||
-      invoice.payment?.method ||
-      invoice.paymentType ||
-      "Unspecified";
-
-    return String(method).trim() || "Unspecified";
-  }
-
-  function readItems(invoice) {
-    const items = invoice.items || invoice.lineItems || invoice.products;
-
-    return Array.isArray(items) ? items : objectToArray(items);
-  }
-
-  function itemName(item) {
-    return String(
-      item.name ||
-      item.productName ||
-      item.itemName ||
-      item.title ||
-      "Unnamed item"
-    );
-  }
-
-  function itemQuantity(item) {
-    const quantity = Number(item.quantity ?? item.qty ?? 1);
-
-    return Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
-  }
-
-  function itemTotal(item) {
-    const candidates = [
-      item.total,
-      item.lineTotal,
-      item.subtotal,
-      item.amount
-    ];
-
-    for (const candidate of candidates) {
-      if (candidate === null || candidate === undefined || candidate === "") {
-        continue;
-      }
-
-      const amount = Number(candidate);
-
-      if (Number.isFinite(amount)) return amount;
-    }
-
-    const price = Number(item.price ?? item.unitPrice ?? item.rate ?? 0);
-
-    return (Number.isFinite(price) ? price : 0) * itemQuantity(item);
-  }
-
-  // --------------------------------------------------
-  // DATE HELPERS
-  // --------------------------------------------------
-
-  function startOfDay(date) {
-    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  }
-
-  function addDays(date, count) {
-    const result = new Date(date);
-    result.setDate(result.getDate() + count);
-    return result;
-  }
-
-  function startOfWeek(date) {
-    const result = startOfDay(date);
-    const weekday = (result.getDay() + 6) % 7;
-
-    result.setDate(result.getDate() - weekday);
-
-    return result;
-  }
-
-  function sameDay(a, b) {
-    return Boolean(
-      a &&
-      b &&
-      a.getFullYear() === b.getFullYear() &&
-      a.getMonth() === b.getMonth() &&
-      a.getDate() === b.getDate()
-    );
-  }
-
-  function isBetween(date, start, end) {
-    return Boolean(date && date >= start && date < end);
-  }
-
-  function sumInvoices(invoices) {
-    return invoices.reduce(
-      (total, invoice) => total + readAmount(invoice),
-      0
-    );
-  }
-
-  // --------------------------------------------------
-  // BUSINESS SETTINGS
-  // --------------------------------------------------
-
-  function getForms() {
-    const forms = state.settings?.forms;
-
-    return forms && typeof forms === "object" ? forms : {};
-  }
-
-  function getSettingValue(formNames, fieldNames) {
-    const forms = getForms();
-
-    for (const formName of formNames) {
-      const section = forms[formName];
-
-      if (!section || typeof section !== "object") continue;
-
-      for (const fieldName of fieldNames) {
-        const value = section[fieldName];
-
-        if (
-          value !== undefined &&
-          value !== null &&
-          String(value).trim()
-        ) {
-          return value;
-        }
-      }
-    }
-
-    for (const fieldName of fieldNames) {
-      const value = state.settings?.[fieldName];
+  function firstValue(object, keys) {
+    for (const key of keys) {
+      const value = object && object[key];
 
       if (
-        value !== undefined &&
         value !== null &&
-        String(value).trim()
+        value !== undefined &&
+        value !== ""
       ) {
         return value;
       }
@@ -397,1091 +174,811 @@
     return null;
   }
 
-  function applyBusinessProfile() {
-    const name = getSettingValue(
-      ["brandSettingsForm", "businessProfileForm"],
-      ["brandDisplayName", "businessName", "displayName"]
+  function numericValue(object, keys) {
+    const value = firstValue(object, keys);
+
+    if (value === null) {
+      return null;
+    }
+
+    const number = Number(value);
+
+    return Number.isFinite(number) ? number : null;
+  }
+
+  function normalizeText(value) {
+    return String(value ?? "").trim();
+  }
+
+  function setStatus(message, type) {
+    const target = el("dashboardStatus");
+
+    if (!target) return;
+
+    target.textContent = message;
+    target.classList.remove(
+      "is-connected",
+      "is-error",
+      "is-warning"
     );
 
-    const tagline = getSettingValue(
-      ["brandSettingsForm", "businessProfileForm"],
-      ["tagline", "businessTagline"]
-    );
+    if (type) {
+      target.classList.add("is-" + type);
+    }
+  }
 
-    const displayName = name ? String(name).trim() : "Your Business";
-    const displayTagline = tagline
-      ? String(tagline).trim()
-      : "Business billing";
+  /* ---------------------------------------------------------
+     2. Invoice normalization
+     --------------------------------------------------------- */
 
-    setText("dashboardBusinessName", displayName);
-    setText("dashboardBusinessTagline", displayTagline);
-    setText("businessFooterName", displayName);
+  function invoiceAmount(invoice) {
+    return numericValue(invoice, [
+      "grandTotal",
+      "grand_total",
+      "totalAmount",
+      "invoiceTotal",
+      "total",
+      "amount"
+    ]) ?? 0;
+  }
 
-    document.title = `Dashboard | ${displayName}`;
+  function invoiceStatus(invoice) {
+    return normalizeText(
+      firstValue(invoice, [
+        "recordStatus",
+        "invoiceStatus",
+        "status"
+      ]) || "valid"
+    ).toLowerCase();
+  }
 
-    const authUser = window.restaurantFirebase?.auth?.currentUser;
+  function isCancelled(invoice) {
+    const status = invoiceStatus(invoice);
 
-    const ownerName =
-      state.settings?.ownerName ||
-      state.settings?.ownerDisplayName ||
-      state.settings?.userName ||
-      authUser?.displayName ||
-      "Owner";
+    return [
+      "cancelled",
+      "canceled",
+      "void",
+      "deleted",
+      "invalid"
+    ].includes(status);
+  }
 
-    setText("ownerDisplayName", ownerName);
-    setText("ownerDisplayRole", "Owner");
+  function invoiceDate(invoice) {
+    const rawDate = firstValue(invoice, [
+      "createdAtMs",
+      "createdAt",
+      "timestamp",
+      "invoiceDate",
+      "date"
+    ]);
 
-    setText(
-      "ownerAvatar",
-      String(ownerName).trim().charAt(0).toUpperCase() || "O"
+    let date = toDate(rawDate);
+
+    if (!date && invoice.invoiceDate && invoice.invoiceTime) {
+      date = toDate(
+        String(invoice.invoiceDate) + " " +
+        String(invoice.invoiceTime)
+      );
+    }
+
+    return date;
+  }
+
+  function invoiceNumber(invoice) {
+    return normalizeText(
+      firstValue(invoice, [
+        "invoiceNumber",
+        "number",
+        "invoiceNo",
+        "invoiceId"
+      ]) || invoice._recordKey
     );
   }
 
-  function renderDailyTarget(todayRevenue) {
-    const targetValue = Number(getSettingValue(
-      [
-        "reportSettingsForm",
-        "billingPreferencesForm",
-        "businessProfileForm"
-      ],
-      ["dailySalesTarget", "dailyTarget", "salesTarget", "targetAmount"]
-    ));
+  function customerName(invoice) {
+    return normalizeText(
+      firstValue(invoice, [
+        "customerName",
+        "customer",
+        "customer_name"
+      ]) || ""
+    ) || "—";
+  }
 
-    if (!Number.isFinite(targetValue) || targetValue <= 0) {
+  function paymentMethod(invoice) {
+    return normalizeText(
+      firstValue(invoice, [
+        "paymentMethod",
+        "paymentMode",
+        "payment_method"
+      ]) || ""
+    ) || "—";
+  }
+
+  function sortInvoicesLatestFirst(invoices) {
+    return invoices.slice().sort(function (a, b) {
+      const aDate = invoiceDate(a);
+      const bDate = invoiceDate(b);
+
+      return (bDate ? bDate.getTime() : 0) -
+        (aDate ? aDate.getTime() : 0);
+    });
+  }
+
+  function getValidInvoices() {
+    return state.invoices.filter(function (invoice) {
+      return !isCancelled(invoice);
+    });
+  }
+
+  /* ---------------------------------------------------------
+     3. Settings and business profile
+     --------------------------------------------------------- */
+
+  function getSettingsObject() {
+    return state.settings && typeof state.settings === "object"
+      ? state.settings
+      : {};
+  }
+
+  function getBusinessProfile() {
+    const settings = getSettingsObject();
+
+    return (
+      settings.businessProfile ||
+      settings.business ||
+      settings.profile ||
+      settings.forms?.businessProfileForm ||
+      settings.forms?.businessProfile ||
+      settings.businessProfileForm ||
+      settings
+    );
+  }
+
+  function getBusinessName() {
+    const profile = getBusinessProfile();
+
+    return normalizeText(
+      firstValue(profile, [
+        "businessName",
+        "name",
+        "business_name"
+      ]) || ""
+    );
+  }
+
+  function getBusinessTagline() {
+    const profile = getBusinessProfile();
+
+    return normalizeText(
+      firstValue(profile, [
+        "businessTagline",
+        "tagline",
+        "description"
+      ]) || ""
+    );
+  }
+
+  function updateBusinessBranding() {
+    const name = getBusinessName();
+    const tagline = getBusinessTagline();
+
+    /*
+     * Empty settings stay empty instead of showing fake
+     * business details. HTML loading labels are not records.
+     */
+    if (name) {
+      document.querySelectorAll("[data-business-name]").forEach(
+        function (node) {
+          node.textContent = name;
+        }
+      );
+
+      setText("sidebarBusinessName", name);
+      setText("businessFooterName", name);
+
+      const mark = el("brandMark");
+
+      if (mark) {
+        mark.textContent = name
+          .split(/\s+/)
+          .filter(Boolean)
+          .slice(0, 2)
+          .map(function (part) {
+            return part.charAt(0).toUpperCase();
+          })
+          .join("");
+      }
+    } else {
+      setText("sidebarBusinessName", "");
+      setText("businessFooterName", "");
+    }
+
+    if (tagline) {
+      document.querySelectorAll("[data-business-tagline]").forEach(
+        function (node) {
+          node.textContent = tagline;
+        }
+      );
+
+      setText("sidebarBusinessTagline", tagline);
+    } else {
+      setText("sidebarBusinessTagline", "");
+    }
+
+    const authUser = window.restaurantAccess?.user;
+
+    const profileName = normalizeText(
+      authUser?.displayName ||
+      authUser?.email ||
+      ""
+    );
+
+    if (profileName) {
+      setText("ownerDisplayName", profileName);
+
+      const avatar = el("ownerAvatar");
+
+      if (avatar) {
+        avatar.textContent = profileName.charAt(0).toUpperCase();
+      }
+    } else {
+      setText("ownerDisplayName", "");
+      setText("ownerAvatar", "");
+    }
+
+    setText("ownerDisplayRole", "Owner");
+  }
+
+  function getDailyTarget() {
+    const settings = getSettingsObject();
+
+    const candidates = [
+      settings.dailySalesTarget,
+      settings.dailyTarget,
+      settings.invoiceSettings?.dailySalesTarget,
+      settings.forms?.invoiceSettingsForm?.dailySalesTarget,
+      settings.forms?.businessProfileForm?.dailySalesTarget
+    ];
+
+    for (const value of candidates) {
+      const amount = Number(value);
+
+      if (value !== null && value !== undefined &&
+          value !== "" && Number.isFinite(amount) && amount >= 0) {
+        return amount;
+      }
+    }
+
+    return null;
+  }
+
+  /* ---------------------------------------------------------
+     4. Today's revenue and invoice count
+     --------------------------------------------------------- */
+
+  function isToday(invoice) {
+    const date = invoiceDate(invoice);
+
+    if (!date) return false;
+
+    return localDateKey(date) === localDateKey(new Date());
+  }
+
+  function renderSalesSummary() {
+    const validInvoices = getValidInvoices();
+
+    const todayInvoices = validInvoices.filter(isToday);
+
+    const todaySales = todayInvoices.reduce(function (total, invoice) {
+      return total + invoiceAmount(invoice);
+    }, 0);
+
+    setText("dashboardTodaySales", formatMoney(todaySales));
+    setText("dashboardTodayInvoices", String(todayInvoices.length));
+
+    setText(
+      "dashboardSalesDescription",
+      state.loaded.invoices
+        ? "Based on saved, non-cancelled invoices today"
+        : "Loading invoice records"
+    );
+
+    setText(
+      "dashboardInvoicesDescription",
+      state.loaded.invoices
+        ? "Saved invoices for today"
+        : "Loading invoice records"
+    );
+  }
+
+  /* ---------------------------------------------------------
+     5. Products and categories summary
+     --------------------------------------------------------- */
+
+  function isActiveRecord(record) {
+    if (record.isActive === false || record.active === false) {
+      return false;
+    }
+
+    if (record.deleted === true || record.deletedAt) {
+      return false;
+    }
+
+    return true;
+  }
+
+  function renderProductSummary() {
+    const products = state.products.filter(isActiveRecord);
+    const categories = state.categories.filter(isActiveRecord);
+
+    setText(
+      "dashboardProductCount",
+      state.loaded.products ? String(products.length) : "—"
+    );
+
+    setText(
+      "dashboardCategoryCount",
+      state.loaded.categories ? String(categories.length) : "—"
+    );
+  }
+
+  /* ---------------------------------------------------------
+     6. Daily target progress
+     --------------------------------------------------------- */
+
+  function renderDailyTarget() {
+    const target = getDailyTarget();
+
+    const todaySales = getValidInvoices()
+      .filter(isToday)
+      .reduce(function (total, invoice) {
+        return total + invoiceAmount(invoice);
+      }, 0);
+
+    const progressElement = el("dailyTargetProgress");
+    const trackElement = el("dailyTargetTrack");
+
+    if (target === null || target <= 0) {
       setText("dailyTargetValue", "Not set");
-      setText("dailyTargetPercent", "Target not configured");
-      setText("dailyTargetRemaining", "—");
+      setText("dailyTargetStatus", "Not configured");
+      setText(
+        "dailyTargetRemaining",
+        "Set a daily sales target in Settings to track progress."
+      );
+
+      if (progressElement) {
+        progressElement.style.width = "0%";
+      }
+
+      if (trackElement) {
+        trackElement.setAttribute("aria-valuenow", "0");
+      }
+
       return;
     }
 
-    const achieved = Math.min(100, (todayRevenue / targetValue) * 100);
-    const remaining = Math.max(0, targetValue - todayRevenue);
+    const percentage = Math.min(
+      100,
+      Math.max(0, (todaySales / target) * 100)
+    );
 
-    setText("dailyTargetValue", money(targetValue));
-    setText("dailyTargetPercent", `${achieved.toFixed(1)}% achieved`);
+    const remaining = Math.max(0, target - todaySales);
+
+    setText("dailyTargetValue", formatMoney(target));
+    setText("dailyTargetStatus", percentage.toFixed(1) + "%");
+
     setText(
       "dailyTargetRemaining",
-      remaining > 0 ? `${money(remaining)} left` : "Target reached"
+      remaining > 0
+        ? formatMoney(remaining) + " remaining to reach today's target"
+        : "Today's target has been reached."
     );
 
-    // Set the progress using a CSS class rather than a style attribute.
-    const fill = $("dailyTargetFill");
-
-    if (fill) {
-      const level = Math.max(0, Math.min(10, Math.round(achieved / 10)));
-
-      for (let i = 0; i <= 10; i += 1) {
-        fill.classList.remove(`target-level-${i}`);
-      }
-
-      fill.classList.add(`target-level-${level}`);
-    }
-  }
-
-  // --------------------------------------------------
-  // SUMMARY CARDS
-  // --------------------------------------------------
-
-  function renderSummary(invoices, now) {
-    const today = startOfDay(now);
-    const yesterday = addDays(today, -1);
-
-    const todaysInvoices = invoices.filter(invoice =>
-      sameDay(readInvoiceDate(invoice), today)
-    );
-
-    const yesterdaysInvoices = invoices.filter(invoice =>
-      sameDay(readInvoiceDate(invoice), yesterday)
-    );
-
-    const todaysRevenue = sumInvoices(todaysInvoices);
-    const yesterdaysRevenue = sumInvoices(yesterdaysInvoices);
-    const average = invoices.length
-      ? sumInvoices(invoices) / invoices.length
-      : 0;
-
-    setText("todayRevenueValue", money(todaysRevenue));
-    setText("invoicesTodayValue", number(todaysInvoices.length));
-
-    setText(
-      "paidInvoicesValue",
-      number(todaysInvoices.filter(isExplicitlyPaid).length)
-    );
-
-    setText(
-      "pendingInvoicesValue",
-      number(todaysInvoices.filter(isExplicitlyPending).length)
-    );
-
-    setText("averageBillValue", money(average));
-    setText("averageBillCount", number(invoices.length));
-    setText("totalInvoicesValue", number(invoices.length));
-
-    const change = yesterdaysRevenue > 0
-      ? ((todaysRevenue - yesterdaysRevenue) / yesterdaysRevenue) * 100
-      : null;
-
-    setText(
-      "todayRevenueTrend",
-      change === null ? "—" : percent(change)
-    );
-
-    setText(
-      "todayRevenueComparison",
-      change === null
-        ? `Yesterday: ${money(yesterdaysRevenue)}`
-        : `${percent(change)} vs yesterday (${money(yesterdaysRevenue)})`
-    );
-
-    renderDailyTarget(todaysRevenue);
-  }
-
-  // --------------------------------------------------
-  // WEEKLY SALES CHART
-  // --------------------------------------------------
-
-  function renderWeeklySales(invoices, now) {
-    const thisWeekStart = startOfWeek(now);
-    const nextWeekStart = addDays(thisWeekStart, 7);
-    const lastWeekStart = addDays(thisWeekStart, -7);
-
-    const thisWeekInvoices = invoices.filter(invoice =>
-      isBetween(readInvoiceDate(invoice), thisWeekStart, nextWeekStart)
-    );
-
-    const lastWeekInvoices = invoices.filter(invoice =>
-      isBetween(readInvoiceDate(invoice), lastWeekStart, thisWeekStart)
-    );
-
-    const thisWeekSales = sumInvoices(thisWeekInvoices);
-    const lastWeekSales = sumInvoices(lastWeekInvoices);
-
-    setText("thisWeekSalesValue", money(thisWeekSales));
-    setText("lastWeekSalesValue", money(lastWeekSales));
-
-    setText(
-      "thisWeekInvoiceCount",
-      `${number(thisWeekInvoices.length)} invoices`
-    );
-
-    setText(
-      "weeklySalesChange",
-      lastWeekSales > 0
-        ? `${percent(((thisWeekSales - lastWeekSales) / lastWeekSales) * 100)} vs last week`
-        : "No previous-week baseline"
-    );
-
-    setText(
-      "weeklySalesSummary",
-      `This week: ${money(thisWeekSales)} · Last week: ${money(lastWeekSales)}`
-    );
-
-    const chart = $("weeklySalesChart");
-
-    if (!chart) return;
-
-    const labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-    const days = [];
-
-    for (let index = 0; index < 7; index += 1) {
-      const start = addDays(thisWeekStart, index);
-      const end = addDays(start, 1);
-
-      const previousStart = addDays(lastWeekStart, index);
-      const previousEnd = addDays(previousStart, 1);
-
-      const currentSales = sumInvoices(invoices.filter(invoice =>
-        isBetween(readInvoiceDate(invoice), start, end)
-      ));
-
-      const previousSales = sumInvoices(invoices.filter(invoice =>
-        isBetween(readInvoiceDate(invoice), previousStart, previousEnd)
-      ));
-
-      days.push({
-        label: labels[index],
-        currentSales,
-        previousSales
-      });
+    if (progressElement) {
+      progressElement.style.width = percentage + "%";
     }
 
-    const maxValue = Math.max(
-      1,
-      ...days.flatMap(day => [day.currentSales, day.previousSales])
-    );
-
-    const width = 700;
-    const height = 230;
-    const top = 18;
-    const bottom = 178;
-    const plotHeight = bottom - top;
-    const groupWidth = 100;
-    const barWidth = 24;
-
-    const gridLines = [0, 1, 2, 3, 4].map(index => {
-      const y = top + (plotHeight / 4) * index;
-
-      return `<line x1="24" y1="${y}" x2="690" y2="${y}" class="dashboard-chart-grid-line"/>`;
-    }).join("");
-
-    const bars = days.map((day, index) => {
-      const x = 34 + (index * groupWidth);
-      const currentHeight = (day.currentSales / maxValue) * plotHeight;
-      const previousHeight = (day.previousSales / maxValue) * plotHeight;
-
-      const currentY = bottom - currentHeight;
-      const previousY = bottom - previousHeight;
-
-      return `
-        <g class="dashboard-chart-day">
-          <rect
-            class="dashboard-chart-current"
-            x="${x}"
-            y="${currentY}"
-            width="${barWidth}"
-            height="${Math.max(0, currentHeight)}"
-            rx="3"
-          >
-            <title>${escapeHTML(day.label)} this week: ${escapeHTML(money(day.currentSales))}</title>
-          </rect>
-
-          <rect
-            class="dashboard-chart-previous"
-            x="${x + barWidth + 5}"
-            y="${previousY}"
-            width="${barWidth}"
-            height="${Math.max(0, previousHeight)}"
-            rx="3"
-          >
-            <title>${escapeHTML(day.label)} last week: ${escapeHTML(money(day.previousSales))}</title>
-          </rect>
-
-          <text class="dashboard-chart-label" x="${x + 26}" y="199" text-anchor="middle">
-            ${escapeHTML(day.label)}
-          </text>
-        </g>
-      `;
-    }).join("");
-
-    chart.innerHTML = `
-      <svg
-        class="dashboard-sales-svg"
-        viewBox="0 0 ${width} ${height}"
-        role="img"
-        aria-label="Daily sales comparison for this week and last week"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        ${gridLines}
-        ${bars}
-      </svg>
-    `;
-  }
-
-  // --------------------------------------------------
-  // PAYMENT METHOD SPLIT
-  // --------------------------------------------------
-
-  function renderPaymentSplit(invoices, now) {
-    const today = startOfDay(now);
-    const tomorrow = addDays(today, 1);
-
-    const todaysInvoices = invoices.filter(invoice =>
-      isBetween(readInvoiceDate(invoice), today, tomorrow)
-    );
-
-    const totals = new Map();
-
-    for (const invoice of todaysInvoices) {
-      const method = readPaymentMethod(invoice);
-      totals.set(method, (totals.get(method) || 0) + readAmount(invoice));
-    }
-
-    const entries = [...totals.entries()]
-      .sort((a, b) => b[1] - a[1]);
-
-    const total = entries.reduce((sum, [, amount]) => sum + amount, 0);
-
-    const bar = $("paymentSplitBar");
-
-    if (bar) {
-      let start = 0;
-
-      const segments = entries.slice(0, 5).map(([method, amount], index) => {
-        const share = total > 0 ? (amount / total) * 100 : 0;
-        const x = start;
-        const segmentWidth = Math.max(0, share * 10);
-
-        start += segmentWidth;
-
-        return `
-          <rect
-            class="dashboard-payment-segment payment-segment-${index + 1}"
-            x="${x}"
-            y="0"
-            width="${segmentWidth}"
-            height="22"
-          >
-            <title>${escapeHTML(method)}: ${escapeHTML(money(amount))}</title>
-          </rect>
-        `;
-      }).join("");
-
-      bar.innerHTML = entries.length
-        ? `
-          <svg
-            class="dashboard-payment-svg"
-            viewBox="0 0 1000 22"
-            role="img"
-            aria-label="Today's payment method distribution"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            ${segments}
-          </svg>
-        `
-        : "<span>No payment data recorded today.</span>";
-    }
-
-    const legend = $("paymentSplitLegend");
-
-    if (legend) {
-      legend.innerHTML = entries.length
-        ? entries.map(([method, amount]) => {
-            const share = total > 0 ? (amount / total) * 100 : 0;
-
-            return `
-              <div class="split-legend-item">
-                <div class="sl-left">
-                  <span class="sl-name">${escapeHTML(method)}</span>
-                </div>
-                <span class="sl-val">
-                  ${escapeHTML(money(amount))} · ${share.toFixed(1)}%
-                </span>
-              </div>
-            `;
-          }).join("")
-        : "<p>No invoice payment methods found for today.</p>";
-    }
-  }
-
-  // --------------------------------------------------
-  // MONTHLY REPORT
-  // --------------------------------------------------
-
-  function renderMonthlyTrend(invoices, now) {
-    const rows = [];
-
-    for (let offset = 5; offset >= 0; offset -= 1) {
-      const start = new Date(
-        now.getFullYear(),
-        now.getMonth() - offset,
-        1
+    if (trackElement) {
+      trackElement.setAttribute(
+        "aria-valuenow",
+        String(Math.round(percentage))
       );
-
-      const end = new Date(
-        now.getFullYear(),
-        now.getMonth() - offset + 1,
-        1
-      );
-
-      const selected = invoices.filter(invoice =>
-        isBetween(readInvoiceDate(invoice), start, end)
-      );
-
-      rows.push({
-        label: start.toLocaleDateString("en-IN", {
-          month: "short",
-          year: "numeric"
-        }),
-        sales: sumInvoices(selected)
-      });
-    }
-
-    const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    const previousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-
-    const currentInvoices = invoices.filter(invoice =>
-      isBetween(readInvoiceDate(invoice), currentMonth, nextMonth)
-    );
-
-    const previousInvoices = invoices.filter(invoice =>
-      isBetween(readInvoiceDate(invoice), previousMonth, currentMonth)
-    );
-
-    const currentSales = sumInvoices(currentInvoices);
-    const previousSales = sumInvoices(previousInvoices);
-
-    setText(
-      "monthlyReportPeriod",
-      currentMonth.toLocaleDateString("en-IN", {
-        month: "long",
-        year: "numeric"
-      })
-    );
-
-    setText("monthlySalesValue", money(currentSales));
-    setText("monthlyInvoicesValue", number(currentInvoices.length));
-
-    setText(
-      "monthlySalesChange",
-      previousSales > 0
-        ? percent(((currentSales - previousSales) / previousSales) * 100)
-        : "No previous-month baseline"
-    );
-
-    const list = $("monthlyTrendList");
-
-    if (list) {
-      list.innerHTML = rows.map(row => `
-        <div class="cat-item">
-          <div class="cat-row">
-            <span class="cat-name">${escapeHTML(row.label)}</span>
-            <span class="cat-val">${escapeHTML(money(row.sales))}</span>
-          </div>
-        </div>
-      `).join("");
-    }
-  }
-
-  // --------------------------------------------------
-  // TOP CATEGORIES
-  // --------------------------------------------------
-
-  function resolveCategory(item, productLookup, categoryLookup) {
-    const productId = String(
-      item.productId || item.id || item.productKey || ""
-    );
-
-    const product = productLookup.get(productId);
-
-    const categoryValue =
-      product?.categoryId ||
-      product?.categoryName ||
-      product?.category ||
-      item.categoryId ||
-      item.categoryName ||
-      item.category ||
-      "";
-
-    const categoryId = String(categoryValue);
-
-    if (categoryLookup.has(categoryId)) {
-      const category = categoryLookup.get(categoryId);
-
-      return String(
-        category.name ||
-        category.categoryName ||
-        categoryId
+      trackElement.setAttribute(
+        "aria-valuetext",
+        percentage.toFixed(1) + "% complete"
       );
     }
-
-    return categoryId.trim() || "Uncategorised";
   }
 
-  function renderTopCategories(invoices) {
-    const productLookup = new Map(
-      state.products.map(product => [
-        String(product.id || product.key || product.productId || ""),
-        product
-      ])
-    );
+  /* ---------------------------------------------------------
+     7. Recent invoices table
+     --------------------------------------------------------- */
 
-    const categoryLookup = new Map(
-      state.categories.map(category => [
-        String(category.id || category.key || category.categoryId || ""),
-        category
-      ])
-    );
+  function appendCell(row, value) {
+    const cell = document.createElement("td");
+    cell.textContent = value;
+    row.appendChild(cell);
 
-    const sales = new Map();
-
-    for (const invoice of invoices) {
-      for (const item of readItems(invoice)) {
-        const category = resolveCategory(item, productLookup, categoryLookup);
-
-        sales.set(
-          category,
-          (sales.get(category) || 0) + itemTotal(item)
-        );
-      }
-    }
-
-    const entries = [...sales.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6);
-
-    const total = entries.reduce((sum, [, amount]) => sum + amount, 0);
-    const list = $("topCategoriesList");
-
-    if (!list) return;
-
-    list.innerHTML = entries.length
-      ? entries.map(([name, amount]) => {
-          const share = total > 0 ? (amount / total) * 100 : 0;
-
-          return `
-            <div class="cat-item">
-              <div class="cat-row">
-                <span class="cat-name">${escapeHTML(name)}</span>
-                <span class="cat-val">${escapeHTML(money(amount))}</span>
-              </div>
-              <div class="cat-row">
-                <span class="cat-val">${share.toFixed(1)}% of listed category sales</span>
-              </div>
-            </div>
-          `;
-        }).join("")
-      : "<p>No category sales can be calculated from the recorded invoice items.</p>";
+    return cell;
   }
 
-  // --------------------------------------------------
-  // TOP PRODUCTS
-  // --------------------------------------------------
+  function showTableEmpty(body, colspan, message) {
+    if (!body) return;
 
-  function renderTopProducts(invoices) {
-    const productsByName = new Map();
+    body.replaceChildren();
 
-    for (const invoice of invoices) {
-      for (const item of readItems(invoice)) {
-        const name = itemName(item);
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
 
-        const entry = productsByName.get(name) || {
-          quantity: 0,
-          sales: 0
-        };
+    cell.colSpan = colspan;
+    cell.className = "table-empty";
+    cell.textContent = message;
 
-        entry.quantity += itemQuantity(item);
-        entry.sales += itemTotal(item);
-
-        productsByName.set(name, entry);
-      }
-    }
-
-    const entries = [...productsByName.entries()]
-      .sort((a, b) => b[1].quantity - a[1].quantity)
-      .slice(0, 5);
-
-    const list = $("topProductsList");
-
-    if (!list) return;
-
-    list.innerHTML = entries.length
-      ? entries.map(([name, values], index) => `
-          <div class="prod-item">
-            <div class="prod-rank">${index + 1}</div>
-            <div class="prod-info">
-              <div class="p-name">
-                <span>${escapeHTML(name)}</span>
-                <span>${number(values.quantity)} sold</span>
-              </div>
-              <div class="p-name">
-                <span>${escapeHTML(money(values.sales))} sales</span>
-              </div>
-            </div>
-          </div>
-        `).join("")
-      : "<p>No product sales found in saved invoice line items.</p>";
+    row.appendChild(cell);
+    body.appendChild(row);
   }
 
-  // --------------------------------------------------
-  // HOURLY ACTIVITY
-  // --------------------------------------------------
-
-  function renderHourlyActivity(invoices, now) {
-    const today = startOfDay(now);
-    const tomorrow = addDays(today, 1);
-
-    const todaysInvoices = invoices.filter(invoice =>
-      isBetween(readInvoiceDate(invoice), today, tomorrow)
-    );
-
-    const counts = Array(24).fill(0);
-
-    for (const invoice of todaysInvoices) {
-      const date = readInvoiceDate(invoice);
-
-      if (date) counts[date.getHours()] += 1;
-    }
-
-    const hours = [
-      8, 9, 10, 11, 12, 13, 14, 15,
-      16, 17, 18, 19, 20, 21, 22, 23
-    ];
-
-    const activeHours = counts
-      .map((count, hour) => ({ count, hour }))
-      .filter(item => item.count > 0);
-
-    const peak = activeHours.length
-      ? activeHours.reduce((best, current) =>
-          current.count > best.count ? current : best
-        )
-      : null;
-
-    const heatmap = $("hourlySalesHeatmap");
-
-    if (heatmap) {
-      const max = Math.max(1, ...hours.map(hour => counts[hour]));
-
-      heatmap.innerHTML = hours.map(hour => {
-        const level = counts[hour] === 0
-          ? 0
-          : Math.min(5, Math.ceil((counts[hour] / max) * 5));
-
-        const label = `${String(hour).padStart(2, "0")}:00 — ${counts[hour]} invoices`;
-
-        return `
-          <div
-            class="hour-cell${level ? ` level-${level}` : ""}"
-            title="${escapeHTML(label)}"
-            aria-label="${escapeHTML(label)}"
-          >
-            ${hour}
-          </div>
-        `;
-      }).join("");
-    }
-
-    setText(
-      "hourlySalesSummary",
-      peak
-        ? `Peak activity: ${String(peak.hour).padStart(2, "0")}:00 (${number(peak.count)} invoices).`
-        : "No timestamped invoices found for today."
-    );
-
-    setText("hourlySalesLabels", "Hours shown in 24-hour format");
-  }
-
-  // --------------------------------------------------
-  // RECENT INVOICES
-  // --------------------------------------------------
-
-  function renderRecentInvoices(invoices) {
-    const body = $("recentInvoicesBody");
+  function renderRecentInvoices() {
+    const body = el("recentInvoicesTableBody");
 
     if (!body) return;
 
-    const recent = [...invoices]
-      .sort((a, b) => {
-        const dateA = readInvoiceDate(a)?.getTime() || 0;
-        const dateB = readInvoiceDate(b)?.getTime() || 0;
-
-        return dateB - dateA;
-      })
-      .slice(0, 8);
-
-    if (!recent.length) {
-      body.innerHTML = `
-        <tr>
-          <td colspan="5">No invoices have been recorded yet.</td>
-        </tr>
-      `;
-
-      setText("recentInvoicesStatus", "No invoice records found.");
-
+    if (!state.loaded.invoices) {
+      showTableEmpty(body, 5, "Loading saved invoices.");
+      setText("recentInvoicesSummary", "Loading invoice records");
       return;
     }
 
-    body.innerHTML = recent.map(invoice => {
-      const date = readInvoiceDate(invoice);
-      const status = readInvoiceStatus(invoice);
+    const latest = sortInvoicesLatestFirst(getValidInvoices()).slice(0, 8);
 
-      const dateLabel = date
-        ? date.toLocaleString("en-IN", {
-            day: "2-digit",
-            month: "short",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit"
-          })
-        : "Date unavailable";
-
-      const statusClass = status === "Cancelled"
-        ? "pending"
-        : status === "Recorded"
-          ? "paid"
-          : "draft";
-
-      const customer = readCustomer(invoice);
-      const firstLetter =
-        customer.trim().charAt(0).toUpperCase() || "—";
-
-      return `
-        <tr>
-          <td class="mono">${escapeHTML(readInvoiceNumber(invoice))}</td>
-          <td>
-            <div class="cust">
-              <div class="cust-avatar">${escapeHTML(firstLetter)}</div>
-              <div>
-                <div class="cust-name">${escapeHTML(customer)}</div>
-                <div class="cust-sub">${escapeHTML(readPaymentMethod(invoice))}</div>
-              </div>
-            </div>
-          </td>
-          <td>${escapeHTML(dateLabel)}</td>
-          <td class="num">${escapeHTML(money(readAmount(invoice)))}</td>
-          <td><span class="pill ${statusClass}">${escapeHTML(status)}</span></td>
-        </tr>
-      `;
-    }).join("");
-
-    setText(
-      "recentInvoicesStatus",
-      `Showing ${recent.length} most recent invoice records.`
-    );
-  }
-
-  // --------------------------------------------------
-  // DASHBOARD RENDERING
-  // --------------------------------------------------
-
-  function renderAll() {
-    const invoices = validInvoices();
-    const now = new Date();
-
-    applyBusinessProfile();
-
-    setText(
-      "dashboardDateLabel",
-      now.toLocaleDateString("en-IN", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric"
-      })
-    );
-
-    renderSummary(invoices, now);
-    renderWeeklySales(invoices, now);
-    renderPaymentSplit(invoices, now);
-    renderMonthlyTrend(invoices, now);
-    renderTopCategories(invoices);
-    renderTopProducts(invoices);
-    renderHourlyActivity(invoices, now);
-    renderRecentInvoices(invoices);
-
-    if (state.errors.size > 0) {
-      const failedPaths = [...state.errors.keys()].join(", ");
-
-      setStatus(
-        `Database read failed for: ${failedPaths}. Check Firebase Rules and Console.`,
-        "error"
-      );
-
+    if (!latest.length) {
+      showTableEmpty(body, 5, "No saved invoices available.");
+      setText("recentInvoicesSummary", "No invoice records found");
       return;
     }
 
-    if (
-      ["invoices", "products", "categories", "settings"].every(
-        name => state.loaded.has(name)
-      )
-    ) {
-      setStatus(
-        "Dashboard connected. Live database updates are enabled.",
-        "success"
-      );
-    } else {
-      setStatus("Reading live business records…", "info");
-    }
-  }
+    body.replaceChildren();
 
-  // --------------------------------------------------
-  // REALTIME DATABASE LISTENERS
-  // --------------------------------------------------
+    latest.forEach(function (invoice) {
+      const row = document.createElement("tr");
 
-  function setNodeData(name, value) {
-    state.loaded.add(name);
-    state.errors.delete(name);
+      appendCell(row, invoiceNumber(invoice));
+      appendCell(row, customerName(invoice));
 
-    if (name === "invoices") {
-      state.invoices = objectToArray(value);
-    }
+      const date = invoiceDate(invoice);
 
-    if (name === "products") {
-      state.products = objectToArray(value);
-    }
+      appendCell(row, date ? formatDate(date) : "—");
+      appendCell(row, paymentMethod(invoice));
+      appendCell(row, formatMoney(invoiceAmount(invoice)));
 
-    if (name === "categories") {
-      state.categories = objectToArray(value);
-    }
+      body.appendChild(row);
+    });
 
-    if (name === "settings") {
-      state.settings =
-        value && typeof value === "object" ? value : {};
-    }
-
-    renderAll();
-  }
-
-  function setNodeError(name, error) {
-    state.errors.set(name, error);
-    state.loaded.add(name);
-
-    console.error(`[Dashboard] Cannot read ${name}:`, error);
-
-    renderAll();
-  }
-
-  function subscribe(dbSdk, db, path, name) {
-    const databaseRef = dbSdk.ref(db, path);
-
-    const unsubscribe = dbSdk.onValue(
-      databaseRef,
-      snapshot => setNodeData(name, snapshot.val()),
-      error => setNodeError(name, error)
+    setText(
+      "recentInvoicesSummary",
+      "Showing " + latest.length + " of " +
+      getValidInvoices().length + " saved invoices"
     );
-
-    if (typeof unsubscribe === "function") {
-      state.unsubscribers.push(unsubscribe);
-    }
   }
 
-  // --------------------------------------------------
-  // FIREBASE INITIALIZATION
-  // --------------------------------------------------
+  /* ---------------------------------------------------------
+     8. Top-selling products
+     --------------------------------------------------------- */
 
-  function waitForFirstAuthState(authSdk, auth) {
-    return new Promise((resolve, reject) => {
-      let settled = false;
-      let unsubscribe = null;
+  function getInvoiceItems(invoice) {
+    const items = firstValue(invoice, [
+      "items",
+      "lineItems",
+      "invoiceItems",
+      "products"
+    ]);
 
-      const timeout = window.setTimeout(() => {
-        if (settled) return;
+    return Array.isArray(items) ? items : entries(items);
+  }
 
-        settled = true;
+  function getItemName(item) {
+    return normalizeText(
+      firstValue(item, [
+        "productName",
+        "itemName",
+        "name",
+        "title"
+      ]) || ""
+    );
+  }
 
-        if (typeof unsubscribe === "function") {
-          unsubscribe();
-        }
+  function getItemQuantity(item) {
+    const quantity = numericValue(item, [
+      "quantity",
+      "qty",
+      "count"
+    ]);
 
-        reject(new Error("Timed out while checking the signed-in account."));
-      }, 15000);
+    return quantity !== null && quantity > 0 ? quantity : 0;
+  }
 
-      const finish = (callback, value) => {
-        if (settled) return;
+  function renderTopProducts() {
+    const list = el("topProductsList");
 
-        settled = true;
-        window.clearTimeout(timeout);
+    if (!list) return;
 
-        if (typeof unsubscribe === "function") {
-          unsubscribe();
-        }
+    if (!state.loaded.invoices) {
+      list.replaceChildren();
 
-        callback(value);
-      };
+      const loading = document.createElement("p");
+      loading.className = "empty-state";
+      loading.textContent = "Loading invoice items.";
 
-      unsubscribe = authSdk.onAuthStateChanged(
-        auth,
-        user => finish(resolve, user),
-        error => finish(reject, error)
-      );
+      list.appendChild(loading);
+      return;
+    }
+
+    const totals = new Map();
+
+    getValidInvoices().forEach(function (invoice) {
+      getInvoiceItems(invoice).forEach(function (item) {
+        const name = getItemName(item);
+
+        if (!name) return;
+
+        const key = name.toLowerCase();
+        const previous = totals.get(key) || {
+          name: name,
+          quantity: 0
+        };
+
+        previous.quantity += getItemQuantity(item);
+        totals.set(key, previous);
+      });
+    });
+
+    const topItems = Array.from(totals.values())
+      .sort(function (a, b) {
+        return b.quantity - a.quantity;
+      })
+      .slice(0, 5);
+
+    list.replaceChildren();
+
+    if (!topItems.length) {
+      const empty = document.createElement("p");
+      empty.className = "empty-state";
+      empty.textContent = "No product sales available yet.";
+
+      list.appendChild(empty);
+      return;
+    }
+
+    topItems.forEach(function (item) {
+      const row = document.createElement("div");
+      row.className = "product-performance-row";
+
+      const name = document.createElement("strong");
+      name.textContent = item.name;
+
+      const quantity = document.createElement("span");
+      quantity.textContent =
+        String(item.quantity) + " units recorded";
+
+      row.appendChild(name);
+      row.appendChild(quantity);
+
+      list.appendChild(row);
     });
   }
 
-  async function waitForFirebase() {
-    const firebase = window.restaurantFirebase;
+  /* ---------------------------------------------------------
+     9. Render page
+     --------------------------------------------------------- */
 
-    if (!firebase) {
-      throw new Error("window.restaurantFirebase was not initialized.");
+  function renderDashboard() {
+    if (stopped) return;
+
+    const currentDate = new Intl.DateTimeFormat("en-IN", {
+      weekday: "long",
+      day: "2-digit",
+      month: "long",
+      year: "numeric"
+    }).format(new Date());
+
+    setText("dashboardCurrentDate", currentDate);
+
+    updateBusinessBranding();
+    renderSalesSummary();
+    renderProductSummary();
+    renderDailyTarget();
+    renderRecentInvoices();
+    renderTopProducts();
+
+    if (state.errors.length) {
+      setStatus(
+        "Some database records could not be loaded. Check database permissions and connection.",
+        "error"
+      );
+
+      setText("dashboardFooterStatus", "Some data unavailable");
+      return;
     }
 
-    if (firebase.ready && typeof firebase.ready.then === "function") {
-      await firebase.ready;
+    const allLoaded = Object.values(state.loaded).every(Boolean);
+
+    if (allLoaded) {
+      setStatus("Dashboard connected. Live database updates are enabled.", "connected");
+      setText("sidebarConnectionStatus", "Database connected");
+      setText("dashboardFooterStatus", "Live data connected");
+
+      const connection = el("sidebarConnectionStatus");
+
+      if (connection) {
+        connection.classList.add("is-connected");
+      }
+    } else {
+      setStatus("Connecting to live business records...", "warning");
+      setText("dashboardFooterStatus", "Loading business records");
     }
-
-    if (firebase.error) {
-      throw firebase.error;
-    }
-
-    const auth = firebase.auth;
-    const db = firebase.db;
-    const authSdk = firebase.sdk?.auth;
-    const dbSdk = firebase.sdk?.database;
-
-    if (!auth || !db || !authSdk || !dbSdk) {
-      throw new Error("Firebase Auth or Realtime Database is unavailable.");
-    }
-
-    if (
-      typeof authSdk.onAuthStateChanged !== "function" ||
-      typeof dbSdk.ref !== "function" ||
-      typeof dbSdk.onValue !== "function"
-    ) {
-      throw new Error("A required Firebase SDK method is unavailable.");
-    }
-
-    return { auth, db, authSdk, dbSdk };
   }
 
-  async function initialize() {
-    if (state.initialized) return;
+  /* ---------------------------------------------------------
+     10. Realtime Database subscriptions
+     --------------------------------------------------------- */
 
-    state.initialized = true;
+  function subscribeTo(path, key, normalize) {
+    const reference = databaseAPI.ref(database, path);
 
-    try {
-      setStatus("Initializing Firebase connection…", "info");
+    const unsubscribe = databaseAPI.onValue(
+      reference,
 
-      const { auth, db, authSdk, dbSdk } = await waitForFirebase();
-      const user = await waitForFirstAuthState(authSdk, auth);
+      function (snapshot) {
+        if (stopped) return;
 
-      if (!user) {
-        setStatus(
-          "Sign-in required. Please sign in to access the dashboard.",
-          "error"
-        );
+        const data = snapshot.exists() ? snapshot.val() : null;
 
-        return;
-      }
+        state[key] = normalize ? normalize(data) : data;
+        state.loaded[key] = true;
 
-      if (user.uid !== OWNER_UID) {
-        setStatus("Access denied for this account.", "error");
+        state.errors = state.errors.filter(function (error) {
+          return error.path !== path;
+        });
+
+        renderDashboard();
+      },
+
+      function (error) {
+        if (stopped) return;
 
         console.error(
-          "[Dashboard] Signed-in user is not the configured owner."
+          "Dashboard database read failed:",
+          path,
+          error && error.code ? error.code : "unknown"
         );
 
+        state.errors = state.errors.filter(function (item) {
+          return item.path !== path;
+        });
+
+        state.errors.push({
+          path: path,
+          code: error && error.code ? error.code : "unknown"
+        });
+
+        state.loaded[key] = false;
+
+        renderDashboard();
+      }
+    );
+
+    subscriptions.push(unsubscribe);
+  }
+
+  /* ---------------------------------------------------------
+     11. Initialize
+     --------------------------------------------------------- */
+
+  async function initialize() {
+    try {
+      setStatus("Checking owner authorization...", "warning");
+
+      const access = window.restaurantAccess;
+
+      if (!access || !access.readyPromise) {
+        throw new Error("Protected-page authorization is unavailable.");
+      }
+
+      const authorized = await access.readyPromise;
+
+      if (!authorized || !access.authorized || !access.user) {
+        stopped = true;
         return;
       }
 
-      setStatus("Reading live business records…", "info");
+      if (access.user.uid !== OWNER_UID) {
+        throw new Error("The current account is not the configured owner.");
+      }
 
-      subscribe(dbSdk, db, `${ROOT_PATH}/invoices`, "invoices");
-      subscribe(dbSdk, db, `${ROOT_PATH}/products`, "products");
-      subscribe(dbSdk, db, `${ROOT_PATH}/categories`, "categories");
-      subscribe(dbSdk, db, `${ROOT_PATH}/settings`, "settings");
+      const firebase = window.restaurantFirebase;
+
+      if (!firebase || !firebase.readyPromise) {
+        throw new Error("Firebase configuration is unavailable.");
+      }
+
+      const ready = await firebase.readyPromise;
+
+      if (!ready || !firebase.ready || !firebase.db || !firebase.sdk) {
+        throw new Error(
+          firebase.error?.message || "Firebase is not initialized."
+        );
+      }
+
+      database = firebase.db;
+      databaseAPI = firebase.sdk.database;
+
+      if (
+        typeof databaseAPI.ref !== "function" ||
+        typeof databaseAPI.onValue !== "function"
+      ) {
+        throw new Error("Realtime Database methods are unavailable.");
+      }
+
+      subscribeTo(
+        PATHS.invoices,
+        "invoices",
+        entries
+      );
+
+      subscribeTo(
+        PATHS.products,
+        "products",
+        entries
+      );
+
+      subscribeTo(
+        PATHS.categories,
+        "categories",
+        entries
+      );
+
+      subscribeTo(
+        PATHS.settings,
+        "settings",
+        function (value) {
+          return value && typeof value === "object" ? value : {};
+        }
+      );
+
+      setText("sidebarConnectionStatus", "Loading database records");
+
     } catch (error) {
-      console.error("[Dashboard] Initialization failed:", error);
+      console.error("Dashboard initialization failed:", error);
 
       setStatus(
-        `Dashboard initialization failed: ${error?.message || "Unknown error"}`,
+        error instanceof Error
+          ? error.message
+          : "Dashboard could not initialize.",
         "error"
       );
+
+      setText("dashboardFooterStatus", "Initialization failed");
     }
   }
 
-  // --------------------------------------------------
-  // EXPORT INVOICE SUMMARY
-  // --------------------------------------------------
+  window.addEventListener("pagehide", function () {
+    stopped = true;
 
-  function bindExport() {
-    const button = $("exportDashboardBtn");
-
-    if (!button) return;
-
-    button.addEventListener("click", () => {
-      const rows = validInvoices();
-
-      if (!rows.length) {
-        setStatus("There are no invoice records to export.", "info");
-        return;
-      }
-
-      const columns = [
-        "Invoice Number",
-        "Customer",
-        "Invoice Date",
-        "Payment Method",
-        "Grand Total",
-        "Status"
-      ];
-
-      const csvCell = value =>
-        `"${String(value ?? "").replace(/"/g, '""')}"`;
-
-      const csvRows = rows.map(invoice => [
-        readInvoiceNumber(invoice),
-        readCustomer(invoice),
-        invoice.invoiceDate || invoice.createdAt || invoice.date || "",
-        readPaymentMethod(invoice),
-        readAmount(invoice),
-        readInvoiceStatus(invoice)
-      ]);
-
-      const csv = [
-        columns.map(csvCell).join(","),
-        ...csvRows.map(row => row.map(csvCell).join(","))
-      ].join("\r\n");
-
-      const blob = new Blob(["\uFEFF", csv], {
-        type: "text/csv;charset=utf-8;"
-      });
-
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-
-      link.href = url;
-      link.download =
-        `invoice-dashboard-${new Date().toISOString().slice(0, 10)}.csv`;
-
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-
-      URL.revokeObjectURL(url);
-    });
-  }
-
-  // --------------------------------------------------
-  // MOBILE SIDEBAR
-  // --------------------------------------------------
-
-  function bindNavigation() {
-    const menu = $("menuBtn");
-    const sidebar = $("sidebar");
-    const overlay = $("overlay");
-
-    if (!menu || !sidebar || !overlay) return;
-
-    function closeMenu() {
-      sidebar.classList.remove("open");
-      overlay.classList.remove("open");
-      menu.setAttribute("aria-expanded", "false");
-    }
-
-    menu.addEventListener("click", () => {
-      const open = sidebar.classList.toggle("open");
-
-      overlay.classList.toggle("open", open);
-      menu.setAttribute("aria-expanded", String(open));
-    });
-
-    overlay.addEventListener("click", closeMenu);
-
-    sidebar.querySelectorAll("a.nav-item").forEach(link => {
-      link.addEventListener("click", closeMenu);
-    });
-  }
-
-  // --------------------------------------------------
-  // CLEANUP
-  // --------------------------------------------------
-
-  window.addEventListener("pagehide", () => {
-    for (const unsubscribe of state.unsubscribers) {
+    subscriptions.forEach(function (unsubscribe) {
       try {
-        unsubscribe();
+        if (typeof unsubscribe === "function") {
+          unsubscribe();
+        }
       } catch (error) {
-        console.warn(
-          "[Dashboard] Listener cleanup warning:",
-          error
-        );
+        console.warn("Unable to remove a dashboard subscription.", error);
       }
-    }
+    });
 
-    state.unsubscribers = [];
+    subscriptions = [];
   });
 
-  // --------------------------------------------------
-  // STARTUP
-  // --------------------------------------------------
+  initialize();
 
-  bindExport();
-  bindNavigation();
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initialize, {
-      once: true
-    });
-  } else {
-    initialize();
-  }
 })();
