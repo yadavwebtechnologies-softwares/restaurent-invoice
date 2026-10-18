@@ -2,7 +2,7 @@
    RESTAURANT BILLING SOFTWARE
    Invoice Creation, Calculation, Saving and Preview
    Database root: restaurantBilling/
-   Dynamic invoice verification QR
+   Verification: publicInvoiceVerification/{invoiceId}
    ========================================================= */
 
 (function () {
@@ -15,7 +15,8 @@
     categories: "restaurantBilling/categories",
     settings: "restaurantBilling/settings",
     invoices: "restaurantBilling/invoices",
-    counters: "restaurantBilling/invoiceCounters"
+    counters: "restaurantBilling/invoiceCounters",
+    verification: "publicInvoiceVerification"
   });
 
   const $ = (id) => document.getElementById(id);
@@ -36,40 +37,39 @@
     subscriptions: [],
     ready: false,
     saving: false,
-    disposed: false,
     nextItemId: 1
   };
 
   /* ---------------------------------------------------------
-     1. Common helpers
+     1. General helpers
      --------------------------------------------------------- */
 
   function setText(id, value) {
-    const node = $(id);
-    if (!node) return;
+    const element = $(id);
+    if (!element) return;
 
-    node.textContent =
+    element.textContent =
       value === null || value === undefined ? "" : String(value);
   }
 
   function setMessage(message, type) {
-    const node = $("invoiceMessage");
-    if (!node) return;
+    const element = $("invoiceMessage");
+    if (!element) return;
 
-    node.textContent = message || "";
-    node.classList.remove("is-success", "is-error", "is-warning");
+    element.textContent = message || "";
+    element.classList.remove("is-success", "is-error", "is-warning");
 
-    if (type) node.classList.add("is-" + type);
+    if (type) element.classList.add("is-" + type);
   }
 
   function setPageStatus(message, type) {
-    const node = $("invoicePageStatus");
-    if (!node) return;
+    const element = $("invoicePageStatus");
+    if (!element) return;
 
-    node.textContent = message || "";
-    node.classList.remove("is-connected", "is-error", "is-warning");
+    element.textContent = message || "";
+    element.classList.remove("is-connected", "is-error", "is-warning");
 
-    if (type) node.classList.add("is-" + type);
+    if (type) element.classList.add("is-" + type);
   }
 
   function formatMoney(value) {
@@ -90,7 +90,9 @@
   }
 
   function toNumber(value) {
-    if (value === "" || value === null || value === undefined) return null;
+    if (value === "" || value === null || value === undefined) {
+      return null;
+    }
 
     const result = Number(value);
     return Number.isFinite(result) ? result : null;
@@ -247,7 +249,7 @@
   }
 
   /* ---------------------------------------------------------
-     2. Settings readers
+     2. Settings
      --------------------------------------------------------- */
 
   function settingsSections() {
@@ -312,6 +314,15 @@
     }
 
     return fallback;
+  }
+
+  function getBusinessName() {
+    const business = settingsSections().business;
+
+    return textValue(firstValue(business, [
+      "businessName",
+      "name"
+    ]) || "") || "Business Profile";
   }
 
   function getTaxSettings() {
@@ -527,6 +538,10 @@
     renderCart();
   }
 
+  /* ---------------------------------------------------------
+     4. Custom items
+     --------------------------------------------------------- */
+
   function addCustomItem(event) {
     event.preventDefault();
 
@@ -585,7 +600,7 @@
   }
 
   /* ---------------------------------------------------------
-     4. Dynamic discount input and calculation
+     5. Discount and invoice totals
      --------------------------------------------------------- */
 
   function ensureDiscountInput() {
@@ -623,6 +638,7 @@
       wrapper.append(label, input);
 
       const notes = $("invoiceNotes")?.closest(".form-field");
+
       if (notes) {
         form.insertBefore(wrapper, notes);
       } else {
@@ -828,11 +844,12 @@
   }
 
   /* ---------------------------------------------------------
-     5. Invoice numbering
+     6. Invoice number reservation
      --------------------------------------------------------- */
 
   async function reserveInvoiceNumber(date) {
     const year = String(date.getFullYear());
+
     const reference = state.api.ref(
       state.db,
       PATHS.counters + "/" + year
@@ -865,7 +882,7 @@
   }
 
   /* ---------------------------------------------------------
-     6. Settings-driven footer and field visibility
+     7. Business profile and invoice footer
      --------------------------------------------------------- */
 
   function renderOptionalText(id, value, enabled) {
@@ -949,7 +966,6 @@
     if (group) {
       group.hidden = !fields.some((field) => {
         const input = $(field.id);
-
         return input && !input.closest(".form-field")?.hidden;
       });
     }
@@ -996,7 +1012,7 @@
     if (termsContainer) {
       termsContainer.replaceChildren();
 
-      const lines = [
+      [
         {
           value: termsLine1,
           visible: settingFlag(["showTermsLine1", "showTerms"], true)
@@ -1009,9 +1025,7 @@
           value: footer,
           visible: settingFlag(["showInvoiceFooter", "showTerms"], true)
         }
-      ];
-
-      lines.forEach((line) => {
+      ].forEach((line) => {
         if (!line.value || !line.visible) return;
 
         const paragraph = document.createElement("p");
@@ -1028,11 +1042,10 @@
       settingFlag(["showSignature", "showAuthorisedSignatory"], true)
     );
 
-    const signatureSection = $("printSignatureSection");
+    const signature = $("printSignatureSection");
 
-    if (signatureSection) {
-      signatureSection.hidden =
-        !signatory ||
+    if (signature) {
+      signature.hidden = !signatory ||
         !settingFlag(["showSignature", "showAuthorisedSignatory"], true);
     }
   }
@@ -1041,10 +1054,7 @@
     const sections = settingsSections();
     const business = sections.business;
 
-    const name = textValue(firstValue(business, [
-      "businessName",
-      "name"
-    ]) || "");
+    const name = getBusinessName();
 
     const tagline = textValue(firstValue(business, [
       "businessTagline",
@@ -1095,7 +1105,7 @@
       "fssaiLicenseNumber"
     ]) || "");
 
-    setText("printBusinessName", name || "Business Profile");
+    setText("printBusinessName", name);
 
     renderOptionalText(
       "printBusinessTagline",
@@ -1135,7 +1145,7 @@
 
       if (showLogo) {
         logo.hidden = false;
-        logo.alt = name ? name + " Logo" : "Business Logo";
+        logo.alt = name + " Logo";
 
         logo.onerror = function () {
           logo.hidden = true;
@@ -1172,7 +1182,7 @@
   }
 
   /* ---------------------------------------------------------
-     7. Customer and payment details
+     8. Customer and payment details
      --------------------------------------------------------- */
 
   function normalizePaymentMethod(value) {
@@ -1195,23 +1205,19 @@
 
   function getInvoiceFormDetails() {
     return {
-      customerName:
-        textValue($("customerName")?.value) || "Walk-in Customer",
-
+      customerName: textValue($("customerName")?.value) || "Walk-in Customer",
       customerPhone: textValue($("customerPhone")?.value),
       tableNumber: textValue($("tableNumber")?.value),
-
       paymentMethod: normalizePaymentMethod(
         $("paymentMethod")?.value || "Cash"
       ),
-
       paymentStatus: textValue($("paymentStatus")?.value || "Paid"),
       notes: textValue($("invoiceNotes")?.value)
     };
   }
 
   /* ---------------------------------------------------------
-     8. Dynamic QR verification URL
+     9. Dynamic verification QR
      --------------------------------------------------------- */
 
   function updatePaymentQRVisibility() {
@@ -1224,10 +1230,6 @@
       "showQRCode"
     ], true);
 
-    /*
-     * Remove the former static placeholder. The QR is generated
-     * from the unique saved invoice URL after saving.
-     */
     const oldImage = $("invoiceQrImage");
 
     if (oldImage) {
@@ -1254,14 +1256,8 @@
       return;
     }
 
-    const verificationURL = new URL(
-      "QRVerification.html",
-      window.location.href
-    );
-
-    verificationURL.searchParams.set("invoice", verificationId);
-
-    if (caption) caption.textContent = "Generating Verification QR...";
+    const url = new URL("QRVerification.html", window.location.href);
+    url.searchParams.set("invoice", verificationId);
 
     const qr = window.restaurantQR;
 
@@ -1270,23 +1266,25 @@
       return;
     }
 
+    if (caption) caption.textContent = "Generating Verification QR...";
+
     try {
-      await qr.generate(container, verificationURL.href, {
+      await qr.generate(container, url.href, {
         width: 108,
         height: 108,
         margin: 1
       });
 
       if (caption) caption.textContent = "Scan to Verify Invoice";
+
     } catch (error) {
       console.error("Invoice verification QR generation failed:", error);
-
       if (caption) caption.textContent = "QR Generation Failed";
     }
   }
 
   /* ---------------------------------------------------------
-     9. Preview item rows
+     10. Invoice preview
      --------------------------------------------------------- */
 
   function createInvoicePrintRow(item, index) {
@@ -1309,10 +1307,6 @@
     return row;
   }
 
-  /* ---------------------------------------------------------
-     10. Render saved invoice preview
-     --------------------------------------------------------- */
-
   function renderSavedInvoice(invoice) {
     const preview = $("invoicePreviewSection");
     if (!preview) return;
@@ -1320,7 +1314,6 @@
     setText("printInvoiceNumber", invoice.invoiceNumber);
     setText("printInvoiceDate", displayDate(invoice.invoiceDate));
     setText("printInvoiceTime", displayTime(invoice.invoiceTime));
-
     setText("printCustomerName", invoice.customerName);
 
     renderOptionalText(
@@ -1335,25 +1328,8 @@
       settingFlag(["showTableNumber"], true)
     );
 
-    const rightParty = $("printTableNumber")?.parentElement;
-    const taxIds = $("printBusinessTaxIds");
-
-    const hasTable = Boolean(
-      invoice.tableNumber &&
-      settingFlag(["showTableNumber"], true)
-    );
-
-    const hasTaxIds = Boolean(taxIds && !taxIds.hidden);
-
-    if (rightParty) {
-      rightParty.hidden = !hasTable && !hasTaxIds;
-
-      const label = rightParty.querySelector(".inv-label");
-      if (label) label.textContent = hasTable ? "Table" : "Business Details";
-    }
-
     const showMethod = settingFlag(["showPaymentMethod"], true);
-    const showPaymentStatus = settingFlag(["showPaymentStatus"], true);
+    const showStatus = settingFlag(["showPaymentStatus"], true);
 
     setText("printPaymentMethod", invoice.paymentMethod);
     setText("printPaymentStatus", invoice.paymentStatus);
@@ -1362,12 +1338,12 @@
     const statusRow = $("printPaymentStatusRow");
 
     if (methodRow) methodRow.hidden = !showMethod;
-    if (statusRow) statusRow.hidden = !showPaymentStatus;
+    if (statusRow) statusRow.hidden = !showStatus;
 
     const paymentBlock = methodRow?.closest(".inv-payment-block");
 
     if (paymentBlock) {
-      paymentBlock.hidden = !showMethod && !showPaymentStatus;
+      paymentBlock.hidden = !showMethod && !showStatus;
     }
 
     setText("printInvoiceSubtotal", formatMoney(invoice.subtotal));
@@ -1379,8 +1355,7 @@
     setText(
       "printInvoiceTaxLabel",
       "GST (" + Number(invoice.taxRate || 0)
-        .toFixed(2)
-        .replace(/\.00$/, "") + "%)"
+        .toFixed(2).replace(/\.00$/, "") + "%)"
     );
 
     const discountRow = $("printDiscountRow");
@@ -1429,7 +1404,6 @@
 
     setMessage("Invoice Recorded Successfully. Preview Is Ready.", "success");
     setPageStatus("Invoice Saved To The Business Database.", "connected");
-
     setText("invoiceFooterStatus", "Invoice Recorded");
 
     preview.scrollIntoView({
@@ -1443,7 +1417,7 @@
   }
 
   /* ---------------------------------------------------------
-     11. Save invoice to Firebase
+     11. Validation and atomic Firebase saving
      --------------------------------------------------------- */
 
   function validateCart() {
@@ -1452,9 +1426,11 @@
     }
 
     for (const item of state.cart) {
-      if (!item.name ||
-          !Number.isSafeInteger(item.quantity) ||
-          item.quantity < 1) {
+      if (
+        !item.name ||
+        !Number.isSafeInteger(item.quantity) ||
+        item.quantity < 1
+      ) {
         throw new Error("One or more invoice items are invalid.");
       }
 
@@ -1462,6 +1438,23 @@
         throw new Error("An invoice item has an invalid unit price.");
       }
     }
+  }
+
+  function buildPublicVerificationRecord(invoice, verificationId) {
+    /*
+     * Public record allowlist:
+     * Do not add customer details, phone, notes or item lists here.
+     */
+    return {
+      verificationId: verificationId,
+      ownerUid: OWNER_UID,
+      recordStatus: "valid",
+      businessName: getBusinessName(),
+      invoiceNumber: invoice.invoiceNumber,
+      invoiceDate: invoice.invoiceDate,
+      grandTotal: invoice.grandTotal,
+      paymentStatus: invoice.paymentStatus
+    };
   }
 
   async function saveInvoice(event) {
@@ -1477,18 +1470,30 @@
       ensureOwnerAuthorized();
       validateCart();
 
+      if (typeof state.api.update !== "function") {
+        throw new Error(
+          "Firebase multi-location update is unavailable. No invoice was saved."
+        );
+      }
+
       const tax = getTaxSettings();
 
-      if (tax.enabled && (
-        !Number.isFinite(tax.rate) ||
-        tax.rate < 0 ||
-        tax.rate > 100
-      )) {
+      if (
+        tax.enabled &&
+        (!Number.isFinite(tax.rate) || tax.rate < 0 || tax.rate > 100)
+      ) {
         throw new Error("Check the tax rate in Settings before recording an invoice.");
       }
 
       const details = getInvoiceFormDetails();
-      const totals = calculateTotals();
+
+      if (
+        settingFlag(["showCustomerName", "showBillTo"], true) &&
+        !$("customerName")?.closest(".form-field")?.hidden &&
+        !details.customerName
+      ) {
+        throw new Error("Enter the customer name.");
+      }
 
       state.saving = true;
 
@@ -1500,6 +1505,7 @@
       if (submitLabel) submitLabel.textContent = "Recording Invoice...";
 
       const createdAt = new Date();
+      const totals = calculateTotals();
       const invoiceNumber = await reserveInvoiceNumber(createdAt);
 
       ensureOwnerAuthorized();
@@ -1517,7 +1523,7 @@
       const invoiceRecord = {
         ownerUid: OWNER_UID,
 
-        invoiceNumber,
+        invoiceNumber: invoiceNumber,
         invoiceDate: localDateString(createdAt),
         invoiceTime: localTimeString(createdAt),
         createdAt: createdAt.toISOString(),
@@ -1530,7 +1536,7 @@
         paymentMethod: details.paymentMethod,
         paymentStatus: details.paymentStatus,
 
-        items,
+        items: items,
 
         subtotal: totals.subtotal,
         discount: totals.discount,
@@ -1545,22 +1551,46 @@
         recordStatus: "valid"
       };
 
-      const invoiceListRef = state.api.ref(state.db, PATHS.invoices);
+      const invoiceListRef = state.api.ref(
+        state.db,
+        PATHS.invoices
+      );
+
       const newInvoiceRef = state.api.push(invoiceListRef);
 
       if (!newInvoiceRef || !newInvoiceRef.key) {
         throw new Error("Unable to create a database invoice reference.");
       }
 
+      const verificationId = newInvoiceRef.key;
+
       /*
-       * Unique Firebase invoice key is the QR verification ID.
-       * QRVerification.html will use it to retrieve the record.
+       * Both records use the same unique ID.
+       * update(rootRef, updates) is an atomic multi-location write.
        */
-      invoiceRecord.verificationId = newInvoiceRef.key;
+      invoiceRecord.verificationId = verificationId;
 
-      await state.api.set(newInvoiceRef, invoiceRecord);
+      const verificationRecord = buildPublicVerificationRecord(
+        invoiceRecord,
+        verificationId
+      );
 
-      invoiceRecord._recordKey = newInvoiceRef.key;
+      const updates = {};
+
+      updates[PATHS.invoices + "/" + verificationId] = invoiceRecord;
+      updates[PATHS.verification + "/" + verificationId] = verificationRecord;
+
+      ensureOwnerAuthorized();
+
+      await state.api.update(
+        state.api.ref(state.db),
+        updates
+      );
+
+      /*
+       * Only render success after Firebase confirms the update.
+       */
+      invoiceRecord._recordKey = verificationId;
 
       renderSavedInvoice(invoiceRecord);
 
@@ -1578,8 +1608,12 @@
 
     } catch (error) {
       console.error("Invoice recording failed:", {
-        code: error && error.code ? error.code : "invoice-save-error",
-        message: error instanceof Error ? error.message : "Unknown Error"
+        code: error && error.code
+          ? error.code
+          : "invoice-save-error",
+        message: error instanceof Error
+          ? error.message
+          : "Unknown Error"
       });
 
       setMessage(
@@ -1646,7 +1680,6 @@
       : {};
 
     state.loaded.settings = true;
-
     renderInvoiceBusinessDetails();
     renderCart();
     checkReady();
@@ -1654,7 +1687,7 @@
 
   function onReadError(path, error) {
     console.error("Invoice data read failed:", {
-      path,
+      path: path,
       code: error && error.code ? error.code : "unknown"
     });
 
@@ -1684,7 +1717,7 @@
   }
 
   /* ---------------------------------------------------------
-     13. Reset, close and print controls
+     13. Reset, close and print
      --------------------------------------------------------- */
 
   function resetInvoice() {
@@ -1703,7 +1736,6 @@
     if ($("invoiceDiscountAmount")) $("invoiceDiscountAmount").value = "";
 
     applyFormFieldVisibility();
-
     setMessage("");
 
     setPageStatus(
@@ -1775,9 +1807,12 @@
         typeof state.api.onValue !== "function" ||
         typeof state.api.push !== "function" ||
         typeof state.api.set !== "function" ||
+        typeof state.api.update !== "function" ||
         typeof state.api.runTransaction !== "function"
       ) {
-        throw new Error("Required Realtime Database Methods Are Unavailable.");
+        throw new Error(
+          "Required Realtime Database methods are unavailable. Invoice creation is disabled."
+        );
       }
 
       subscribe(PATHS.products, onProducts, (error) =>
@@ -1812,7 +1847,7 @@
   }
 
   /* ---------------------------------------------------------
-     15. Event handlers and safe defaults
+     15. Event handlers
      --------------------------------------------------------- */
 
   $("addInvoiceItemForm")?.addEventListener("submit", addSavedProduct);
@@ -1843,8 +1878,6 @@
   initialize();
 
   window.addEventListener("pagehide", function () {
-    state.disposed = true;
-
     state.subscriptions.forEach((unsubscribe) => {
       try {
         if (typeof unsubscribe === "function") unsubscribe();
