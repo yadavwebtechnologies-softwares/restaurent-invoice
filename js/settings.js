@@ -98,6 +98,25 @@
     return null;
   }
 
+  /*
+   * Unlike firstValue(), this helper respects an intentionally
+   * empty saved field, so clearing a message stays cleared.
+   */
+  function storedValue(object, keys) {
+    for (const key of keys) {
+      if (
+        object &&
+        Object.prototype.hasOwnProperty.call(object, key) &&
+        object[key] !== null &&
+        object[key] !== undefined
+      ) {
+        return object[key];
+      }
+    }
+
+    return "";
+  }
+
   function booleanValue(value) {
     return value === true ||
       value === 1 ||
@@ -268,6 +287,7 @@
     assignInput("businessLogoUrlInput", getFieldValue(profile, [
       "businessLogoUrl",
       "logoUrl",
+      "logoImageUrl",
       "logo"
     ]));
   }
@@ -282,13 +302,17 @@
 
     const email = textValue($("businessEmailInput")?.value);
 
-    if (email && $("businessEmailInput") &&
-        !$("businessEmailInput").validity.valid) {
+    if (
+      email &&
+      $("businessEmailInput") &&
+      !$("businessEmailInput").validity.valid
+    ) {
       $("businessEmailInput").focus();
       throw new Error("Enter a valid business email.");
     }
 
     const phone = textValue($("businessPhoneInput")?.value);
+
     const logo = validateURL(
       textValue($("businessLogoUrlInput")?.value),
       "Logo URL"
@@ -306,8 +330,24 @@
   }
 
   /* ---------------------------------------------------------
-     4. Invoice preferences form
+     4. Invoice preferences and printed invoice text
      --------------------------------------------------------- */
+
+  function getExistingInvoiceSettings() {
+    const settings = state.settings || {};
+    const forms = settings.forms || {};
+
+    /*
+     * Read the actual invoice settings section rather than
+     * copying the entire root settings object into that section.
+     */
+    return (
+      settings.invoiceSettings ||
+      settings.invoice ||
+      forms.invoiceSettingsForm ||
+      {}
+    );
+  }
 
   function populateInvoiceSettings() {
     if (state.dirty.has("invoiceSettingsForm")) return;
@@ -319,10 +359,31 @@
       "prefix"
     ]));
 
-    assignInput("invoiceFooterInput", getFieldValue(settings, [
+    assignInput("invoiceFooterInput", storedValue(settings, [
       "invoiceFooter",
       "footerText",
       "footer"
+    ]));
+
+    assignInput("thankYouMessageInput", storedValue(settings, [
+      "thankYouMessage",
+      "invoiceThankYouMessage"
+    ]));
+
+    assignInput("termsLine1Input", storedValue(settings, [
+      "termsLine1",
+      "invoiceTermsLine1"
+    ]));
+
+    assignInput("termsLine2Input", storedValue(settings, [
+      "termsLine2",
+      "invoiceTermsLine2"
+    ]));
+
+    assignInput("authorisedSignatoryInput", storedValue(settings, [
+      "authorisedSignatory",
+      "authorizedSignatory",
+      "signatureLabel"
     ]));
 
     assignInput("dailySalesTargetInput", getFieldValue(settings, [
@@ -334,7 +395,26 @@
   function buildInvoiceSettings() {
     const prefix = textValue($("invoicePrefixInput")?.value);
     const footer = textValue($("invoiceFooterInput")?.value);
-    const targetText = textValue($("dailySalesTargetInput")?.value);
+
+    const thankYouMessage = textValue(
+      $("thankYouMessageInput")?.value
+    );
+
+    const termsLine1 = textValue(
+      $("termsLine1Input")?.value
+    );
+
+    const termsLine2 = textValue(
+      $("termsLine2Input")?.value
+    );
+
+    const authorisedSignatory = textValue(
+      $("authorisedSignatoryInput")?.value
+    );
+
+    const targetText = textValue(
+      $("dailySalesTargetInput")?.value
+    );
 
     if (!prefix || !/^[A-Za-z0-9-]+$/.test(prefix)) {
       $("invoicePrefixInput")?.focus();
@@ -355,18 +435,47 @@
         dailySalesTarget > 999999999
       ) {
         $("dailySalesTargetInput")?.focus();
-        throw new Error("Enter a valid non-negative daily sales target.");
+
+        throw new Error(
+          "Enter a valid non-negative daily sales target."
+        );
       }
     }
 
+    /*
+     * Preserve any additional saved invoice preferences,
+     * including future display settings not edited by this form.
+     */
+    const existing = getExistingInvoiceSettings();
+
     const result = {
+      ...existing,
       ...makeMetadata(),
+
       invoicePrefix: prefix,
-      invoiceFooter: footer
+      invoiceFooter: footer,
+
+      thankYouMessage: thankYouMessage,
+      termsLine1: termsLine1,
+      termsLine2: termsLine2,
+      authorisedSignatory: authorisedSignatory
     };
+
+    /*
+     * Remove old/alternate keys to prevent stale values from
+     * reappearing when the user intentionally clears a field.
+     */
+    delete result.invoiceThankYouMessage;
+    delete result.invoiceTermsLine1;
+    delete result.invoiceTermsLine2;
+    delete result.authorizedSignatory;
+    delete result.signatureLabel;
+    delete result.dailyTarget;
 
     if (dailySalesTarget !== null) {
       result.dailySalesTarget = dailySalesTarget;
+    } else {
+      delete result.dailySalesTarget;
     }
 
     return result;
@@ -409,8 +518,13 @@
     const taxEnabled = Boolean($("taxEnabledInput")?.checked);
     const taxText = textValue($("taxRateInput")?.value);
 
-    const discountEnabled = Boolean($("discountEnabledInput")?.checked);
-    const discountText = textValue($("maximumDiscountInput")?.value);
+    const discountEnabled = Boolean(
+      $("discountEnabledInput")?.checked
+    );
+
+    const discountText = textValue(
+      $("maximumDiscountInput")?.value
+    );
 
     let taxRate = numberValue(taxText);
 
@@ -479,6 +593,7 @@
 
   function buildPaymentSettings() {
     const upiId = textValue($("upiIdInput")?.value);
+
     const accountName = textValue(
       $("paymentAccountNameInput")?.value
     );
@@ -549,6 +664,7 @@
     }
 
     const access = window.restaurantAccess;
+
     const displayName = textValue(
       access?.user?.displayName ||
       access?.user?.email ||
@@ -556,10 +672,12 @@
     );
 
     setText("ownerDisplayName", displayName);
+
     setText(
       "ownerAvatar",
       displayName ? displayName.charAt(0).toUpperCase() : ""
     );
+
     setText("ownerDisplayRole", "Owner");
   }
 
@@ -603,10 +721,16 @@
   }
 
   /* ---------------------------------------------------------
-     9. Save one settings section only
+     9. Save only one settings section
      --------------------------------------------------------- */
 
-  async function saveSection(formId, sectionKey, builder, messageId, buttonId) {
+  async function saveSection(
+    formId,
+    sectionKey,
+    builder,
+    messageId,
+    buttonId
+  ) {
     if (state.busy.has(formId)) return;
 
     showMessage(messageId, "");
@@ -617,7 +741,9 @@
       requireOwner();
 
       if (!state.ready || !state.loaded) {
-        throw new Error("Settings are still loading. Please try again.");
+        throw new Error(
+          "Settings are still loading. Please try again."
+        );
       }
 
       record = builder();
@@ -625,7 +751,9 @@
     } catch (error) {
       showMessage(
         messageId,
-        error instanceof Error ? error.message : "Invalid settings.",
+        error instanceof Error
+          ? error.message
+          : "Invalid settings.",
         "error"
       );
 
@@ -670,9 +798,18 @@
       state.dirty.delete(formId);
 
       populateCleanForms();
-      showMessage(messageId, "Settings saved successfully.", "success");
 
-      setStatus("Settings saved and synchronized.", "connected");
+      showMessage(
+        messageId,
+        "Settings saved successfully.",
+        "success"
+      );
+
+      setStatus(
+        "Settings saved and synchronized.",
+        "connected"
+      );
+
       setText("sidebarConnectionStatus", "Database connected");
       setText("settingsFooterStatus", "Settings saved");
 
@@ -697,7 +834,9 @@
     } catch (error) {
       console.error("Settings save failed:", {
         section: sectionKey,
-        code: error && error.code ? error.code : "settings-save-error"
+        code: error && error.code
+          ? error.code
+          : "settings-save-error"
       });
 
       const message =
@@ -745,7 +884,9 @@
           : {};
 
         state.settings =
-          data && typeof data === "object" ? data : {};
+          data && typeof data === "object"
+            ? data
+            : {};
 
         state.loaded = true;
         state.ready = true;
@@ -761,13 +902,18 @@
         setText("settingsFooterStatus", "Live settings connected");
 
         if (!state.dirty.size) {
-          setText("settingsSaveStatus", "Settings are synchronized.");
+          setText(
+            "settingsSaveStatus",
+            "Settings are synchronized."
+          );
         }
       },
 
       function (error) {
         console.error("Settings database read failed:", {
-          code: error && error.code ? error.code : "unknown"
+          code: error && error.code
+            ? error.code
+            : "unknown"
         });
 
         state.loaded = false;
@@ -810,20 +956,25 @@
         !access.user ||
         access.user.uid !== OWNER_UID
       ) {
-        throw new Error("Only the authorized owner can access settings.");
+        throw new Error(
+          "Only the authorized owner can access settings."
+        );
       }
 
       const firebase = window.restaurantFirebase;
 
       if (!firebase || !firebase.readyPromise) {
-        throw new Error("Firebase configuration loader is unavailable.");
+        throw new Error(
+          "Firebase configuration loader is unavailable."
+        );
       }
 
       const ready = await firebase.readyPromise;
 
       if (!ready || !firebase.ready) {
         throw new Error(
-          firebase.error?.message || "Firebase initialization failed."
+          firebase.error?.message ||
+          "Firebase initialization failed."
         );
       }
 
@@ -855,53 +1006,65 @@
      12. Bind save forms
      --------------------------------------------------------- */
 
-  $("businessProfileForm")?.addEventListener("submit", function (event) {
-    event.preventDefault();
+  $("businessProfileForm")?.addEventListener(
+    "submit",
+    function (event) {
+      event.preventDefault();
 
-    saveSection(
-      "businessProfileForm",
-      "businessProfile",
-      buildBusinessProfile,
-      "businessProfileMessage",
-      "saveBusinessProfileBtn"
-    );
-  });
+      saveSection(
+        "businessProfileForm",
+        "businessProfile",
+        buildBusinessProfile,
+        "businessProfileMessage",
+        "saveBusinessProfileBtn"
+      );
+    }
+  );
 
-  $("invoiceSettingsForm")?.addEventListener("submit", function (event) {
-    event.preventDefault();
+  $("invoiceSettingsForm")?.addEventListener(
+    "submit",
+    function (event) {
+      event.preventDefault();
 
-    saveSection(
-      "invoiceSettingsForm",
-      "invoiceSettings",
-      buildInvoiceSettings,
-      "invoiceSettingsMessage",
-      "saveInvoiceSettingsBtn"
-    );
-  });
+      saveSection(
+        "invoiceSettingsForm",
+        "invoiceSettings",
+        buildInvoiceSettings,
+        "invoiceSettingsMessage",
+        "saveInvoiceSettingsBtn"
+      );
+    }
+  );
 
-  $("taxSettingsForm")?.addEventListener("submit", function (event) {
-    event.preventDefault();
+  $("taxSettingsForm")?.addEventListener(
+    "submit",
+    function (event) {
+      event.preventDefault();
 
-    saveSection(
-      "taxSettingsForm",
-      "taxSettings",
-      buildTaxSettings,
-      "taxSettingsMessage",
-      "saveTaxSettingsBtn"
-    );
-  });
+      saveSection(
+        "taxSettingsForm",
+        "taxSettings",
+        buildTaxSettings,
+        "taxSettingsMessage",
+        "saveTaxSettingsBtn"
+      );
+    }
+  );
 
-  $("paymentSettingsForm")?.addEventListener("submit", function (event) {
-    event.preventDefault();
+  $("paymentSettingsForm")?.addEventListener(
+    "submit",
+    function (event) {
+      event.preventDefault();
 
-    saveSection(
-      "paymentSettingsForm",
-      "paymentSettings",
-      buildPaymentSettings,
-      "paymentSettingsMessage",
-      "savePaymentSettingsBtn"
-    );
-  });
+      saveSection(
+        "paymentSettingsForm",
+        "paymentSettings",
+        buildPaymentSettings,
+        "paymentSettingsMessage",
+        "savePaymentSettingsBtn"
+      );
+    }
+  );
 
   /* ---------------------------------------------------------
      13. Clean up live listeners
