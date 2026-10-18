@@ -1,175 +1,211 @@
+/* =========================================================
+   RESTAURANT BILLING SOFTWARE
+   Protected Page Authentication Guard
+   No secrets, demo users or database writes
+   ========================================================= */
 
-"use strict";
+(function () {
+  "use strict";
 
-/**
- * Restaurant Billing Software
- * Authentication guard for protected pages.
- *
- * Requires:
- * - js/firebase-config.js
- * - js/auth.js
- *
- * Responsibilities:
- * - Hide protected page content until authentication is checked.
- * - Allow access only to the authorized administrator.
- * - Redirect unauthenticated users to login.html.
- * - Handle Firebase initialization and authentication errors.
- */
+  const OWNER_UID = "20wif9y7LQhBZgFPDsAlrQpFjnI2";
+  const LOGIN_URL = "index.html";
 
-(() => {
-  const LOGIN_PAGE = "login.html";
-  const AUTH_CHECK_TIMEOUT = 15000;
+  const access = {
+    ready: false,
+    authorized: false,
+    user: null,
+    error: null,
+    readyPromise: null
+  };
 
-  let redirectStarted = false;
-  let pageAuthorized = false;
-  let authCheckTimer = null;
-  let unsubscribeAuth = null;
+  window.restaurantAccess = access;
 
-  // Hide protected page content until the initial auth check completes.
-  document.documentElement.style.visibility = "hidden";
+  let redirecting = false;
 
-  /**
-   * Redirect to the login page only once.
-   */
+  function updatePageStatus(message, isError) {
+    const statusIds = [
+      "dashboardStatus",
+      "invoicePageStatus",
+      "productsPageStatus",
+      "settingsPageStatus",
+      "sidebarConnectionStatus"
+    ];
+
+    statusIds.forEach(function (id) {
+      const element = document.getElementById(id);
+
+      if (!element) return;
+
+      element.textContent = message;
+      element.classList.remove("is-connected", "is-error");
+
+      if (isError) {
+        element.classList.add("is-error");
+      }
+    });
+  }
+
   function redirectToLogin() {
-    if (redirectStarted) {
-      return;
-    }
+    if (redirecting) return;
 
-    redirectStarted = true;
-
-    if (authCheckTimer !== null) {
-      window.clearTimeout(authCheckTimer);
-      authCheckTimer = null;
-    }
-
-    document.documentElement.style.visibility = "hidden";
-
-    window.location.replace(LOGIN_PAGE);
+    redirecting = true;
+    window.location.replace(LOGIN_URL);
   }
 
-  /**
-   * Display an authorized page.
-   */
-  function allowPageAccess() {
-    if (redirectStarted) {
-      return;
-    }
+  function finish(authorized, user, error) {
+    access.ready = true;
+    access.authorized = Boolean(authorized);
+    access.user = authorized ? user : null;
+    access.error = error || null;
 
-    pageAuthorized = true;
-    document.documentElement.style.visibility = "";
+    document.dispatchEvent(
+      new CustomEvent("restaurant-access-ready", {
+        detail: {
+          authorized: access.authorized,
+          uid: access.user ? access.user.uid : null
+        }
+      })
+    );
   }
 
-  /**
-   * Initialize Firebase, then monitor the administrator's
-   * authentication state.
-   */
-  async function protectPage() {
-    try {
-      const firebase = window.restaurantFirebase;
-      const authService = window.restaurantAuth;
+  function getAuthAPI(firebase) {
+    const api = firebase && firebase.sdk && firebase.sdk.auth;
 
-      if (!firebase?.ready) {
-        throw new Error(
-          "Firebase configuration is unavailable. Check firebase-config.js."
-        );
+    if (
+      !firebase ||
+      !firebase.ready ||
+      !firebase.auth ||
+      !api ||
+      typeof api.onAuthStateChanged !== "function" ||
+      typeof api.signOut !== "function"
+    ) {
+      throw new Error("Firebase Authentication is unavailable.");
+    }
+
+    return api;
+  }
+
+  async function initializeGuard() {
+    const firebase = window.restaurantFirebase;
+
+    if (!firebase || !firebase.readyPromise) {
+      throw new Error("Firebase configuration loader is unavailable.");
+    }
+
+    const initialized = await firebase.readyPromise;
+
+    if (!initialized || !firebase.ready) {
+      throw new Error(
+        firebase.error?.message || "Firebase initialization failed."
+      );
+    }
+
+    const authAPI = getAuthAPI(firebase);
+
+    return new Promise(function (resolve, reject) {
+      let settled = false;
+      let unsubscribe = null;
+
+      function complete(authorized, user, error) {
+        if (settled) return;
+
+        settled = true;
+
+        if (typeof unsubscribe === "function") {
+          unsubscribe();
+        }
+
+        finish(authorized, user, error);
+        resolve(authorized);
       }
 
-      if (!authService?.watchAuth) {
-        throw new Error(
-          "Authentication service is unavailable. Check auth.js."
-        );
-      }
+      try {
+        unsubscribe = authAPI.onAuthStateChanged(
+          firebase.auth,
 
-      const initialized = await firebase.ready;
-
-      if (!initialized || !firebase.auth) {
-        throw new Error(
-          "Firebase initialization failed."
-        );
-      }
-
-      // Wait for the initial authentication state.
-      const initialAuthState = new Promise((resolve, reject) => {
-        authCheckTimer = window.setTimeout(() => {
-          authCheckTimer = null;
-
-          reject(
-            new Error(
-              "Authentication check timed out. Please reload the page."
-            )
-          );
-        }, AUTH_CHECK_TIMEOUT);
-
-        Promise.resolve(
-          authService.watchAuth(user => {
-            if (redirectStarted) {
-              return;
-            }
-
+          async function (user) {
             if (!user) {
+              complete(false, null, "No authenticated owner session.");
+              updatePageStatus("Authentication required.", true);
               redirectToLogin();
-
-              resolve(false);
               return;
             }
 
-            allowPageAccess();
+            if (user.uid !== OWNER_UID) {
+              try {
+                await authAPI.signOut(firebase.auth);
+              } catch (error) {
+                console.error(
+                  "Unauthorized session sign-out failed:",
+                  error && error.code ? error.code : "unknown"
+                );
+              }
 
-            resolve(true);
-          })
-        )
-          .then(unsubscribe => {
-            unsubscribeAuth = unsubscribe;
-          })
-          .catch(error => {
-            reject(error);
-          });
-      });
+              complete(
+                false,
+                null,
+                "The current account is not authorized."
+              );
 
-      const isAuthorized = await initialAuthState;
+              redirectToLogin();
+              return;
+            }
 
-      if (authCheckTimer !== null) {
-        window.clearTimeout(authCheckTimer);
-        authCheckTimer = null;
+            complete(true, user, null);
+            updatePageStatus("Owner session verified.", false);
+          },
+
+          function (error) {
+            const message =
+              error && error.code
+                ? "Authentication check failed: " + error.code
+                : "Authentication check failed.";
+
+            complete(false, null, message);
+            updatePageStatus(
+              "Unable to verify the owner session.",
+              true
+            );
+
+            redirectToLogin();
+          }
+        );
+      } catch (error) {
+        reject(error);
       }
-
-      if (!isAuthorized) {
-        return;
-      }
-
-      console.info(
-        "Restaurant Billing: protected page access authorized."
-      );
-    } catch (error) {
-      console.error(
-        "Page authentication check failed:",
-        error
-      );
-
-      redirectToLogin();
-    }
+    });
   }
 
-  // Start the protection process.
-  protectPage();
-
-  // Keep a reference to the auth subscription for debugging.
-  // The listener remains active to detect later sign-outs.
-  window.restaurantPageGuard = Object.freeze({
-    get authorized() {
-      return pageAuthorized;
-    },
-
-    get redirecting() {
-      return redirectStarted;
-    },
-
-    unsubscribe() {
-      if (typeof unsubscribeAuth === "function") {
-        unsubscribeAuth();
-        unsubscribeAuth = null;
+  access.readyPromise = initializeGuard()
+    .then(function (authorized) {
+      if (!authorized) {
+        return false;
       }
-    }
-  });
+
+      return true;
+    })
+    .catch(function (error) {
+      access.ready = true;
+      access.authorized = false;
+      access.user = null;
+      access.error = error instanceof Error
+        ? error.message
+        : "Unknown authentication error.";
+
+      console.error(
+        "Protected-page authorization failed:",
+        access.error
+      );
+
+      updatePageStatus(
+        "Authentication unavailable. Returning to login.",
+        true
+      );
+
+      finish(false, null, access.error);
+      redirectToLogin();
+
+      return false;
+    });
+
 })();
