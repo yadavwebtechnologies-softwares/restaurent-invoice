@@ -1,3 +1,4 @@
+
 (() => {
   "use strict";
 
@@ -48,9 +49,11 @@
   }
 
   function formatNumber(value) {
+    const number = Number(value);
+
     return new Intl.NumberFormat("en-IN", {
       maximumFractionDigits: 2
-    }).format(Number.isFinite(Number(value)) ? Number(value) : 0);
+    }).format(Number.isFinite(number) ? number : 0);
   }
 
   function parseDate(value) {
@@ -91,22 +94,9 @@
       : "valid";
   }
 
-  function getInvoiceNumber(invoice) {
-    return String(
-      invoice.invoiceNumber ??
-      invoice.number ??
-      invoice.invoiceId ??
-      invoice.id ??
-      "Invoice"
-    );
-  }
-
   function getInvoiceTotal(invoice) {
     const total = Number(
-      invoice.grandTotal ??
-      invoice.total ??
-      invoice.amount ??
-      0
+      invoice.grandTotal ?? invoice.total ?? invoice.amount ?? 0
     );
 
     return Number.isFinite(total) ? total : 0;
@@ -118,10 +108,7 @@
 
   function getItemName(item) {
     return String(
-      item.name ??
-      item.productName ??
-      item.itemName ??
-      "Unnamed item"
+      item.name ?? item.productName ?? item.itemName ?? "Unnamed item"
     );
   }
 
@@ -138,24 +125,40 @@
   function getItemAmount(item) {
     const storedAmount = Number(item.total ?? item.amount);
 
-    if (Number.isFinite(storedAmount)) {
-      return storedAmount;
-    }
+    return Number.isFinite(storedAmount)
+      ? storedAmount
+      : getItemQuantity(item) * getItemPrice(item);
+  }
 
-    return getItemQuantity(item) * getItemPrice(item);
+  function getTax(invoice) {
+    return Number(invoice.taxAmount ?? invoice.tax ?? 0) || 0;
+  }
+
+  function getDiscount(invoice) {
+    return Number(
+      invoice.discountAmount ?? invoice.discount ?? 0
+    ) || 0;
+  }
+
+  function getPaymentMethod(invoice) {
+    return String(
+      invoice.paymentMethod ??
+      invoice.paymentType ??
+      invoice.paymentMode ??
+      ""
+    ).trim();
   }
 
   function localDateString(date) {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-
-    return `${year}-${month}-${day}`;
+    return [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, "0"),
+      String(date.getDate()).padStart(2, "0")
+    ].join("-");
   }
 
   function displayDate(value) {
     const date = parseDate(value);
-
     if (!date) return "—";
 
     return new Intl.DateTimeFormat("en-IN", {
@@ -167,17 +170,14 @@
 
   function setStatus(message, isError = false) {
     const element = $("reportsPageStatus");
-
     if (!element) return;
 
     element.textContent = message;
     element.dataset.state = isError ? "error" : "normal";
-    element.setAttribute("role", isError ? "alert" : "status");
   }
 
   function setConnectionStatus(message, isError = false) {
     const element = $("sidebarConnectionStatus");
-
     if (!element) return;
 
     element.textContent = message;
@@ -186,10 +186,7 @@
 
   function setText(id, value) {
     const element = $(id);
-
-    if (element) {
-      element.textContent = String(value ?? "");
-    }
+    if (element) element.textContent = String(value ?? "");
   }
 
   function updateBranding() {
@@ -201,23 +198,40 @@
       state.businessProfile.tagline ?? ""
     ).trim();
 
+    const name = businessName || "Restaurant Billing";
+
     document.querySelectorAll("[data-business-name]").forEach((element) => {
-      element.textContent = businessName || "Restaurant Billing";
+      element.textContent = name;
     });
 
     document.querySelectorAll("[data-business-tagline]").forEach((element) => {
       element.textContent = tagline || "Billing and Invoice Software";
     });
 
-    setText("sidebarBusinessName", businessName || "Restaurant Billing");
-    setText("businessFooterName", businessName || "Restaurant Billing");
-    setText("reportBusinessName", businessName || "Restaurant Billing");
+    setText("sidebarBusinessName", name);
+    setText("businessFooterName", name);
+
+    const mark = $("brandMark");
+    if (mark) mark.textContent = name.charAt(0).toUpperCase();
+  }
+
+  function updateOwnerProfile(user) {
+    const name = String(
+      user?.displayName ??
+      user?.email ??
+      "Owner"
+    ).trim();
+
+    setText("ownerDisplayName", name);
+
+    const avatar = $("ownerAvatar");
+    if (avatar) {
+      avatar.textContent = name.charAt(0).toUpperCase() || "O";
+    }
   }
 
   function normaliseRecords(raw) {
-    if (!raw || typeof raw !== "object") {
-      return [];
-    }
+    if (!raw || typeof raw !== "object") return [];
 
     return Object.entries(raw)
       .filter(([, value]) =>
@@ -230,400 +244,6 @@
         _databaseKey: key
       }))
       .filter((record) => record.ownerUid === OWNER_UID);
-  }
-
-  function getFilteredInvoices() {
-    const start = state.startDate
-      ? new Date(`${state.startDate}T00:00:00`)
-      : null;
-
-    const end = state.endDate
-      ? new Date(`${state.endDate}T23:59:59.999`)
-      : null;
-
-    return state.invoices.filter((invoice) => {
-      // Cancelled invoices are excluded from sales calculations.
-      if (getInvoiceStatus(invoice) !== "valid") {
-        return false;
-      }
-
-      const date = getInvoiceDate(invoice);
-
-      if (!date) {
-        return !start && !end;
-      }
-
-      if (start && date < start) return false;
-      if (end && date > end) return false;
-
-      return true;
-    });
-  }
-
-  function buildDailyReport(invoices) {
-    const daily = new Map();
-
-    invoices.forEach((invoice) => {
-      const date = getInvoiceDate(invoice);
-
-      if (!date) return;
-
-      const key = localDateString(date);
-
-      if (!daily.has(key)) {
-        daily.set(key, {
-          date: key,
-          invoiceCount: 0,
-          sales: 0,
-          tax: 0,
-          discount: 0,
-          quantity: 0
-        });
-      }
-
-      const entry = daily.get(key);
-
-      entry.invoiceCount += 1;
-      entry.sales += getInvoiceTotal(invoice);
-      entry.tax += Number(invoice.taxAmount ?? invoice.tax ?? 0) || 0;
-      entry.discount += Number(
-        invoice.discount ?? invoice.discountAmount ?? 0
-      ) || 0;
-
-      getItems(invoice).forEach((item) => {
-        entry.quantity += getItemQuantity(item);
-      });
-    });
-
-    return [...daily.values()].sort((a, b) =>
-      b.date.localeCompare(a.date)
-    );
-  }
-
-  function buildProductReport(invoices) {
-    const products = new Map();
-
-    invoices.forEach((invoice) => {
-      getItems(invoice).forEach((item) => {
-        const name = getItemName(item).trim() || "Unnamed item";
-        const key = String(
-          item.productId ??
-          item.itemId ??
-          name.toLowerCase()
-        );
-
-        if (!products.has(key)) {
-          products.set(key, {
-            name,
-            quantity: 0,
-            revenue: 0,
-            invoiceCount: 0
-          });
-        }
-
-        const product = products.get(key);
-        product.quantity += getItemQuantity(item);
-        product.revenue += getItemAmount(item);
-        product.invoiceCount += 1;
-      });
-    });
-
-    return [...products.values()].sort((a, b) =>
-      b.revenue - a.revenue
-    );
-  }
-
-  function renderSummary(invoices, daily, products) {
-    const totalSales = invoices.reduce(
-      (sum, invoice) => sum + getInvoiceTotal(invoice),
-      0
-    );
-
-    const totalTax = invoices.reduce(
-      (sum, invoice) =>
-        sum + (Number(invoice.taxAmount ?? invoice.tax ?? 0) || 0),
-      0
-    );
-
-    const totalDiscount = invoices.reduce(
-      (sum, invoice) =>
-        sum + (
-          Number(invoice.discount ?? invoice.discountAmount ?? 0) || 0
-        ),
-      0
-    );
-
-    const itemsSold = invoices.reduce((sum, invoice) => {
-      return sum + getItems(invoice).reduce(
-        (itemSum, item) => itemSum + getItemQuantity(item),
-        0
-      );
-    }, 0);
-
-    const averageInvoice = invoices.length
-      ? totalSales / invoices.length
-      : 0;
-
-    setText("reportTotalSales", formatCurrency(totalSales));
-    setText("reportInvoiceCount", formatNumber(invoices.length));
-    setText("reportAverageInvoice", formatCurrency(averageInvoice));
-    setText("reportItemsSold", formatNumber(itemsSold));
-    setText("reportTaxCollected", formatCurrency(totalTax));
-    setText("reportDiscountTotal", formatCurrency(totalDiscount));
-    setText("reportProductCount", formatNumber(products.length));
-    setText("reportActiveDays", formatNumber(daily.length));
-
-    // Alternative IDs are supported to make it easier to align the page HTML.
-    setText("totalSalesValue", formatCurrency(totalSales));
-    setText("totalInvoiceCount", formatNumber(invoices.length));
-    setText("averageInvoiceValue", formatCurrency(averageInvoice));
-    setText("totalItemsSold", formatNumber(itemsSold));
-  }
-
-  function renderDailyTable(daily) {
-    const body =
-      $("salesReportTableBody") ??
-      $("dailySalesTableBody");
-
-    if (!body) return;
-
-    if (!daily.length) {
-      body.innerHTML = `
-        <tr>
-          <td colspan="5">No sales data is available for this period.</td>
-        </tr>
-      `;
-      return;
-    }
-
-    body.innerHTML = daily.map((entry) => `
-      <tr>
-        <td>${escapeHTML(displayDate(entry.date))}</td>
-        <td>${escapeHTML(formatNumber(entry.invoiceCount))}</td>
-        <td>${escapeHTML(formatCurrency(entry.sales))}</td>
-        <td>${escapeHTML(formatCurrency(entry.tax))}</td>
-        <td>${escapeHTML(formatCurrency(entry.discount))}</td>
-      </tr>
-    `).join("");
-  }
-
-  function renderProductTable(products) {
-    const body =
-      $("productReportTableBody") ??
-      $("topSellingProductsBody");
-
-    if (!body) return;
-
-    if (!products.length) {
-      body.innerHTML = `
-        <tr>
-          <td colspan="4">No product sales are available for this period.</td>
-        </tr>
-      `;
-      return;
-    }
-
-    body.innerHTML = products.map((product) => `
-      <tr>
-        <td>${escapeHTML(product.name)}</td>
-        <td>${escapeHTML(formatNumber(product.quantity))}</td>
-        <td>${escapeHTML(formatCurrency(product.revenue))}</td>
-        <td>${escapeHTML(formatNumber(product.invoiceCount))}</td>
-      </tr>
-    `).join("");
-  }
-
-  function renderReport() {
-    if (state.loading) {
-      setStatus("Loading reports…");
-      renderDailyTable([]);
-      renderProductTable([]);
-      return;
-    }
-
-    if (state.error) {
-      setStatus(state.error, true);
-      renderDailyTable([]);
-      renderProductTable([]);
-      return;
-    }
-
-    const invoices = getFilteredInvoices();
-    const daily = buildDailyReport(invoices);
-    const products = buildProductReport(invoices);
-
-    renderSummary(invoices, daily, products);
-    renderDailyTable(daily);
-    renderProductTable(products);
-
-    const startLabel = state.startDate
-      ? displayDate(state.startDate)
-      : "All dates";
-
-    const endLabel = state.endDate
-      ? displayDate(state.endDate)
-      : "Today and earlier";
-
-    setText(
-      "reportGeneratedAt",
-      `Report period: ${startLabel} – ${endLabel}`
-    );
-
-    setText(
-      "reportsFooterStatus",
-      `${invoices.length} valid invoice${invoices.length === 1 ? "" : "s"} included`
-    );
-
-    setStatus(
-      `Report updated. ${invoices.length} valid invoice${invoices.length === 1 ? "" : "s"} included.`
-    );
-  }
-
-  function applyDateFilters() {
-    const start = $("reportStartDate")?.value ?? "";
-    const end = $("reportEndDate")?.value ?? "";
-
-    if (start && end && start > end) {
-      setStatus("The start date cannot be after the end date.", true);
-      return;
-    }
-
-    state.startDate = start;
-    state.endDate = end;
-
-    renderReport();
-  }
-
-  function resetDateFilters() {
-    if ($("reportStartDate")) $("reportStartDate").value = "";
-    if ($("reportEndDate")) $("reportEndDate").value = "";
-
-    state.startDate = "";
-    state.endDate = "";
-
-    renderReport();
-  }
-
-  function setPreset(period) {
-    const today = new Date();
-    const end = localDateString(today);
-    const startDate = new Date(today);
-
-    if (period === "today") {
-      state.startDate = end;
-      state.endDate = end;
-    } else if (period === "7days") {
-      startDate.setDate(startDate.getDate() - 6);
-      state.startDate = localDateString(startDate);
-      state.endDate = end;
-    } else if (period === "30days") {
-      startDate.setDate(startDate.getDate() - 29);
-      state.startDate = localDateString(startDate);
-      state.endDate = end;
-    } else {
-      state.startDate = "";
-      state.endDate = "";
-    }
-
-    if ($("reportStartDate")) {
-      $("reportStartDate").value = state.startDate;
-    }
-
-    if ($("reportEndDate")) {
-      $("reportEndDate").value = state.endDate;
-    }
-
-    renderReport();
-  }
-
-  function csvCell(value) {
-    const text = String(value ?? "");
-    return `"${text.replace(/"/g, '""')}"`;
-  }
-
-  function downloadCSV(filename, rows) {
-    const csv = "\uFEFF" + rows
-      .map((row) => row.map(csvCell).join(","))
-      .join("\r\n");
-
-    const blob = new Blob([csv], {
-      type: "text/csv;charset=utf-8;"
-    });
-
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-
-    link.href = url;
-    link.download = filename;
-    link.hidden = true;
-
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
-
-  function exportDailyReport() {
-    if (state.loading || state.error) {
-      setStatus("Wait until the report has loaded before exporting.", true);
-      return;
-    }
-
-    const invoices = getFilteredInvoices();
-    const daily = buildDailyReport(invoices);
-
-    const rows = [
-      [
-        "Date",
-        "Invoice Count",
-        "Sales (INR)",
-        "Tax (INR)",
-        "Discount (INR)",
-        "Items Sold"
-      ]
-    ];
-
-    daily.forEach((entry) => {
-      rows.push([
-        entry.date,
-        entry.invoiceCount,
-        entry.sales.toFixed(2),
-        entry.tax.toFixed(2),
-        entry.discount.toFixed(2),
-        entry.quantity
-      ]);
-    });
-
-    rows.push([]);
-    rows.push(["Product", "Quantity Sold", "Revenue (INR)", "Invoice Line Count"]);
-
-    buildProductReport(invoices).forEach((product) => {
-      rows.push([
-        product.name,
-        product.quantity,
-        product.revenue.toFixed(2),
-        product.invoiceCount
-      ]);
-    });
-
-    downloadCSV(`restaurant-sales-report-${localDateString(new Date())}.csv`, rows);
-    setStatus("CSV report exported.");
-  }
-
-  function subscribe(path, handler, errorHandler) {
-    const shared = window.restaurantFirebase;
-    const reference = state.api.ref(shared.db, path);
-
-    const unsubscribe = state.api.onValue(
-      reference,
-      handler,
-      errorHandler
-    );
-
-    if (typeof unsubscribe === "function") {
-      state.unsubscribers.push(unsubscribe);
-    }
   }
 
   function normaliseLookup(raw) {
@@ -645,6 +265,379 @@
     return result;
   }
 
+  function getFilteredInvoices() {
+    const start = state.startDate
+      ? new Date(`${state.startDate}T00:00:00`)
+      : null;
+
+    const end = state.endDate
+      ? new Date(`${state.endDate}T23:59:59.999`)
+      : null;
+
+    return state.invoices.filter((invoice) => {
+      if (getInvoiceStatus(invoice) !== "valid") return false;
+
+      const date = getInvoiceDate(invoice);
+
+      if (!date) return !start && !end;
+      if (start && date < start) return false;
+      if (end && date > end) return false;
+
+      return true;
+    });
+  }
+
+  function getCancelledCount() {
+    const start = state.startDate
+      ? new Date(`${state.startDate}T00:00:00`)
+      : null;
+
+    const end = state.endDate
+      ? new Date(`${state.endDate}T23:59:59.999`)
+      : null;
+
+    return state.invoices.filter((invoice) => {
+      if (getInvoiceStatus(invoice) !== "cancelled") return false;
+
+      const date = getInvoiceDate(invoice);
+      if (!date) return !start && !end;
+      if (start && date < start) return false;
+      if (end && date > end) return false;
+
+      return true;
+    }).length;
+  }
+
+  function buildDailyReport(invoices) {
+    const daily = new Map();
+
+    invoices.forEach((invoice) => {
+      const date = getInvoiceDate(invoice);
+      if (!date) return;
+
+      const key = localDateString(date);
+
+      if (!daily.has(key)) {
+        daily.set(key, {
+          date: key,
+          invoiceCount: 0,
+          sales: 0,
+          tax: 0,
+          discount: 0,
+          quantity: 0
+        });
+      }
+
+      const entry = daily.get(key);
+      entry.invoiceCount += 1;
+      entry.sales += getInvoiceTotal(invoice);
+      entry.tax += getTax(invoice);
+      entry.discount += getDiscount(invoice);
+
+      getItems(invoice).forEach((item) => {
+        entry.quantity += getItemQuantity(item);
+      });
+    });
+
+    return [...daily.values()].sort((a, b) =>
+      b.date.localeCompare(a.date)
+    );
+  }
+
+  function buildProductReport(invoices) {
+    const products = new Map();
+
+    invoices.forEach((invoice) => {
+      getItems(invoice).forEach((item) => {
+        const name = getItemName(item).trim() || "Unnamed item";
+        const key = String(item.productId ?? item.itemId ?? name.toLowerCase());
+
+        if (!products.has(key)) {
+          products.set(key, {
+            name,
+            quantity: 0,
+            revenue: 0
+          });
+        }
+
+        const product = products.get(key);
+        product.quantity += getItemQuantity(item);
+        product.revenue += getItemAmount(item);
+      });
+    });
+
+    return [...products.values()].sort((a, b) =>
+      b.revenue - a.revenue
+    );
+  }
+
+  function buildPaymentReport(invoices) {
+    const payments = new Map();
+
+    invoices.forEach((invoice) => {
+      const method = getPaymentMethod(invoice) || "Not recorded";
+
+      if (!payments.has(method)) {
+        payments.set(method, {
+          method,
+          invoiceCount: 0,
+          total: 0
+        });
+      }
+
+      const entry = payments.get(method);
+      entry.invoiceCount += 1;
+      entry.total += getInvoiceTotal(invoice);
+    });
+
+    return [...payments.values()].sort((a, b) => b.total - a.total);
+  }
+
+  function renderSummary(invoices, daily, products) {
+    const totalSales = invoices.reduce(
+      (sum, invoice) => sum + getInvoiceTotal(invoice), 0
+    );
+
+    const totalTax = invoices.reduce(
+      (sum, invoice) => sum + getTax(invoice), 0
+    );
+
+    const totalDiscount = invoices.reduce(
+      (sum, invoice) => sum + getDiscount(invoice), 0
+    );
+
+    const itemsSold = invoices.reduce((sum, invoice) =>
+      sum + getItems(invoice).reduce(
+        (itemSum, item) => itemSum + getItemQuantity(item), 0
+      ), 0
+    );
+
+    setText("reportTotalSales", formatCurrency(totalSales));
+    setText("reportInvoiceCount", formatNumber(invoices.length));
+    setText(
+      "reportAverageInvoice",
+      formatCurrency(invoices.length ? totalSales / invoices.length : 0)
+    );
+    setText("reportCancelledCount", formatNumber(getCancelledCount()));
+
+    setText("reportItemsSold", formatNumber(itemsSold));
+    setText("reportTaxCollected", formatCurrency(totalTax));
+    setText("reportDiscountTotal", formatCurrency(totalDiscount));
+    setText("reportProductCount", formatNumber(products.length));
+    setText("reportActiveDays", formatNumber(daily.length));
+  }
+
+  function renderDailyTable(daily) {
+    const body = $("dailySalesTableBody");
+    if (!body) return;
+
+    if (!daily.length) {
+      body.innerHTML = `
+        <tr><td colspan="3" class="table-empty">
+          No sales data is available for this period.
+        </td></tr>`;
+      return;
+    }
+
+    body.innerHTML = daily.map((entry) => `
+      <tr>
+        <td>${escapeHTML(displayDate(entry.date))}</td>
+        <td>${escapeHTML(formatNumber(entry.invoiceCount))}</td>
+        <td>${escapeHTML(formatCurrency(entry.sales))}</td>
+      </tr>
+    `).join("");
+  }
+
+  function renderProductTable(products) {
+    const body = $("productReportTableBody");
+    if (!body) return;
+
+    if (!products.length) {
+      body.innerHTML = `
+        <tr><td colspan="3" class="table-empty">
+          No product sales are available for this period.
+        </td></tr>`;
+      return;
+    }
+
+    body.innerHTML = products.map((product) => `
+      <tr>
+        <td>${escapeHTML(product.name)}</td>
+        <td>${escapeHTML(formatNumber(product.quantity))}</td>
+        <td>${escapeHTML(formatCurrency(product.revenue))}</td>
+      </tr>
+    `).join("");
+  }
+
+  function renderPaymentTable(payments) {
+    const body = $("paymentReportTableBody");
+    if (!body) return;
+
+    if (!payments.length) {
+      body.innerHTML = `
+        <tr><td colspan="3" class="table-empty">
+          No payment records are available for this period.
+        </td></tr>`;
+      return;
+    }
+
+    body.innerHTML = payments.map((payment) => `
+      <tr>
+        <td>${escapeHTML(payment.method)}</td>
+        <td>${escapeHTML(formatNumber(payment.invoiceCount))}</td>
+        <td>${escapeHTML(formatCurrency(payment.total))}</td>
+      </tr>
+    `).join("");
+  }
+
+  function renderReport() {
+    if (state.loading) {
+      setStatus("Loading saved invoice records…");
+      return;
+    }
+
+    if (state.error) {
+      setStatus(state.error, true);
+      return;
+    }
+
+    const invoices = getFilteredInvoices();
+    const daily = buildDailyReport(invoices);
+    const products = buildProductReport(invoices);
+    const payments = buildPaymentReport(invoices);
+
+    renderSummary(invoices, daily, products);
+    renderDailyTable(daily);
+    renderProductTable(products);
+    renderPaymentTable(payments);
+
+    const startLabel = state.startDate
+      ? displayDate(state.startDate)
+      : "All dates";
+
+    const endLabel = state.endDate
+      ? displayDate(state.endDate)
+      : "Today and earlier";
+
+    setText("reportPeriodDescription", `Report period: ${startLabel} – ${endLabel}`);
+    setText("reportsFooterStatus", `${invoices.length} valid invoices included`);
+
+    setStatus(
+      `Report updated. ${invoices.length} valid invoice${invoices.length === 1 ? "" : "s"} included.`
+    );
+  }
+
+  function applyDateFilters() {
+    const start = $("reportStartDate")?.value ?? "";
+    const end = $("reportEndDate")?.value ?? "";
+
+    if (start && end && start > end) {
+      setStatus("The start date cannot be after the end date.", true);
+      return;
+    }
+
+    state.startDate = start;
+    state.endDate = end;
+    renderReport();
+  }
+
+  function setPreset(period) {
+    const today = new Date();
+    const end = localDateString(today);
+    const startDate = new Date(today);
+
+    if (period === "today") {
+      state.startDate = end;
+      state.endDate = end;
+    } else if (period === "month") {
+      startDate.setDate(1);
+      state.startDate = localDateString(startDate);
+      state.endDate = end;
+    } else {
+      state.startDate = "";
+      state.endDate = "";
+    }
+
+    if ($("reportStartDate")) $("reportStartDate").value = state.startDate;
+    if ($("reportEndDate")) $("reportEndDate").value = state.endDate;
+
+    renderReport();
+  }
+
+  function csvCell(value) {
+    return `"${String(value ?? "").replace(/"/g, '""')}"`;
+  }
+
+  function downloadCSV(filename, rows) {
+    const csv = "\uFEFF" + rows
+      .map((row) => row.map(csvCell).join(","))
+      .join("\r\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = filename;
+    link.hidden = true;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function exportDailyReport() {
+    if (state.loading || state.error) {
+      setStatus("Wait until the report has loaded before exporting.", true);
+      return;
+    }
+
+    const invoices = getFilteredInvoices();
+    const rows = [
+      ["Date", "Invoice Count", "Sales (INR)", "Tax (INR)", "Discount (INR)", "Items Sold"]
+    ];
+
+    buildDailyReport(invoices).forEach((entry) => {
+      rows.push([
+        entry.date,
+        entry.invoiceCount,
+        entry.sales.toFixed(2),
+        entry.tax.toFixed(2),
+        entry.discount.toFixed(2),
+        entry.quantity
+      ]);
+    });
+
+    rows.push([]);
+    rows.push(["Product", "Quantity Sold", "Revenue (INR)"]);
+
+    buildProductReport(invoices).forEach((product) => {
+      rows.push([product.name, product.quantity, product.revenue.toFixed(2)]);
+    });
+
+    rows.push([]);
+    rows.push(["Payment Method", "Invoice Count", "Total Amount (INR)"]);
+
+    buildPaymentReport(invoices).forEach((payment) => {
+      rows.push([payment.method, payment.invoiceCount, payment.total.toFixed(2)]);
+    });
+
+    downloadCSV(`restaurant-sales-report-${localDateString(new Date())}.csv`, rows);
+    setStatus("CSV report exported.");
+  }
+
+  function subscribe(path, handler, errorHandler) {
+    const shared = window.restaurantFirebase;
+    const reference = state.api.ref(shared.db, path);
+
+    const unsubscribe = state.api.onValue(reference, handler, errorHandler);
+
+    if (typeof unsubscribe === "function") {
+      state.unsubscribers.push(unsubscribe);
+    }
+  }
+
   async function initializePage() {
     if (state.initialized) return;
     state.initialized = true;
@@ -656,6 +649,7 @@
       state.error = "Firebase configuration is unavailable.";
       renderReport();
       setConnectionStatus("Configuration error", true);
+      setText("ownerDisplayName", "Account unavailable");
       return;
     }
 
@@ -669,13 +663,13 @@
 
       const access = window.restaurantAccess;
 
-      if (access?.readyPromise) {
-        await access.readyPromise;
-      }
+      if (access?.readyPromise) await access.readyPromise;
 
       if (!access?.authorized || access.user?.uid !== OWNER_UID) {
         throw new Error("Owner access is required to view reports.");
       }
+
+      updateOwnerProfile(access.user);
 
       state.api = {
         ref: shared.sdk.database.ref,
@@ -695,50 +689,36 @@
         handleDatabaseError
       );
 
-      subscribe(
-        PRODUCTS_PATH,
-        (snapshot) => {
-          state.products = normaliseLookup(snapshot.val());
-        },
-        handleDatabaseError
-      );
+      subscribe(PRODUCTS_PATH, (snapshot) => {
+        state.products = normaliseLookup(snapshot.val());
+      }, handleDatabaseError);
 
-      subscribe(
-        CATEGORIES_PATH,
-        (snapshot) => {
-          state.categories = normaliseLookup(snapshot.val());
-        },
-        handleDatabaseError
-      );
+      subscribe(CATEGORIES_PATH, (snapshot) => {
+        state.categories = normaliseLookup(snapshot.val());
+      }, handleDatabaseError);
 
-      subscribe(
-        BUSINESS_PATH,
-        (snapshot) => {
-          state.businessProfile = snapshot.val() || {};
-          updateBranding();
-        },
-        () => {
-          state.businessProfile = {};
-          updateBranding();
-        }
-      );
+      subscribe(BUSINESS_PATH, (snapshot) => {
+        state.businessProfile = snapshot.val() || {};
+        updateBranding();
+      }, () => {
+        state.businessProfile = {};
+        updateBranding();
+      });
     } catch (error) {
       state.loading = false;
-      state.error =
-        error?.message || "Could not connect to reports.";
+      state.error = error?.message || "Could not connect to reports.";
 
       setConnectionStatus("Connection error", true);
+      setText("ownerDisplayName", "Account unavailable");
       renderReport();
     }
   }
 
   function handleDatabaseError(error) {
     state.loading = false;
-
-    state.error =
-      error?.code === "PERMISSION_DENIED"
-        ? "Database permission denied. Check Firebase Realtime Database rules."
-        : "Unable to load report data.";
+    state.error = error?.code === "PERMISSION_DENIED"
+      ? "Database permission denied. Check Firebase Realtime Database rules."
+      : "Unable to load report data.";
 
     setConnectionStatus("Database error", true);
     renderReport();
@@ -750,21 +730,15 @@
       applyDateFilters();
     });
 
-    $("reportApplyFiltersBtn")?.addEventListener("click", (event) => {
-      event.preventDefault();
-      applyDateFilters();
+    $("currentDayReportBtn")?.addEventListener("click", () => {
+      setPreset("today");
     });
 
-    $("reportResetFiltersBtn")?.addEventListener("click", (event) => {
-      event.preventDefault();
-      resetDateFilters();
+    $("currentMonthReportBtn")?.addEventListener("click", () => {
+      setPreset("month");
     });
 
-    $("reportExportBtn")?.addEventListener("click", exportDailyReport);
-
-    $("reportPreset")?.addEventListener("change", (event) => {
-      setPreset(event.target.value);
-    });
+    $("exportReportBtn")?.addEventListener("click", exportDailyReport);
 
     window.addEventListener("pagehide", () => {
       state.unsubscribers.forEach((unsubscribe) => unsubscribe());
