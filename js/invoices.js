@@ -1,3 +1,10 @@
+/* =========================================================
+   RESTAURANT BILLING SOFTWARE
+   Invoice History, Filtering, Details and Printing
+   Database root: restaurantBilling/
+   No demo invoices, fake products or embedded secrets
+   ========================================================= */
+
 (() => {
   "use strict";
 
@@ -16,7 +23,8 @@
     unsubscribeBusiness: null,
     initialized: false,
     loading: true,
-    error: ""
+    error: "",
+    businessProfile: {}
   };
 
   const $ = (id) => document.getElementById(id);
@@ -248,7 +256,7 @@
       })
       .filter(Boolean)
       .filter((invoice) => {
-        // Records belonging to other owners must never be displayed here.
+        // Only show records belonging to the authorized owner.
         return invoice.ownerUid === OWNER_UID;
       })
       .sort((a, b) => {
@@ -260,9 +268,11 @@
 
   function renderSummary() {
     const totalCount = state.invoices.length;
+
     const validInvoices = state.invoices.filter(
       (invoice) => getInvoiceStatus(invoice) === "valid"
     );
+
     const cancelledInvoices = state.invoices.filter(
       (invoice) => getInvoiceStatus(invoice) === "cancelled"
     );
@@ -296,8 +306,13 @@
       .trim()
       .toLowerCase();
 
+    /*
+     * Important fix:
+     * An empty dropdown value must behave like "all".
+     * The || operator handles both null/undefined and "".
+     */
     const statusFilter = String(
-      $("invoiceStatusFilter")?.value ?? "all"
+      $("invoiceStatusFilter")?.value || "all"
     ).toLowerCase();
 
     const startValue = $("invoiceStartDate")?.value ?? "";
@@ -347,6 +362,7 @@
 
     state.currentPage = 1;
     renderTable();
+
     return true;
   }
 
@@ -364,6 +380,7 @@
     );
 
     const startIndex = (state.currentPage - 1) * PAGE_SIZE;
+
     const pageInvoices = state.filteredInvoices.slice(
       startIndex,
       startIndex + PAGE_SIZE
@@ -392,7 +409,9 @@
         const date = getInvoiceDate(invoice);
         const number = getInvoiceNumber(invoice);
         const status = getInvoiceStatus(invoice);
-        const statusLabel = status === "cancelled" ? "Cancelled" : "Generated";
+
+        const statusLabel =
+          status === "cancelled" ? "Cancelled" : "Generated";
 
         return `
           <tr>
@@ -405,16 +424,20 @@
                 aria-label="View invoice ${escapeHTML(number)}"
               >${escapeHTML(number)}</button>
             </td>
+
             <td>
               <span>${escapeHTML(formatDate(date))}</span>
               <span class="table-secondary">${escapeHTML(formatTime(date))}</span>
             </td>
+
             <td>${escapeHTML(formatCurrency(getInvoiceTotal(invoice)))}</td>
+
             <td>
               <span class="status-badge ${status === "cancelled" ? "status-cancelled" : "status-success"}">
                 ${statusLabel}
               </span>
             </td>
+
             <td>
               <button
                 class="secondary-button"
@@ -500,6 +523,7 @@
             <p>${escapeHTML(getBusinessAddress())}</p>
             <p>${escapeHTML(getBusinessContact())}</p>
           </div>
+
           <div class="invoice-detail-meta">
             <p><strong>Invoice:</strong> ${escapeHTML(invoiceNumber)}</p>
             <p><strong>Date:</strong> ${escapeHTML(formatDate(date))}</p>
@@ -518,6 +542,7 @@
                 <th>Amount</th>
               </tr>
             </thead>
+
             <tbody>
               ${itemRows || `<tr><td colspan="4">No item details available.</td></tr>`}
             </tbody>
@@ -525,13 +550,25 @@
         </div>
 
         <div class="invoice-detail-totals">
-          <p><span>Subtotal</span><strong>${escapeHTML(formatCurrency(subtotal))}</strong></p>
+          <p>
+            <span>Subtotal</span>
+            <strong>${escapeHTML(formatCurrency(subtotal))}</strong>
+          </p>
+
           ${discount > 0 ? `
-            <p><span>Discount</span><strong>−${escapeHTML(formatCurrency(discount))}</strong></p>
+            <p>
+              <span>Discount</span>
+              <strong>−${escapeHTML(formatCurrency(discount))}</strong>
+            </p>
           ` : ""}
+
           ${taxAmount > 0 ? `
-            <p><span>Tax</span><strong>${escapeHTML(formatCurrency(taxAmount))}</strong></p>
+            <p>
+              <span>Tax</span>
+              <strong>${escapeHTML(formatCurrency(taxAmount))}</strong>
+            </p>
           ` : ""}
+
           <p class="invoice-detail-grand-total">
             <span>Total</span>
             <strong>${escapeHTML(formatCurrency(grandTotal))}</strong>
@@ -575,6 +612,7 @@
   function getBusinessContact() {
     const profile = state.businessProfile ?? {};
     const values = [profile.phone, profile.email].filter(Boolean);
+
     return values.join(" · ");
   }
 
@@ -615,6 +653,9 @@
       </tr>
     `).join("");
 
+    const businessAddress = getBusinessAddress();
+    const businessContact = getBusinessContact();
+
     const printDocument = `
       <!DOCTYPE html>
       <html lang="en">
@@ -624,12 +665,13 @@
         <title>Invoice ${escapeHTML(number)}</title>
         <link rel="stylesheet" href="style.css">
       </head>
+
       <body>
         <main id="invoicePreviewSection" class="invoice-preview-section">
           <header class="invoice-print-header">
             <h1>${escapeHTML(getBusinessName())}</h1>
-            ${getBusinessAddress() ? `<p>${escapeHTML(getBusinessAddress())}</p>` : ""}
-            ${getBusinessContact() ? `<p>${escapeHTML(getBusinessContact())}</p>` : ""}
+            ${businessAddress ? `<p>${escapeHTML(businessAddress)}</p>` : ""}
+            ${businessContact ? `<p>${escapeHTML(businessContact)}</p>` : ""}
             <h2>INVOICE</h2>
           </header>
 
@@ -649,19 +691,44 @@
                 <th>Amount</th>
               </tr>
             </thead>
+
             <tbody>
               ${itemRows || `<tr><td colspan="4">No item details available.</td></tr>`}
             </tbody>
           </table>
 
           <section class="invoice-detail-totals">
-            <p><span>Subtotal</span><strong>${escapeHTML(formatCurrency(subtotal))}</strong></p>
-            ${discount > 0 ? `<p><span>Discount</span><strong>−${escapeHTML(formatCurrency(discount))}</strong></p>` : ""}
-            ${taxAmount > 0 ? `<p><span>Tax</span><strong>${escapeHTML(formatCurrency(taxAmount))}</strong></p>` : ""}
-            <p class="invoice-detail-grand-total"><span>Total</span><strong>${escapeHTML(formatCurrency(grandTotal))}</strong></p>
+            <p>
+              <span>Subtotal</span>
+              <strong>${escapeHTML(formatCurrency(subtotal))}</strong>
+            </p>
+
+            ${discount > 0 ? `
+              <p>
+                <span>Discount</span>
+                <strong>−${escapeHTML(formatCurrency(discount))}</strong>
+              </p>
+            ` : ""}
+
+            ${taxAmount > 0 ? `
+              <p>
+                <span>Tax</span>
+                <strong>${escapeHTML(formatCurrency(taxAmount))}</strong>
+              </p>
+            ` : ""}
+
+            <p class="invoice-detail-grand-total">
+              <span>Total</span>
+              <strong>${escapeHTML(formatCurrency(grandTotal))}</strong>
+            </p>
           </section>
 
-          ${notes ? `<section class="invoice-detail-notes"><strong>Notes</strong><p>${escapeHTML(notes)}</p></section>` : ""}
+          ${notes ? `
+            <section class="invoice-detail-notes">
+              <strong>Notes</strong>
+              <p>${escapeHTML(notes)}</p>
+            </section>
+          ` : ""}
         </main>
       </body>
       </html>
@@ -683,6 +750,7 @@
     if (!button) return;
 
     const key = button.dataset.invoiceKey;
+
     const invoice = state.invoices.find(
       (entry) => entry._databaseKey === key
     );
@@ -693,16 +761,28 @@
   }
 
   function resetFilters() {
-    if ($("invoiceSearchInput")) $("invoiceSearchInput").value = "";
-    if ($("invoiceStatusFilter")) $("invoiceStatusFilter").value = "all";
-    if ($("invoiceStartDate")) $("invoiceStartDate").value = "";
-    if ($("invoiceEndDate")) $("invoiceEndDate").value = "";
+    if ($("invoiceSearchInput")) {
+      $("invoiceSearchInput").value = "";
+    }
+
+    if ($("invoiceStatusFilter")) {
+      $("invoiceStatusFilter").value = "all";
+    }
+
+    if ($("invoiceStartDate")) {
+      $("invoiceStartDate").value = "";
+    }
+
+    if ($("invoiceEndDate")) {
+      $("invoiceEndDate").value = "";
+    }
 
     applyFilters();
   }
 
   async function initializePage() {
     if (state.initialized) return;
+
     state.initialized = true;
 
     const shared = window.restaurantFirebase;
@@ -718,9 +798,14 @@
     setStatus("Connecting to invoice history…");
 
     try {
-      await shared.readyPromise;
+      const initialized = await shared.readyPromise;
 
-      if (shared.error || !shared.db || !shared.sdk?.database) {
+      if (
+        !initialized ||
+        shared.error ||
+        !shared.db ||
+        !shared.sdk?.database
+      ) {
         throw new Error("The database connection is unavailable.");
       }
 
@@ -740,33 +825,38 @@
       };
 
       setConnectionStatus("Connected");
+
       watchInvoices();
       watchBusinessProfile();
     } catch (error) {
       state.loading = false;
       state.error = error?.message || "Could not connect to invoice history.";
+
       setConnectionStatus("Connection error", true);
       renderTable();
     }
   }
 
   function watchInvoices() {
-    const reference = state.api.ref(state.apiDb ?? window.restaurantFirebase.db, INVOICES_PATH);
+    const shared = window.restaurantFirebase;
+    const reference = state.api.ref(shared.db, INVOICES_PATH);
 
     state.unsubscribeInvoices = state.api.onValue(
       reference,
-      (snapshot) => {
-        const raw = snapshot.val();
 
-        state.invoices = normalizeInvoices(raw);
+      (snapshot) => {
+        state.invoices = normalizeInvoices(snapshot.val());
+
         state.loading = false;
         state.error = "";
 
         renderSummary();
         applyFilters();
       },
+
       (error) => {
         state.loading = false;
+
         state.error =
           error?.code === "PERMISSION_DENIED"
             ? "Database permission denied. Check Firebase Realtime Database rules."
@@ -783,12 +873,15 @@
 
     state.unsubscribeBusiness = state.api.onValue(
       state.api.ref(shared.db, SETTINGS_PATH),
+
       (snapshot) => {
         state.businessProfile = snapshot.val() || {};
         updateBusinessBranding(state.businessProfile);
       },
+
       () => {
-        // Invoice history remains usable if optional business-profile settings fail.
+        // Invoice history remains usable if optional settings fail.
+        state.businessProfile = {};
         updateBusinessBranding({});
       }
     );
@@ -799,6 +892,7 @@
       event.preventDefault();
 
       const button = $("applyInvoiceFiltersBtn");
+
       setButtonBusy(button, true, "Applying…");
 
       try {
@@ -808,12 +902,19 @@
       }
     });
 
-    $("resetInvoiceFiltersBtn")?.addEventListener("click", resetFilters);
+    $("resetInvoiceFiltersBtn")?.addEventListener(
+      "click",
+      resetFilters
+    );
 
-    $("invoicesTableBody")?.addEventListener("click", handleTableClick);
+    $("invoicesTableBody")?.addEventListener(
+      "click",
+      handleTableClick
+    );
 
     $("previousInvoicePage")?.addEventListener("click", () => {
       if (state.currentPage <= 1) return;
+
       state.currentPage -= 1;
       renderTable();
     });
@@ -825,6 +926,7 @@
       );
 
       if (state.currentPage >= totalPages) return;
+
       state.currentPage += 1;
       renderTable();
     });
