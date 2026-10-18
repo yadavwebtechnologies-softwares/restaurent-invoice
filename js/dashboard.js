@@ -277,23 +277,55 @@
   }
 
   function customerName(invoice) {
-    return normalizeText(
+    const name = normalizeText(
       firstValue(invoice, [
         "customerName",
         "customer",
         "customer_name"
       ]) || ""
-    ) || "—";
+    );
+
+    return name || "Walk-in Customer";
   }
 
   function paymentMethod(invoice) {
-    return normalizeText(
+    const method = normalizeText(
       firstValue(invoice, [
         "paymentMethod",
+        "paymentType",
         "paymentMode",
         "payment_method"
       ]) || ""
-    ) || "—";
+    );
+
+    if (!method) {
+      return "Cash";
+    }
+
+    const normalized = method.toLowerCase();
+
+    const labels = {
+      cash: "Cash",
+      upi: "UPI",
+      "upi qr": "UPI QR",
+      card: "Card",
+      "credit card": "Credit Card",
+      "debit card": "Debit Card",
+      "bank transfer": "Bank Transfer",
+      "net banking": "Net Banking",
+      "online payment": "Online Payment"
+    };
+
+    if (labels[normalized]) {
+      return labels[normalized];
+    }
+
+    return normalized
+      .split(/\s+/)
+      .map(function (word) {
+        return word.charAt(0).toUpperCase() + word.slice(1);
+      })
+      .join(" ");
   }
 
   function sortInvoicesLatestFirst(invoices) {
@@ -364,10 +396,6 @@
     const name = getBusinessName();
     const tagline = getBusinessTagline();
 
-    /*
-     * Empty settings stay empty instead of showing fake
-     * business details. HTML loading labels are not records.
-     */
     if (name) {
       document.querySelectorAll("[data-business-name]").forEach(
         function (node) {
@@ -445,8 +473,13 @@
     for (const value of candidates) {
       const amount = Number(value);
 
-      if (value !== null && value !== undefined &&
-          value !== "" && Number.isFinite(amount) && amount >= 0) {
+      if (
+        value !== null &&
+        value !== undefined &&
+        value !== "" &&
+        Number.isFinite(amount) &&
+        amount >= 0
+      ) {
         return amount;
       }
     }
@@ -543,6 +576,7 @@
     if (target === null || target <= 0) {
       setText("dailyTargetValue", "Not set");
       setText("dailyTargetStatus", "Not configured");
+
       setText(
         "dailyTargetRemaining",
         "Set a daily sales target in Settings to track progress."
@@ -585,6 +619,7 @@
         "aria-valuenow",
         String(Math.round(percentage))
       );
+
       trackElement.setAttribute(
         "aria-valuetext",
         percentage.toFixed(1) + "% complete"
@@ -724,6 +759,7 @@
         if (!name) return;
 
         const key = name.toLowerCase();
+
         const previous = totals.get(key) || {
           name: name,
           quantity: 0
@@ -760,7 +796,7 @@
 
       const quantity = document.createElement("span");
       quantity.textContent =
-        String(item.quantity) + " units recorded";
+        String(item.quantity) + " Invoices Recorded";
 
       row.appendChild(name);
       row.appendChild(quantity);
@@ -805,7 +841,11 @@
     const allLoaded = Object.values(state.loaded).every(Boolean);
 
     if (allLoaded) {
-      setStatus("Dashboard connected. Live database updates are enabled.", "connected");
+      setStatus(
+        "Dashboard connected. Live database updates are enabled.",
+        "connected"
+      );
+
       setText("sidebarConnectionStatus", "Database connected");
       setText("dashboardFooterStatus", "Live data connected");
 
