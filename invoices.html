@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="robots" content="noindex, nofollow">
+
+  <title>Invoice History | Restaurant Billing</title>
+  <meta
+    name="description"
+    content="View and manage saved business invoices."
+  >
+
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body class="invoices-page">
+
+  <div class="app" id="app">
+
+    <!-- Shared Sidebar -->
+    <aside class="sidebar" id="sidebar">
+
+      <div class="brand">
+        <a class="brand-link" href="dashboard.html" aria-label="Dashboard">
+          <span class="brand-mark" id="brandMark" aria-hidden="true">B</span>
+          <span class="brand-text">
+            <span class="brand-name" id="sidebarBusinessName"
+                  data-business-name>Business profile</span>
+            <span class="brand-description" id="sidebarBusinessTagline"
+                  data-business-tagline>Billing and management</span>
+          </span>
+        </a>
+      </div>
+
+      <nav class="sidebar-navigation" aria-label="Main navigation">
+
+        <p class="nav-section">Main</p>
+
+        <a class="nav-item" href="dashboard.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="3" width="7" height="9" rx="1.5"/>
+            <rect x="14" y="3" width="7" height="5" rx="1.5"/>
+            <rect x="14" y="12" width="7" height="9" rx="1.5"/>
+            <rect x="3" y="16" width="7" height="5" rx="1.5"/>
+          </svg>
+          <span>Dashboard</span>
+        </a>
+
+        <a class="nav-item" href="invoice.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 5v14M5 12h14"/>
+            <rect x="3" y="3" width="18" height="18" rx="3"/>
+          </svg>
+          <span>New Invoice</span>
+        </a>
+
+        <a class="nav-item active" href="invoices.html" aria-current="page">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <path d="M14 2v6h6M8 13h8M8 17h5"/>
+          </svg>
+          <span>Invoice History</span>
+        </a>
+
+        <a class="nav-item" href="reports.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 3v18h18"/>
+            <path d="M7 14l4-4 3 3 5-6"/>
+          </svg>
+          <span>Reports</span>
+        </a>
+
+        <p class="nav-section">Management</p>
+
+        <a class="nav-item" href="products.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true">
+            <path d="m12 3 9 5-9 5-9-5 9-5Z"/>
+            <path d="M3 8v9l9 5 9-5V8M12 13v9"/>
+          </svg>
+          <span>Products &amp; Categories</span>
+        </a>
+
+        <a class="nav-item" href="settings.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a2 2 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a2 2 0 0 0-1.8-.3 2 2 0 0 0-1 1.5v.2a2 2 0 1 1-4 0v-.2a2 2 0 0 0-1-1.5 2 2 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a2 2 0 0 0 .3-1.8 2 2 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.2a2 2 0 0 0 1.5-1 2 2 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a2 2 0 0 0 1.8.3 2 2 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.2a2 2 0 0 0 1 1.5 2 2 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a2 2 0 0 0-.3 1.8 2 2 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.2a2 2 0 0 0-1.5 1Z"/>
+          </svg>
+          <span>Settings</span>
+        </a>
+
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-business-status">
+          <span class="status-indicator" aria-hidden="true"></span>
+          <span id="sidebarConnectionStatus">Connecting to database</span>
+        </div>
+
+        <button type="button" class="nav-item logout-button" id="logoutBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true">
+            <path d="M10 17l5-5-5-5M15 12H3"/>
+            <path d="M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7"/>
+          </svg>
+          <span>Sign Out</span>
+        </button>
+      </div>
+
+    </aside>
+
+    <!-- Mobile Backdrop -->
+    <button
+      type="button"
+      class="overlay"
+      id="overlay"
+      aria-label="Close navigation"
+      hidden
+    ></button>
+
+    <div class="main">
+
+      <!-- Shared Header -->
+      <header class="topbar">
+
+        <div class="topbar-left">
+          <button
+            type="button"
+            class="menu-btn"
+            id="menuBtn"
+            aria-label="Open navigation"
+            aria-controls="sidebar"
+            aria-expanded="false"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round"
+                 aria-hidden="true">
+              <path d="M3 6h18M3 12h18M3 18h18"/>
+            </svg>
+          </button>
+
+          <div class="topbar-heading">
+            <p class="breadcrumb">Main / Invoice History</p>
+            <h1>Invoice History</h1>
+          </div>
+        </div>
+
+        <div class="topbar-right">
+          <div class="owner-profile" id="ownerProfile">
+            <span class="owner-avatar" id="ownerAvatar" aria-hidden="true">—</span>
+            <span class="owner-profile-text">
+              <span class="owner-name" id="ownerDisplayName">Loading account</span>
+              <span class="owner-role" id="ownerDisplayRole">Owner</span>
+            </span>
+          </div>
+        </div>
+
+      </header>
+
+      <!-- Invoice History Content -->
+      <main class="content" id="invoicesContent">
+
+        <section class="page-heading">
+          <div>
+            <p class="section-eyebrow">BILLING RECORDS</p>
+            <h2>Saved Invoices</h2>
+            <p class="muted-text">
+              Search recorded invoices and open their details.
+            </p>
+          </div>
+
+          <a class="btn btn-primary" href="invoice.html">
+            Create Invoice
+          </a>
+        </section>
+
+        <div
+          class="dashboard-status"
+          id="invoicesPageStatus"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          Loading saved invoice records.
+        </div>
+
+        <!-- Summary -->
+        <section class="dashboard-section" aria-labelledby="invoiceOverviewHeading">
+
+          <div class="section-heading">
+            <div>
+              <h2 id="invoiceOverviewHeading">Invoice Overview</h2>
+              <p class="muted-text">Summary of matching saved records.</p>
+            </div>
+          </div>
+
+          <div class="stats-grid">
+
+            <article class="stat-card">
+              <p class="stat-label">Total Invoices</p>
+              <p class="stat-value" id="totalInvoicesCount">—</p>
+              <p class="stat-description">Matching records</p>
+            </article>
+
+            <article class="stat-card">
+              <p class="stat-label">Valid Invoice Value</p>
+              <p class="stat-value" id="totalInvoiceValue">—</p>
+              <p class="stat-description">Saved non-cancelled invoices</p>
+            </article>
+
+            <article class="stat-card">
+              <p class="stat-label">Recorded Invoices</p>
+              <p class="stat-value" id="generatedInvoicesCount">—</p>
+              <p class="stat-description">Saved invoice records</p>
+            </article>
+
+            <article class="stat-card">
+              <p class="stat-label">Cancelled Invoices</p>
+              <p class="stat-value" id="cancelledInvoicesCount">—</p>
+              <p class="stat-description">Cancelled or void records</p>
+            </article>
+
+          </div>
+
+        </section>
+
+        <!-- Filters -->
+        <section class="dashboard-section" aria-labelledby="invoiceFiltersHeading">
+
+          <div class="section-heading">
+            <div>
+              <h2 id="invoiceFiltersHeading">Search and Filter</h2>
+              <p class="muted-text">
+                Filters do not alter stored invoice records.
+              </p>
+            </div>
+          </div>
+
+          <div class="panel">
+
+            <form id="invoiceFiltersForm" class="management-form">
+
+              <div class="table-toolbar">
+
+                <div class="form-field">
+                  <label for="invoiceSearchInput">Search invoices</label>
+                  <input
+                    type="search"
+                    id="invoiceSearchInput"
+                    name="invoiceSearch"
+                    placeholder="Invoice number or customer"
+                    autocomplete="off"
+                  >
+                </div>
+
+                <div class="form-field">
+                  <label for="invoiceStatusFilter">Status</label>
+                  <select id="invoiceStatusFilter" name="invoiceStatus">
+                    <option value="">All statuses</option>
+                    <option value="valid">Valid</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </div>
+
+                <div class="form-field">
+                  <label for="invoiceStartDate">From date</label>
+                  <input
+                    type="date"
+                    id="invoiceStartDate"
+                    name="startDate"
+                  >
+                </div>
+
+                <div class="form-field">
+                  <label for="invoiceEndDate">To date</label>
+                  <input
+                    type="date"
+                    id="invoiceEndDate"
+                    name="endDate"
+                  >
+                </div>
+
+              </div>
+
+              <div class="form-actions">
+                <button type="submit" class="btn btn-primary" id="applyInvoiceFiltersBtn">
+                  Apply Filters
+                </button>
+
+                <button type="reset" class="btn btn-secondary" id="resetInvoiceFiltersBtn">
+                  Clear Filters
+                </button>
+              </div>
+
+            </form>
+
+          </div>
+
+        </section>
+
+        <!-- Invoice Table -->
+        <section class="dashboard-section" aria-labelledby="invoiceTableHeading">
+
+          <div class="section-heading">
+            <div>
+              <h2 id="invoiceTableHeading">Invoice Records</h2>
+              <p class="muted-text">
+                Latest invoice records appear first.
+              </p>
+            </div>
+          </div>
+
+          <div class="table-container">
+
+            <div class="table-scroll">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Invoice Number</th>
+                    <th scope="col">Date</th>
+                    <th scope="col">Customer</th>
+                    <th scope="col">Payment Method</th>
+                    <th scope="col">Total</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Actions</th>
+                  </tr>
+                </thead>
+
+                <tbody id="invoicesTableBody">
+                  <tr>
+                    <td colspan="7" class="table-empty">
+                      Loading saved invoices.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="table-footer">
+              <span id="invoicePaginationInfo">Waiting for invoice records</span>
+
+              <div class="page-actions">
+                <button
+                  type="button"
+                  class="btn btn-secondary btn-small"
+                  id="previousInvoicePage"
+                  disabled
+                >
+                  Previous
+                </button>
+
+                <span id="currentInvoicePage">1</span>
+
+                <button
+                  type="button"
+                  class="btn btn-secondary btn-small"
+                  id="nextInvoicePage"
+                  disabled
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+        </section>
+
+        <!-- Invoice Detail Dialog -->
+        <dialog class="invoice-detail-dialog" id="invoiceDetailsDialog"
+                aria-labelledby="invoiceDetailsHeading">
+
+          <div class="dialog-content">
+
+            <header class="section-heading">
+              <h2 id="invoiceDetailsHeading">Invoice Details</h2>
+
+              <button
+                type="button"
+                class="btn btn-secondary btn-small"
+                id="closeInvoiceDetailsBtn"
+              >
+                Close
+              </button>
+            </header>
+
+            <div id="invoiceDetailsBody">
+              <p class="empty-state">Select an invoice to see its details.</p>
+            </div>
+
+            <footer class="form-actions">
+              <button
+                type="button"
+                class="btn btn-primary"
+                id="printSelectedInvoiceBtn"
+                disabled
+              >
+                Print Invoice
+              </button>
+            </footer>
+
+          </div>
+
+        </dialog>
+
+        <footer class="app-footer">
+          <span id="businessFooterName" data-business-name>
+            Business management
+          </span>
+          <span id="invoicesFooterStatus">Invoice history</span>
+        </footer>
+
+      </main>
+
+    </div>
+
+  </div>
+
+  <!-- Shared scripts: consistent order -->
+  <script src="js/script.js" defer></script>
+  <script src="js/firebase-config.js" defer></script>
+  <script src="js/auth.js" defer></script>
+  <script src="js/guard.js" defer></script>
+  <script src="js/logout.js" defer></script>
+
+  <!-- Page-specific functionality -->
+  <script src="js/invoices.js" defer></script>
+
+</body>
+</html>
