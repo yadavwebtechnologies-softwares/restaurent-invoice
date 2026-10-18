@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <meta
+    name="description"
+    content="Verify the authenticity of a restaurant billing invoice."
+  >
+  <title>Invoice Verification</title>
+
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/verification.css">
+
+  <script src="js/verification.js" defer></script>
+</head>
+
+<body class="verification-page">
+  <main class="verification-main">
+    <section class="verification-card" aria-labelledby="verificationTitle">
+
+      <header class="verification-header">
+        <p class="verification-eyebrow">INVOICE AUTHENTICATION</p>
+        <h1 id="verificationTitle">Invoice Verification</h1>
+        <p class="verification-intro">
+          Check whether this invoice was recorded in the business billing system.
+        </p>
+      </header>
+
+      <section
+        id="verificationStatus"
+        class="verification-status verification-status-checking"
+        role="status"
+        aria-live="polite"
+      >
+        <span class="verification-status-indicator" aria-hidden="true"></span>
+
+        <div class="verification-status-content">
+          <h2 id="verificationStatusTitle">Checking Invoice</h2>
+          <p id="verificationStatusMessage">
+            Contacting the verification service...
+          </p>
+        </div>
+      </section>
+
+      <section
+        id="verificationDetails"
+        class="verification-details"
+        aria-labelledby="verificationDetailsTitle"
+        hidden
+      >
+        <h2 id="verificationDetailsTitle">Verified Invoice Details</h2>
+
+        <dl class="verification-data-list">
+          <div class="verification-data-row">
+            <dt>Business Name</dt>
+            <dd id="verifiedBusinessName">—</dd>
+          </div>
+
+          <div class="verification-data-row">
+            <dt>Invoice Number</dt>
+            <dd id="verifiedInvoiceNumber">—</dd>
+          </div>
+
+          <div class="verification-data-row">
+            <dt>Invoice Date</dt>
+            <dd id="verifiedInvoiceDate">—</dd>
+          </div>
+
+          <div class="verification-data-row">
+            <dt>Invoice Total</dt>
+            <dd id="verifiedGrandTotal">—</dd>
+          </div>
+
+          <div class="verification-data-row">
+            <dt>Payment Status</dt>
+            <dd id="verifiedPaymentStatus">—</dd>
+          </div>
+
+          <div class="verification-data-row">
+            <dt>Record Status</dt>
+            <dd id="verifiedRecordStatus">—</dd>
+          </div>
+        </dl>
+
+        <p class="verification-disclaimer">
+          These details are returned by the invoice verification service.
+        </p>
+      </section>
+
+      <section
+        id="verificationHelp"
+        class="verification-help"
+        hidden
+      >
+        <h2>What should you do?</h2>
+        <p id="verificationHelpMessage">
+          Check the QR code or contact the business that issued the invoice.
+        </p>
+      </section>
+
+      <footer class="verification-footer">
+        <p>Invoice Verification Service</p>
+        <p class="verification-footer-note">
+          A QR code alone does not prove that an invoice is authentic.
+        </p>
+      </footer>
+
+    </section>
+  </main>
+</body>
+</html>
