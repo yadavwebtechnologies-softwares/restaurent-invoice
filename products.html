@@ -9,7 +9,7 @@
   <title>Products &amp; Categories | Restaurant Billing</title>
   <meta
     name="description"
-    content="Manage saved business products, item prices and categories."
+    content="Manage saved products, prices and product categories."
   >
 
   <link rel="stylesheet" href="style.css">
@@ -19,7 +19,7 @@
 
   <div class="app" id="app">
 
-    <!-- Sidebar -->
+    <!-- Shared Sidebar -->
     <aside class="sidebar" id="sidebar">
 
       <div class="brand">
@@ -27,10 +27,17 @@
           <span class="brand-mark" id="brandMark" aria-hidden="true">B</span>
 
           <span class="brand-text">
-            <span class="brand-name" id="sidebarBusinessName"
-                  data-business-name>Business profile</span>
-            <span class="brand-description" id="sidebarBusinessTagline"
-                  data-business-tagline>Billing and management</span>
+            <span
+              class="brand-name"
+              id="sidebarBusinessName"
+              data-business-name
+            >Business profile</span>
+
+            <span
+              class="brand-description"
+              id="sidebarBusinessTagline"
+              data-business-tagline
+            >Billing and management</span>
           </span>
         </a>
       </div>
@@ -40,20 +47,71 @@
         <p class="nav-section">Main</p>
 
         <a class="nav-item" href="dashboard.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="3" width="7" height="9" rx="1.5"/>
+            <rect x="14" y="3" width="7" height="5" rx="1.5"/>
+            <rect x="14" y="12" width="7" height="9" rx="1.5"/>
+            <rect x="3" y="16" width="7" height="5" rx="1.5"/>
+          </svg>
           <span>Dashboard</span>
         </a>
 
         <a class="nav-item" href="invoice.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 5v14M5 12h14"/>
+            <rect x="3" y="3" width="18" height="18" rx="3"/>
+          </svg>
           <span>New Invoice</span>
+        </a>
+
+        <a class="nav-item" href="invoices.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <path d="M14 2v6h6M8 13h8M8 17h5"/>
+          </svg>
+          <span>Invoice History</span>
+        </a>
+
+        <a class="nav-item" href="reports.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 3v18h18"/>
+            <path d="M7 14l4-4 3 3 5-6"/>
+          </svg>
+          <span>Reports</span>
         </a>
 
         <p class="nav-section">Management</p>
 
-        <a class="nav-item active" href="products.html" aria-current="page">
+        <a
+          class="nav-item active"
+          href="products.html"
+          aria-current="page"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true">
+            <path d="m12 3 9 5-9 5-9-5 9-5Z"/>
+            <path d="M3 8v9l9 5 9-5V8"/>
+            <path d="M12 13v9"/>
+          </svg>
           <span>Products &amp; Categories</span>
         </a>
 
         <a class="nav-item" href="settings.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a2 2 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a2 2 0 0 0-1.8-.3 2 2 0 0 0-1 1.5v.2a2 2 0 1 1-4 0v-.2a2 2 0 0 0-1-1.5 2 2 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a2 2 0 0 0 .3-1.8 2 2 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.2a2 2 0 0 0 1.5-1 2 2 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a2 2 0 0 0 1.8.3 2 2 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.2a2 2 0 0 0 1 1.5 2 2 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a2 2 0 0 0-.3 1.8 2 2 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.2a2 2 0 0 0-1.5 1Z"/>
+          </svg>
           <span>Settings</span>
         </a>
 
@@ -71,14 +129,19 @@
           class="nav-item logout-button"
           id="logoutBtn"
         >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true">
+            <path d="M10 17l5-5-5-5M15 12H3"/>
+            <path d="M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7"/>
+          </svg>
           <span>Sign Out</span>
         </button>
 
       </div>
-
     </aside>
 
-    <!-- Mobile navigation backdrop -->
+    <!-- Shared Mobile Navigation Backdrop -->
     <button
       type="button"
       class="overlay"
@@ -87,9 +150,10 @@
       hidden
     ></button>
 
-    <!-- Main column -->
+    <!-- Main Column -->
     <div class="main">
 
+      <!-- Shared Header -->
       <header class="topbar">
 
         <div class="topbar-left">
@@ -117,7 +181,7 @@
         </div>
 
         <div class="topbar-right">
-          <div class="owner-profile">
+          <div class="owner-profile" id="ownerProfile">
             <span class="owner-avatar" id="ownerAvatar" aria-hidden="true">—</span>
 
             <span class="owner-profile-text">
@@ -129,16 +193,16 @@
 
       </header>
 
+      <!-- Products Page Content -->
       <main class="content" id="productsContent">
 
-        <!-- Page introduction -->
         <section class="page-heading">
 
           <div>
             <p class="section-eyebrow">BUSINESS MANAGEMENT</p>
-            <h2>Saved Products</h2>
+            <h2>Manage Products</h2>
             <p class="muted-text">
-              Manage the items and prices used when creating invoices.
+              Maintain saved products, prices and categories for billing.
             </p>
           </div>
 
@@ -148,7 +212,6 @@
 
         </section>
 
-        <!-- Database status -->
         <div
           class="dashboard-status"
           id="productsPageStatus"
@@ -156,7 +219,7 @@
           aria-live="polite"
           aria-atomic="true"
         >
-          Loading saved products and categories.
+          Waiting for product and category data.
         </div>
 
         <!-- Overview -->
@@ -166,7 +229,7 @@
             <div>
               <h2 id="productOverviewHeading">Overview</h2>
               <p class="muted-text">
-                Counts are calculated from saved database records.
+                Counts reflect saved records.
               </p>
             </div>
           </div>
@@ -176,27 +239,26 @@
             <article class="stat-card">
               <p class="stat-label">Total Products</p>
               <p class="stat-value" id="totalProductCount">—</p>
-              <p class="stat-description">Saved product records</p>
+              <p class="stat-description">Saved products</p>
             </article>
 
             <article class="stat-card">
               <p class="stat-label">Total Categories</p>
               <p class="stat-value" id="totalCategoryCount">—</p>
-              <p class="stat-description">Saved product categories</p>
+              <p class="stat-description">Saved categories</p>
             </article>
 
           </div>
-
         </section>
 
-        <!-- Add Product -->
+        <!-- Product Form -->
         <section class="dashboard-section" aria-labelledby="addProductHeading">
 
           <div class="section-heading">
             <div>
               <h2 id="addProductHeading">Add Product</h2>
               <p class="muted-text">
-                Save an item once so it can be selected during billing.
+                Save products for quick selection during billing.
               </p>
             </div>
           </div>
@@ -209,13 +271,11 @@
 
               <div class="form-field">
                 <label for="productName">Product name</label>
-
                 <input
                   type="text"
                   id="productName"
                   name="productName"
                   maxlength="120"
-                  placeholder="Enter product name"
                   autocomplete="off"
                   required
                 >
@@ -223,7 +283,6 @@
 
               <div class="form-field">
                 <label for="productPrice">Price per item (₹)</label>
-
                 <input
                   type="number"
                   id="productPrice"
@@ -232,19 +291,13 @@
                   max="99999999"
                   step="0.01"
                   inputmode="decimal"
-                  placeholder="Enter price"
                   required
                 >
               </div>
 
               <div class="form-field">
                 <label for="productCategory">Category</label>
-
-                <select
-                  id="productCategory"
-                  name="productCategory"
-                  required
-                >
+                <select id="productCategory" name="productCategory" required>
                   <option value="">Loading saved categories...</option>
                 </select>
               </div>
@@ -283,23 +336,21 @@
                 id="productFormMessage"
                 role="status"
                 aria-live="polite"
-                aria-atomic="true"
               ></div>
 
             </form>
-
           </div>
 
         </section>
 
-        <!-- Product List -->
+        <!-- Saved Products -->
         <section class="dashboard-section" aria-labelledby="productListHeading">
 
           <div class="section-heading">
             <div>
               <h2 id="productListHeading">Saved Products</h2>
               <p class="muted-text">
-                Search, edit or remove a saved product.
+                Search, edit or remove existing products.
               </p>
             </div>
           </div>
@@ -310,23 +361,17 @@
 
               <div class="form-field">
                 <label for="productSearch">Search products</label>
-
                 <input
                   type="search"
                   id="productSearch"
                   name="productSearch"
-                  placeholder="Search by product name"
                   autocomplete="off"
                 >
               </div>
 
               <div class="form-field">
                 <label for="productCategoryFilter">Filter category</label>
-
-                <select
-                  id="productCategoryFilter"
-                  name="productCategoryFilter"
-                >
+                <select id="productCategoryFilter" name="productCategoryFilter">
                   <option value="">All categories</option>
                 </select>
               </div>
@@ -349,7 +394,7 @@
                   <tbody id="productsTableBody">
                     <tr>
                       <td colspan="4" class="table-empty">
-                        Loading saved products.
+                        Waiting for saved products.
                       </td>
                     </tr>
                   </tbody>
@@ -359,23 +404,20 @@
             </div>
 
             <div class="table-footer">
-              <span id="productListSummary">
-                Loading product records.
-              </span>
+              <span id="productListSummary">Waiting for product records</span>
             </div>
 
           </div>
-
         </section>
 
-        <!-- Add Category -->
+        <!-- Category Form -->
         <section class="dashboard-section" aria-labelledby="addCategoryHeading">
 
           <div class="section-heading">
             <div>
-              <h2 id="addCategoryHeading">Categories</h2>
+              <h2 id="addCategoryHeading">Manage Categories</h2>
               <p class="muted-text">
-                Create categories to organize saved products.
+                Organize products into reusable categories.
               </p>
             </div>
           </div>
@@ -388,13 +430,11 @@
 
               <div class="form-field">
                 <label for="categoryName">Category name</label>
-
                 <input
                   type="text"
                   id="categoryName"
                   name="categoryName"
                   maxlength="100"
-                  placeholder="Enter category name"
                   autocomplete="off"
                   required
                 >
@@ -434,23 +474,21 @@
                 id="categoryFormMessage"
                 role="status"
                 aria-live="polite"
-                aria-atomic="true"
               ></div>
 
             </form>
-
           </div>
 
         </section>
 
-        <!-- Category List -->
+        <!-- Saved Categories -->
         <section class="dashboard-section" aria-labelledby="categoryListHeading">
 
           <div class="section-heading">
             <div>
               <h2 id="categoryListHeading">Saved Categories</h2>
               <p class="muted-text">
-                Review or edit existing categories.
+                Review, edit or remove existing categories.
               </p>
             </div>
           </div>
@@ -472,7 +510,7 @@
                   <tbody id="categoriesTableBody">
                     <tr>
                       <td colspan="3" class="table-empty">
-                        Loading saved categories.
+                        Waiting for saved categories.
                       </td>
                     </tr>
                   </tbody>
@@ -482,17 +520,18 @@
             </div>
 
             <div class="table-footer">
-              <span id="categoryListSummary">
-                Loading category records.
-              </span>
+              <span id="categoryListSummary">Waiting for category records</span>
             </div>
 
           </div>
 
         </section>
 
+        <!-- Shared Footer -->
         <footer class="app-footer">
-          <span data-business-name id="businessFooterName">Business management</span>
+          <span id="businessFooterName" data-business-name>
+            Business management
+          </span>
           <span id="productsFooterStatus">Products and categories</span>
         </footer>
 
@@ -502,14 +541,14 @@
 
   </div>
 
-  <!-- Shared application scripts -->
+  <!-- Shared application scripts: same order as dashboard.html -->
   <script src="js/script.js" defer></script>
   <script src="js/firebase-config.js" defer></script>
   <script src="js/auth.js" defer></script>
   <script src="js/guard.js" defer></script>
   <script src="js/logout.js" defer></script>
 
-  <!-- Products and categories functionality -->
+  <!-- Page-specific functionality -->
   <script src="js/products.js" defer></script>
 
 </body>
