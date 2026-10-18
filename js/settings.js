@@ -2,6 +2,7 @@
    RESTAURANT BILLING SOFTWARE
    Business Settings — Live Firebase Integration
    Database root: restaurantBilling/settings/
+   Public location record: publicInvoiceVerification/businessLocation
    No demo data, localStorage persistence or secrets
    ========================================================= */
 
@@ -10,6 +11,8 @@
 
   const OWNER_UID = "20wif9y7LQhBZgFPDsAlrQpFjnI2";
   const SETTINGS_PATH = "restaurantBilling/settings";
+  const PUBLIC_LOCATION_PATH =
+    "publicInvoiceVerification/businessLocation";
 
   const $ = function (id) {
     return document.getElementById(id);
@@ -99,8 +102,7 @@
   }
 
   /*
-   * Unlike firstValue(), this helper respects an intentionally
-   * empty saved field, so clearing a message stays cleared.
+   * Respect intentionally empty saved fields.
    */
   function storedValue(object, keys) {
     for (const key of keys) {
@@ -177,12 +179,16 @@
       typeof api.ref !== "function" ||
       typeof api.get !== "function" ||
       typeof api.set !== "function" ||
+      typeof api.update !== "function" ||
       typeof api.onValue !== "function"
     ) {
       throw new Error("Required Firebase database methods are unavailable.");
     }
 
-    return { db: firebase.db, api: api };
+    return {
+      db: firebase.db,
+      api: api
+    };
   }
 
   function makeMetadata() {
@@ -194,7 +200,7 @@
   }
 
   /* ---------------------------------------------------------
-     2. Read canonical and older saved settings
+     2. Read saved settings
      --------------------------------------------------------- */
 
   function readSections() {
@@ -249,7 +255,7 @@
   }
 
   /* ---------------------------------------------------------
-     3. Business profile form
+     3. Business profile
      --------------------------------------------------------- */
 
   function populateBusinessProfile() {
@@ -330,17 +336,13 @@
   }
 
   /* ---------------------------------------------------------
-     4. Invoice preferences and printed invoice text
+     4. Invoice preferences
      --------------------------------------------------------- */
 
   function getExistingInvoiceSettings() {
     const settings = state.settings || {};
     const forms = settings.forms || {};
 
-    /*
-     * Read the actual invoice settings section rather than
-     * copying the entire root settings object into that section.
-     */
     return (
       settings.invoiceSettings ||
       settings.invoice ||
@@ -442,10 +444,6 @@
       }
     }
 
-    /*
-     * Preserve any additional saved invoice preferences,
-     * including future display settings not edited by this form.
-     */
     const existing = getExistingInvoiceSettings();
 
     const result = {
@@ -454,17 +452,12 @@
 
       invoicePrefix: prefix,
       invoiceFooter: footer,
-
       thankYouMessage: thankYouMessage,
       termsLine1: termsLine1,
       termsLine2: termsLine2,
       authorisedSignatory: authorisedSignatory
     };
 
-    /*
-     * Remove old/alternate keys to prevent stale values from
-     * reappearing when the user intentionally clears a field.
-     */
     delete result.invoiceThankYouMessage;
     delete result.invoiceTermsLine1;
     delete result.invoiceTermsLine2;
@@ -482,7 +475,7 @@
   }
 
   /* ---------------------------------------------------------
-     5. Tax and discount form
+     5. Tax and discount
      --------------------------------------------------------- */
 
   function populateTaxSettings() {
@@ -570,7 +563,7 @@
   }
 
   /* ---------------------------------------------------------
-     6. Payment and QR settings form
+     6. Payment settings
      --------------------------------------------------------- */
 
   function populatePaymentSettings() {
@@ -682,7 +675,7 @@
   }
 
   /* ---------------------------------------------------------
-     8. Populate forms without overwriting unsaved edits
+     8. Form state tracking
      --------------------------------------------------------- */
 
   function populateCleanForms() {
@@ -721,7 +714,7 @@
   }
 
   /* ---------------------------------------------------------
-     9. Save only one settings section
+     9. Save settings section
      --------------------------------------------------------- */
 
   async function saveSection(
@@ -788,11 +781,41 @@
         SETTINGS_PATH + "/" + sectionKey
       );
 
-      /*
-       * Write only to this settings section. Other sections
-       * under restaurantBilling/settings are left untouched.
-       */
-      await state.api.set(targetRef, record);
+      if (sectionKey === "businessProfile") {
+        /*
+         * The fixed QR page reads this limited public record.
+         * Only business name and address are exposed here.
+         */
+        const address = textValue(record.businessAddress);
+
+        const locationRecord = {
+          recordType: "business-location",
+          recordStatus: address ? "configured" : "not-configured",
+          verificationId: "businessLocation",
+          businessName: textValue(record.businessName),
+          businessAddress: address,
+          updatedAt: new Date().toISOString(),
+          updatedAtMs: Date.now()
+        };
+
+        const updates = {};
+
+        updates[SETTINGS_PATH + "/" + sectionKey] = record;
+        updates[PUBLIC_LOCATION_PATH] = locationRecord;
+
+        /*
+         * Atomic multi-location update:
+         * business profile and location record succeed together
+         * or neither path is changed by this update.
+         */
+        await state.api.update(
+          state.api.ref(state.db),
+          updates
+        );
+
+      } else {
+        await state.api.set(targetRef, record);
+      }
 
       state.settings[sectionKey] = record;
       state.dirty.delete(formId);
