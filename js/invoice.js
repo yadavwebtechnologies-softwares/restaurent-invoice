@@ -2,8 +2,7 @@
    RESTAURANT BILLING SOFTWARE
    Invoice Creation, Calculation, Saving and Preview
    Database root: restaurantBilling/
-   Reference-aligned invoice layout
-   No demo invoices, fake products or embedded secrets
+   Dynamic invoice verification QR
    ========================================================= */
 
 (function () {
@@ -19,9 +18,8 @@
     counters: "restaurantBilling/invoiceCounters"
   });
 
-  const $ = function (id) {
-    return document.getElementById(id);
-  };
+  const $ = (id) => document.getElementById(id);
+  const ui = window.restaurantUI;
 
   const state = {
     db: null,
@@ -42,10 +40,8 @@
     nextItemId: 1
   };
 
-  const ui = window.restaurantUI;
-
   /* ---------------------------------------------------------
-     1. Shared helpers
+     1. Common helpers
      --------------------------------------------------------- */
 
   function setText(id, value) {
@@ -61,16 +57,9 @@
     if (!node) return;
 
     node.textContent = message || "";
+    node.classList.remove("is-success", "is-error", "is-warning");
 
-    node.classList.remove(
-      "is-success",
-      "is-error",
-      "is-warning"
-    );
-
-    if (type) {
-      node.classList.add("is-" + type);
-    }
+    if (type) node.classList.add("is-" + type);
   }
 
   function setPageStatus(message, type) {
@@ -78,24 +67,9 @@
     if (!node) return;
 
     node.textContent = message || "";
+    node.classList.remove("is-connected", "is-error", "is-warning");
 
-    node.classList.remove(
-      "is-connected",
-      "is-error",
-      "is-warning"
-    );
-
-    if (type === "connected") {
-      node.classList.add("is-connected");
-    } else if (type === "error") {
-      node.classList.add("is-error");
-    } else if (type === "warning") {
-      node.classList.add("is-warning");
-    }
-  }
-
-  function setFooterStatus(message) {
-    setText("invoiceFooterStatus", message);
+    if (type) node.classList.add("is-" + type);
   }
 
   function formatMoney(value) {
@@ -116,9 +90,7 @@
   }
 
   function toNumber(value) {
-    if (value === "" || value === null || value === undefined) {
-      return null;
-    }
+    if (value === "" || value === null || value === undefined) return null;
 
     const result = Number(value);
     return Number.isFinite(result) ? result : null;
@@ -140,34 +112,41 @@
     return null;
   }
 
-  function recordEntries(data) {
-    if (!data || typeof data !== "object") {
-      return [];
+  function storedValue(object, keys) {
+    for (const key of keys) {
+      if (
+        object &&
+        Object.prototype.hasOwnProperty.call(object, key) &&
+        object[key] !== null &&
+        object[key] !== undefined
+      ) {
+        return object[key];
+      }
     }
 
-    if (Array.isArray(data)) {
-      return data
-        .map(function (record, index) {
-          if (!record || typeof record !== "object") return null;
+    return "";
+  }
 
-          return {
-            ...record,
-            _recordKey: record._recordKey || String(index)
-          };
-        })
-        .filter(Boolean);
+  function recordEntries(data) {
+    if (!data || typeof data !== "object") return [];
+
+    if (Array.isArray(data)) {
+      return data.map((record, index) => {
+        if (!record || typeof record !== "object") return null;
+
+        return {
+          ...record,
+          _recordKey: record._recordKey || String(index)
+        };
+      }).filter(Boolean);
     }
 
     return Object.entries(data)
-      .filter(function (entry) {
-        return entry[1] && typeof entry[1] === "object";
-      })
-      .map(function (entry) {
-        return {
-          ...entry[1],
-          _recordKey: entry[0]
-        };
-      });
+      .filter(([, value]) => value && typeof value === "object")
+      .map(([key, value]) => ({
+        ...value,
+        _recordKey: key
+      }));
   }
 
   function recordIsActive(record) {
@@ -197,10 +176,7 @@
     if (!value) return "";
 
     const date = value instanceof Date ? value : new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-      return textValue(value);
-    }
+    if (Number.isNaN(date.getTime())) return textValue(value);
 
     return new Intl.DateTimeFormat("en-IN", {
       day: "2-digit",
@@ -213,7 +189,6 @@
     if (!value) return "";
 
     const parts = String(value).split(":");
-
     if (parts.length < 2) return textValue(value);
 
     const hour = Number(parts[0]);
@@ -238,11 +213,6 @@
     }).format(date);
   }
 
-  function newLocalId() {
-    state.nextItemId += 1;
-    return "item-" + state.nextItemId;
-  }
-
   function getFirebase() {
     const firebase = window.restaurantFirebase;
 
@@ -262,38 +232,53 @@
     };
   }
 
+  function ensureOwnerAuthorized() {
+    const access = window.restaurantAccess;
+
+    if (
+      !access ||
+      !access.ready ||
+      !access.authorized ||
+      !access.user ||
+      access.user.uid !== OWNER_UID
+    ) {
+      throw new Error("The authorized owner session is required.");
+    }
+  }
+
   /* ---------------------------------------------------------
      2. Settings readers
      --------------------------------------------------------- */
 
   function settingsSections() {
     const settings = state.settings || {};
+    const forms = settings.forms || {};
 
     return {
       business:
         settings.businessProfile ||
         settings.business ||
         settings.profile ||
-        settings.forms?.businessProfileForm ||
-        settings.forms?.businessProfile ||
+        forms.businessProfileForm ||
+        forms.businessProfile ||
         settings,
 
       invoice:
         settings.invoiceSettings ||
         settings.invoice ||
-        settings.forms?.invoiceSettingsForm ||
+        forms.invoiceSettingsForm ||
         settings,
 
       tax:
         settings.taxSettings ||
         settings.tax ||
-        settings.forms?.taxSettingsForm ||
+        forms.taxSettingsForm ||
         settings,
 
       payment:
         settings.paymentSettings ||
         settings.payment ||
-        settings.forms?.paymentSettingsForm ||
+        forms.paymentSettingsForm ||
         settings
     };
   }
@@ -305,23 +290,15 @@
       value === "1";
   }
 
-  /*
-   * Reads an explicit display preference from Settings.
-   * When no preference exists, the supplied default is used.
-   * Settings-page switches must save matching preference keys
-   * before they can control additional fields.
-   */
   function settingFlag(keys, fallback) {
     const sections = settingsSections();
 
-    const sources = [
+    for (const source of [
       sections.invoice,
       sections.business,
       sections.tax,
       sections.payment
-    ];
-
-    for (const source of sources) {
+    ]) {
       for (const key of keys) {
         if (
           source &&
@@ -338,52 +315,42 @@
   }
 
   function getTaxSettings() {
-    const sections = settingsSections();
+    const tax = settingsSections().tax;
 
-    const taxEnabled = booleanSetting(
-      firstValue(sections.tax, [
-        "taxEnabled",
-        "enabled",
-        "enableTax"
-      ])
-    );
+    const enabled = booleanSetting(firstValue(tax, [
+      "taxEnabled",
+      "enableTax",
+      "enabled"
+    ]));
 
-    const taxRate = toNumber(
-      firstValue(sections.tax, [
-        "taxRate",
-        "rate",
-        "taxPercentage"
-      ])
-    );
+    const rate = toNumber(firstValue(tax, [
+      "taxRate",
+      "rate",
+      "taxPercentage"
+    ]));
 
     return {
-      enabled: taxEnabled,
-      rate: taxRate === null
-        ? 0
-        : Math.min(100, Math.max(0, taxRate))
+      enabled,
+      rate: rate === null ? 0 : Math.min(100, Math.max(0, rate))
     };
   }
 
   function getDiscountSettings() {
-    const sections = settingsSections();
+    const tax = settingsSections().tax;
 
-    const enabled = booleanSetting(
-      firstValue(sections.tax, [
-        "discountEnabled",
-        "enableDiscount"
-      ])
-    );
+    const enabled = booleanSetting(firstValue(tax, [
+      "discountEnabled",
+      "enableDiscount"
+    ]));
 
-    const maximumPercent = toNumber(
-      firstValue(sections.tax, [
-        "maximumDiscount",
-        "maxDiscount",
-        "maximumDiscountPercent"
-      ])
-    );
+    const maximumPercent = toNumber(firstValue(tax, [
+      "maximumDiscount",
+      "maxDiscount",
+      "maximumDiscountPercent"
+    ]));
 
     return {
-      enabled: enabled,
+      enabled,
       maximumPercent: maximumPercent === null
         ? 0
         : Math.min(100, Math.max(0, maximumPercent))
@@ -391,84 +358,65 @@
   }
 
   function getInvoicePrefix() {
-    const sections = settingsSections();
+    const configured = textValue(firstValue(
+      settingsSections().invoice,
+      ["invoicePrefix", "prefix"]
+    ) || "");
 
-    const configured = textValue(
-      firstValue(sections.invoice, [
-        "invoicePrefix",
-        "prefix"
-      ]) || ""
-    );
-
-    const normalized = configured.replace(/[^A-Za-z0-9-]/g, "");
-
-    return normalized || "INV";
+    return configured.replace(/[^A-Za-z0-9-]/g, "") || "INV";
   }
 
   /* ---------------------------------------------------------
-     3. Product loading and selection
+     3. Products and categories
      --------------------------------------------------------- */
 
   function productName(product) {
-    return textValue(
-      firstValue(product, [
-        "productName",
-        "name",
-        "itemName",
-        "title"
-      ]) || ""
-    );
+    return textValue(firstValue(product, [
+      "productName",
+      "name",
+      "itemName",
+      "title"
+    ]) || "");
   }
 
   function productPrice(product) {
-    const value = toNumber(
-      firstValue(product, [
-        "price",
-        "unitPrice",
-        "sellingPrice",
-        "amount"
-      ])
-    );
+    const value = toNumber(firstValue(product, [
+      "price",
+      "unitPrice",
+      "sellingPrice",
+      "amount"
+    ]));
 
-    return value !== null && value >= 0
-      ? roundMoney(value)
-      : null;
+    return value !== null && value >= 0 ? roundMoney(value) : null;
   }
 
   function categoryName(category) {
-    return textValue(
-      firstValue(category, [
-        "categoryName",
-        "name",
-        "title"
-      ]) || ""
-    );
+    return textValue(firstValue(category, [
+      "categoryName",
+      "name",
+      "title"
+    ]) || "");
   }
 
   function resolveCategory(product) {
-    const categoryId = textValue(
-      firstValue(product, [
-        "categoryId",
-        "categoryID",
-        "categoryKey"
-      ]) || ""
-    );
+    const categoryId = textValue(firstValue(product, [
+      "categoryId",
+      "categoryID",
+      "categoryKey"
+    ]) || "");
 
-    const categoryText = textValue(
-      firstValue(product, [
-        "categoryName",
-        "category"
-      ]) || ""
-    );
+    const categoryText = textValue(firstValue(product, [
+      "categoryName",
+      "category"
+    ]) || "");
 
-    const match = state.categories.find(function (category) {
-      return (
-        (categoryId && category._recordKey === categoryId) ||
-        (categoryText &&
-          categoryName(category).toLowerCase() ===
-            categoryText.toLowerCase())
-      );
-    });
+    const match = state.categories.find((category) =>
+      (categoryId && category._recordKey === categoryId) ||
+      (
+        categoryText &&
+        categoryName(category).toLowerCase() === categoryText.toLowerCase()
+      )
+    );
 
     return match ? categoryName(match) : categoryText;
   }
@@ -496,13 +444,14 @@
       return;
     }
 
-    const availableProducts = state.products.filter(function (product) {
-      return recordIsActive(product) &&
-        productName(product) &&
-        productPrice(product) !== null;
-    });
+    const products = state.products.filter((product) =>
+      recordIsActive(product) &&
+      productName(product) &&
+      productPrice(product) !== null &&
+      productPrice(product) > 0
+    );
 
-    if (!availableProducts.length) {
+    if (!products.length) {
       firstOption.textContent = "No saved products available";
       select.appendChild(firstOption);
       select.disabled = true;
@@ -512,32 +461,26 @@
     firstOption.textContent = "Select a product";
     select.appendChild(firstOption);
 
-    availableProducts
-      .slice()
-      .sort(function (a, b) {
-        return productName(a).localeCompare(productName(b));
-      })
-      .forEach(function (product) {
-        const option = document.createElement("option");
-        option.value = product._recordKey;
-        option.textContent =
-          productName(product) + " — " +
-          formatMoney(productPrice(product));
-
-        select.appendChild(option);
-      });
+    products.sort((a, b) =>
+      productName(a).localeCompare(productName(b))
+    ).forEach((product) => {
+      const option = document.createElement("option");
+      option.value = product._recordKey;
+      option.textContent =
+        productName(product) + " — " + formatMoney(productPrice(product));
+      select.appendChild(option);
+    });
 
     select.disabled = false;
   }
 
   function getSelectedProduct() {
     const select = $("productSelect");
-
     if (!select || !select.value) return null;
 
-    return state.products.find(function (product) {
-      return product._recordKey === select.value;
-    }) || null;
+    return state.products.find((product) =>
+      product._recordKey === select.value
+    ) || null;
   }
 
   function addSavedProduct(event) {
@@ -568,31 +511,21 @@
     }
 
     state.cart.push({
-      itemId: newLocalId(),
+      itemId: "item-" + (++state.nextItemId),
       productId: product._recordKey,
       name: productName(product),
       category: resolveCategory(product),
-      unitPrice: unitPrice,
-      quantity: quantity,
+      unitPrice,
+      quantity,
       custom: false
     });
 
-    /*
-     * Do not replace the select's textContent here:
-     * doing so would remove all product options.
-     */
-    const productSelect = $("productSelect");
-    if (productSelect) productSelect.value = "";
-
+    $("productSelect").value = "";
     if (quantityInput) quantityInput.value = "1";
 
     setMessage("");
     renderCart();
   }
-
-  /* ---------------------------------------------------------
-     4. Custom items
-     --------------------------------------------------------- */
 
   function addCustomItem(event) {
     event.preventDefault();
@@ -622,19 +555,17 @@
     }
 
     state.cart.push({
-      itemId: newLocalId(),
+      itemId: "item-" + (++state.nextItemId),
       productId: null,
-      name: name,
+      name,
       category: "",
       unitPrice: roundMoney(unitPrice),
-      quantity: quantity,
+      quantity,
       custom: true
     });
 
     $("customItemForm")?.reset();
-
-    const customQuantity = $("customItemQuantity");
-    if (customQuantity) customQuantity.value = "1";
+    if ($("customItemQuantity")) $("customItemQuantity").value = "1";
 
     setMessage("");
     renderCart();
@@ -646,63 +577,91 @@
 
     if (!panel || !button) return;
 
-    const isOpening = panel.hidden;
+    const opening = panel.hidden;
+    panel.hidden = !opening;
+    button.setAttribute("aria-expanded", String(opening));
 
-    panel.hidden = !isOpening;
-    button.setAttribute("aria-expanded", String(isOpening));
-
-    if (isOpening) {
-      $("customItemName")?.focus();
-    }
+    if (opening) $("customItemName")?.focus();
   }
 
   /* ---------------------------------------------------------
-     5. Invoice discount and calculations
+     4. Dynamic discount input and calculation
      --------------------------------------------------------- */
+
+  function ensureDiscountInput() {
+    const settings = getDiscountSettings();
+    const form = $("invoiceForm");
+
+    if (!form) return;
+
+    let wrapper = $("invoiceDiscountField");
+
+    if (!settings.enabled || settings.maximumPercent <= 0) {
+      if (wrapper) wrapper.hidden = true;
+      return;
+    }
+
+    if (!wrapper) {
+      wrapper = document.createElement("div");
+      wrapper.id = "invoiceDiscountField";
+      wrapper.className = "form-field";
+
+      const label = document.createElement("label");
+      label.htmlFor = "invoiceDiscountAmount";
+      label.textContent = "Discount Amount (₹)";
+
+      const input = document.createElement("input");
+      input.id = "invoiceDiscountAmount";
+      input.name = "discountAmount";
+      input.type = "number";
+      input.min = "0";
+      input.step = "0.01";
+      input.inputMode = "decimal";
+      input.autocomplete = "off";
+      input.addEventListener("input", renderCart);
+
+      wrapper.append(label, input);
+
+      const notes = $("invoiceNotes")?.closest(".form-field");
+      if (notes) {
+        form.insertBefore(wrapper, notes);
+      } else {
+        form.appendChild(wrapper);
+      }
+    }
+
+    wrapper.hidden = false;
+  }
 
   function getDiscountAmount(subtotal) {
     const settings = getDiscountSettings();
     const input = $("invoiceDiscountAmount");
 
-    if (!settings.enabled || !input) {
-      return 0;
-    }
+    if (!settings.enabled || !input) return 0;
 
     const requested = toNumber(input.value);
+    if (requested === null || requested <= 0 || subtotal <= 0) return 0;
 
-    if (requested === null || requested <= 0 || subtotal <= 0) {
-      return 0;
-    }
+    const maximum = subtotal * settings.maximumPercent / 100;
 
-    const maximumAmount =
-      subtotal * settings.maximumPercent / 100;
-
-    return roundMoney(
-      Math.min(requested, maximumAmount, subtotal)
-    );
+    return roundMoney(Math.min(requested, maximum, subtotal));
   }
 
   function calculateTotals() {
-    const subtotal = roundMoney(
-      state.cart.reduce(function (total, item) {
-        return total + item.unitPrice * item.quantity;
-      }, 0)
-    );
+    const subtotal = roundMoney(state.cart.reduce(
+      (total, item) => total + item.unitPrice * item.quantity,
+      0
+    ));
 
     const discount = getDiscountAmount(subtotal);
-    const taxableAmount = roundMoney(
-      Math.max(0, subtotal - discount)
-    );
-
+    const taxableAmount = roundMoney(Math.max(0, subtotal - discount));
     const taxSettings = getTaxSettings();
 
     const taxAmount = taxSettings.enabled
       ? roundMoney(taxableAmount * taxSettings.rate / 100)
       : 0;
 
-    const beforeRounding = roundMoney(
-      taxableAmount + taxAmount
-    );
+    const beforeRounding = roundMoney(taxableAmount + taxAmount);
 
     const roundOffEnabled = settingFlag([
       "roundOffEnabled",
@@ -715,12 +674,12 @@
       : beforeRounding;
 
     return {
-      subtotal: subtotal,
-      discount: discount,
-      taxRate: taxSettings.enabled ? taxSettings.rate : 0,
+      subtotal,
+      discount,
       taxEnabled: taxSettings.enabled,
-      taxAmount: taxAmount,
-      roundOffEnabled: roundOffEnabled,
+      taxRate: taxSettings.enabled ? taxSettings.rate : 0,
+      taxAmount,
+      roundOffEnabled,
       roundOff: roundOffEnabled
         ? roundMoney(grandTotal - beforeRounding)
         : 0,
@@ -738,10 +697,7 @@
   function removeCartItem(itemId) {
     if (state.saving) return;
 
-    state.cart = state.cart.filter(function (item) {
-      return item.itemId !== itemId;
-    });
-
+    state.cart = state.cart.filter((item) => item.itemId !== itemId);
     renderCart();
   }
 
@@ -762,7 +718,7 @@
       row.appendChild(cell);
       body.appendChild(row);
     } else {
-      state.cart.forEach(function (item) {
+      state.cart.forEach((item) => {
         const row = document.createElement("tr");
 
         createTextCell(row, item.name);
@@ -774,19 +730,16 @@
         );
 
         const actionCell = document.createElement("td");
-        const removeButton = document.createElement("button");
+        const button = document.createElement("button");
 
-        removeButton.type = "button";
-        removeButton.className = "btn btn-secondary btn-small";
-        removeButton.textContent = "Remove";
-        removeButton.disabled = state.saving;
-        removeButton.setAttribute("aria-label", "Remove " + item.name);
+        button.type = "button";
+        button.className = "btn btn-secondary btn-small";
+        button.textContent = "Remove";
+        button.disabled = state.saving;
+        button.setAttribute("aria-label", "Remove " + item.name);
+        button.addEventListener("click", () => removeCartItem(item.itemId));
 
-        removeButton.addEventListener("click", function () {
-          removeCartItem(item.itemId);
-        });
-
-        actionCell.appendChild(removeButton);
+        actionCell.appendChild(button);
         row.appendChild(actionCell);
         body.appendChild(row);
       });
@@ -810,14 +763,12 @@
     const taxRow = $("taxTotalRow");
 
     if (discountRow) {
-      discountRow.hidden =
-        totals.discount <= 0 ||
+      discountRow.hidden = totals.discount <= 0 ||
         !settingFlag(["showDiscount", "showInvoiceDiscount"], true);
     }
 
     if (taxRow) {
-      taxRow.hidden =
-        !totals.taxEnabled ||
+      taxRow.hidden = !totals.taxEnabled ||
         !settingFlag(["showTax", "showInvoiceTax"], true);
     }
 
@@ -835,7 +786,7 @@
   }
 
   function setEditingDisabled(disabled) {
-    const ids = [
+    [
       "productSelect",
       "itemQuantity",
       "addItemBtn",
@@ -849,20 +800,14 @@
       "paymentStatus",
       "invoiceDiscountAmount",
       "invoiceNotes"
-    ];
-
-    ids.forEach(function (id) {
+    ].forEach((id) => {
       const node = $(id);
       if (node) node.disabled = disabled;
     });
 
-    const customPanel = $("customItemPanel");
-
-    if (customPanel) {
-      customPanel.querySelectorAll("input, button").forEach(function (node) {
-        node.disabled = disabled;
-      });
-    }
+    $("customItemPanel")?.querySelectorAll("input, button").forEach((node) => {
+      node.disabled = disabled;
+    });
 
     renderCart();
   }
@@ -871,46 +816,34 @@
     if (state.saving) return;
 
     state.cart = [];
-
     $("addInvoiceItemForm")?.reset();
     $("customItemForm")?.reset();
 
-    if ($("itemQuantity")) {
-      $("itemQuantity").value = "1";
-    }
-
-    if ($("customItemQuantity")) {
-      $("customItemQuantity").value = "1";
-    }
-
-    if ($("invoiceDiscountAmount")) {
-      $("invoiceDiscountAmount").value = "";
-    }
+    if ($("itemQuantity")) $("itemQuantity").value = "1";
+    if ($("customItemQuantity")) $("customItemQuantity").value = "1";
+    if ($("invoiceDiscountAmount")) $("invoiceDiscountAmount").value = "";
 
     setMessage("");
     renderCart();
   }
 
   /* ---------------------------------------------------------
-     6. Invoice number reservation
+     5. Invoice numbering
      --------------------------------------------------------- */
 
   async function reserveInvoiceNumber(date) {
     const year = String(date.getFullYear());
-
-    const counterRef = state.api.ref(
+    const reference = state.api.ref(
       state.db,
       PATHS.counters + "/" + year
     );
 
     const result = await state.api.runTransaction(
-      counterRef,
+      reference,
       function (currentValue) {
         const current = Number(currentValue) || 0;
 
-        if (!Number.isSafeInteger(current) || current < 0) {
-          return;
-        }
+        if (!Number.isSafeInteger(current) || current < 0) return;
 
         return current + 1;
       },
@@ -932,56 +865,62 @@
   }
 
   /* ---------------------------------------------------------
-     7. Business fields and Settings-based visibility
+     6. Settings-driven footer and field visibility
      --------------------------------------------------------- */
 
   function renderOptionalText(id, value, enabled) {
     const node = $(id);
     if (!node) return;
 
-    const text = textValue(value);
+    const content = textValue(value);
 
-    node.textContent = text;
-    node.hidden = !enabled || !text;
+    node.textContent = content;
+    node.hidden = !enabled || !content;
   }
 
   function applyFormFieldVisibility() {
     const invoice = settingsSections().invoice;
 
-    const visibility = [
+    const fields = [
       {
         id: "customerName",
         keys: ["showCustomerName", "showBillTo"],
-        fallback: true
+        fallback: true,
+        required: true
       },
       {
         id: "customerPhone",
         keys: ["showCustomerPhone"],
-        fallback: true
+        fallback: true,
+        required: false
       },
       {
         id: "tableNumber",
         keys: ["showTableNumber"],
-        fallback: true
+        fallback: true,
+        required: false
       },
       {
         id: "paymentMethod",
         keys: ["showPaymentMethod"],
-        fallback: true
+        fallback: true,
+        required: true
       },
       {
         id: "paymentStatus",
         keys: ["showPaymentStatus"],
-        fallback: true
+        fallback: true,
+        required: true
       },
       {
         id: "invoiceNotes",
         keys: ["showNotes", "showInvoiceNotes"],
-        fallback: true
+        fallback: true,
+        required: false
       }
     ];
 
-    visibility.forEach(function (field) {
+    fields.forEach((field) => {
       const input = $(field.id);
       if (!input) return;
 
@@ -1000,131 +939,161 @@
       }
 
       const wrapper = input.closest(".form-field");
+      if (wrapper) wrapper.hidden = !visible;
 
-      if (wrapper) {
-        wrapper.hidden = !visible;
-      }
-
-      input.required = visible && (
-        field.id === "customerName" ||
-        field.id === "paymentMethod" ||
-        field.id === "paymentStatus"
-      );
+      input.required = visible && field.required;
     });
 
-    const customerFields = $("customerName")?.closest(
-      ".invoice-customer-fields"
-    );
+    const group = $("customerName")?.closest(".invoice-customer-fields");
 
-    if (customerFields) {
-      customerFields.hidden = ![
-        "customerName",
-        "customerPhone",
-        "tableNumber",
-        "paymentMethod",
-        "paymentStatus"
-      ].some(function (id) {
-        const input = $(id);
+    if (group) {
+      group.hidden = !fields.some((field) => {
+        const input = $(field.id);
+
         return input && !input.closest(".form-field")?.hidden;
       });
+    }
+  }
+
+  function renderInvoiceFooterContent() {
+    const invoice = settingsSections().invoice;
+
+    const footer = textValue(storedValue(invoice, [
+      "invoiceFooter",
+      "footerText",
+      "footer"
+    ]));
+
+    const thankYou = textValue(storedValue(invoice, [
+      "thankYouMessage",
+      "invoiceThankYouMessage"
+    ]));
+
+    const termsLine1 = textValue(storedValue(invoice, [
+      "termsLine1",
+      "invoiceTermsLine1"
+    ]));
+
+    const termsLine2 = textValue(storedValue(invoice, [
+      "termsLine2",
+      "invoiceTermsLine2"
+    ]));
+
+    const signatory = textValue(storedValue(invoice, [
+      "authorisedSignatory",
+      "authorizedSignatory",
+      "signatureLabel"
+    ]));
+
+    renderOptionalText(
+      "printThankYouMessage",
+      thankYou,
+      settingFlag(["showThankYouMessage", "showThankYou"], true)
+    );
+
+    const termsContainer = $("printInvoiceFooterText");
+
+    if (termsContainer) {
+      termsContainer.replaceChildren();
+
+      const lines = [
+        {
+          value: termsLine1,
+          visible: settingFlag(["showTermsLine1", "showTerms"], true)
+        },
+        {
+          value: termsLine2,
+          visible: settingFlag(["showTermsLine2", "showTerms"], true)
+        },
+        {
+          value: footer,
+          visible: settingFlag(["showInvoiceFooter", "showTerms"], true)
+        }
+      ];
+
+      lines.forEach((line) => {
+        if (!line.value || !line.visible) return;
+
+        const paragraph = document.createElement("p");
+        paragraph.textContent = line.value;
+        termsContainer.appendChild(paragraph);
+      });
+
+      termsContainer.hidden = termsContainer.childElementCount === 0;
+    }
+
+    renderOptionalText(
+      "printSignatureLabel",
+      signatory,
+      settingFlag(["showSignature", "showAuthorisedSignatory"], true)
+    );
+
+    const signatureSection = $("printSignatureSection");
+
+    if (signatureSection) {
+      signatureSection.hidden =
+        !signatory ||
+        !settingFlag(["showSignature", "showAuthorisedSignatory"], true);
     }
   }
 
   function renderInvoiceBusinessDetails() {
     const sections = settingsSections();
     const business = sections.business;
-    const invoice = sections.invoice;
 
-    const name = textValue(
-      firstValue(business, ["businessName", "name"]) || ""
-    );
+    const name = textValue(firstValue(business, [
+      "businessName",
+      "name"
+    ]) || "");
 
-    const tagline = textValue(
-      firstValue(business, [
-        "tagline",
-        "businessTagline",
-        "description"
-      ]) || ""
-    );
+    const tagline = textValue(firstValue(business, [
+      "businessTagline",
+      "tagline",
+      "description"
+    ]) || "");
 
-    const address = textValue(
-      firstValue(business, [
-        "businessAddress",
-        "address"
-      ]) || ""
-    );
+    const address = textValue(firstValue(business, [
+      "businessAddress",
+      "address"
+    ]) || "");
 
-    const phone = textValue(
-      firstValue(business, [
-        "businessPhone",
-        "phone",
-        "contactPhone"
-      ]) || ""
-    );
+    const phone = textValue(firstValue(business, [
+      "businessPhone",
+      "phone",
+      "contactPhone"
+    ]) || "");
 
-    const email = textValue(
-      firstValue(business, [
-        "businessEmail",
-        "email"
-      ]) || ""
-    );
+    const email = textValue(firstValue(business, [
+      "businessEmail",
+      "email"
+    ]) || "");
 
-    const website = textValue(
-      firstValue(business, [
-        "website",
-        "businessWebsite",
-        "websiteUrl"
-      ]) || ""
-    );
+    const website = textValue(firstValue(business, [
+      "website",
+      "businessWebsite",
+      "websiteUrl"
+    ]) || "");
 
-    const logoURL = textValue(
-      firstValue(business, [
-        "logoImageUrl",
-        "logoUrl",
-        "businessLogoUrl"
-      ]) || ""
-    );
+    const logoURL = textValue(firstValue(business, [
+      "businessLogoUrl",
+      "logoImageUrl",
+      "logoUrl",
+      "logo"
+    ]) || "");
 
-    const gstin = textValue(
-      firstValue(business, [
-        "gstin",
-        "GSTIN",
-        "gstNumber",
-        "gstNo"
-      ]) || ""
-    );
+    const gstin = textValue(firstValue(business, [
+      "gstin",
+      "GSTIN",
+      "gstNumber",
+      "gstNo"
+    ]) || "");
 
-    const fssai = textValue(
-      firstValue(business, [
-        "fssai",
-        "fssaiNumber",
-        "fssaiLicense",
-        "fssaiLicenseNumber"
-      ]) || ""
-    );
-
-    const footer = textValue(
-      firstValue(invoice, [
-        "invoiceFooter",
-        "footerText",
-        "footer"
-      ]) || ""
-    );
-
-    const thankYou = textValue(
-      firstValue(invoice, [
-        "thankYouMessage",
-        "invoiceThankYouMessage"
-      ]) || ""
-    );
-
-    const signature = textValue(
-      firstValue(invoice, [
-        "authorisedSignatory",
-        "authorizedSignatory",
-        "signatureLabel"
-      ]) || ""
-    );
+    const fssai = textValue(firstValue(business, [
+      "fssai",
+      "fssaiNumber",
+      "fssaiLicense",
+      "fssaiLicenseNumber"
+    ]) || "");
 
     setText("printBusinessName", name || "Business Profile");
 
@@ -1142,25 +1111,15 @@
 
     const contactParts = [];
 
-    if (
-      phone &&
-      settingFlag(["showBusinessPhone", "showPhone"], true)
-    ) {
+    if (phone && settingFlag(["showBusinessPhone", "showPhone"], true)) {
       contactParts.push(phone);
     }
 
-    if (
-      email &&
-      settingFlag(["showBusinessEmail", "showEmail"], true)
-    ) {
+    if (email && settingFlag(["showBusinessEmail", "showEmail"], true)) {
       contactParts.push(email);
     }
 
-    renderOptionalText(
-      "printBusinessContact",
-      contactParts.join(" | "),
-      true
-    );
+    renderOptionalText("printBusinessContact", contactParts.join(" | "), true);
 
     renderOptionalText(
       "printBusinessWebsite",
@@ -1177,10 +1136,12 @@
       if (showLogo) {
         logo.hidden = false;
         logo.alt = name ? name + " Logo" : "Business Logo";
+
         logo.onerror = function () {
           logo.hidden = true;
           logo.removeAttribute("src");
         };
+
         logo.src = logoURL;
       } else {
         logo.hidden = true;
@@ -1188,68 +1149,35 @@
       }
     }
 
-    const taxIdParts = [];
+    const taxIds = [];
 
-    if (
-      gstin &&
-      settingFlag(["showGSTIN", "showGstin"], true)
-    ) {
-      taxIdParts.push("GSTIN: " + gstin);
+    if (gstin && settingFlag(["showGSTIN", "showGstin"], true)) {
+      taxIds.push("GSTIN: " + gstin);
     }
 
-    if (
-      fssai &&
-      settingFlag(["showFSSAI", "showFssai"], true)
-    ) {
-      taxIdParts.push("FSSAI: " + fssai);
+    if (fssai && settingFlag(["showFSSAI", "showFssai"], true)) {
+      taxIds.push("FSSAI: " + fssai);
     }
 
     renderOptionalText(
       "printBusinessTaxIds",
-      taxIdParts.join(" | "),
-      taxIdParts.length > 0
+      taxIds.join(" | "),
+      taxIds.length > 0
     );
 
-    renderOptionalText(
-      "printInvoiceFooterText",
-      footer,
-      settingFlag(["showInvoiceFooter", "showTerms"], true)
-    );
-
-    renderOptionalText(
-      "printThankYouMessage",
-      thankYou,
-      settingFlag(["showThankYouMessage", "showThankYou"], true)
-    );
-
-    renderOptionalText(
-      "printSignatureLabel",
-      signature,
-      settingFlag(["showSignature", "showAuthorisedSignatory"], true)
-    );
-
-    const signatureSection = $("printSignatureSection");
-
-    if (signatureSection) {
-      signatureSection.hidden =
-        !signature ||
-        !settingFlag(["showSignature", "showAuthorisedSignatory"], true);
-    }
-
-    updatePaymentQRVisibility();
+    renderInvoiceFooterContent();
     applyFormFieldVisibility();
+    ensureDiscountInput();
+    updatePaymentQRVisibility();
   }
 
   /* ---------------------------------------------------------
-     8. Customer and payment fields
+     7. Customer and payment details
      --------------------------------------------------------- */
 
   function normalizePaymentMethod(value) {
     const raw = textValue(value);
-
     if (!raw) return "Cash";
-
-    const normalized = raw.toLowerCase();
 
     const labels = {
       cash: "Cash",
@@ -1262,127 +1190,131 @@
       other: "Other"
     };
 
-    return labels[normalized] || raw;
+    return labels[raw.toLowerCase()] || raw;
   }
 
   function getInvoiceFormDetails() {
-    const customerName = textValue($("customerName")?.value) ||
-      "Walk-in Customer";
-
-    const customerPhone = textValue($("customerPhone")?.value);
-    const tableNumber = textValue($("tableNumber")?.value);
-    const paymentMethod = normalizePaymentMethod(
-      $("paymentMethod")?.value || "Cash"
-    );
-    const paymentStatus = textValue(
-      $("paymentStatus")?.value || "Paid"
-    );
-
     return {
-      customerName: customerName,
-      customerPhone: customerPhone,
-      tableNumber: tableNumber,
-      paymentMethod: paymentMethod,
-      paymentStatus: paymentStatus,
+      customerName:
+        textValue($("customerName")?.value) || "Walk-in Customer",
+
+      customerPhone: textValue($("customerPhone")?.value),
+      tableNumber: textValue($("tableNumber")?.value),
+
+      paymentMethod: normalizePaymentMethod(
+        $("paymentMethod")?.value || "Cash"
+      ),
+
+      paymentStatus: textValue($("paymentStatus")?.value || "Paid"),
       notes: textValue($("invoiceNotes")?.value)
     };
   }
 
   /* ---------------------------------------------------------
-     9. Static QR.jpg verification image
+     8. Dynamic QR verification URL
      --------------------------------------------------------- */
 
   function updatePaymentQRVisibility() {
     const section = $("printQrSection");
-    const image = $("invoiceQrImage");
+    if (!section) return;
 
-    if (!section || !image) return;
-
-    const shouldShow = settingFlag([
+    section.hidden = !settingFlag([
       "showVerificationQR",
       "showQR",
       "showQRCode"
     ], true);
 
-    section.hidden = !shouldShow;
-
-    if (!shouldShow) return;
-
-    image.alt = "QR code for invoice verification";
-
-    image.onerror = function () {
-      image.hidden = true;
-
-      const caption = $("invoiceQrCaption");
-
-      if (caption) {
-        caption.textContent =
-          "QR.jpg is unavailable. Add the QR image to the repository.";
-      }
-
-      console.error(
-        "Invoice verification QR image failed to load: QR.jpg"
-      );
-    };
-
-    image.onload = function () {
-      image.hidden = false;
-
-      const caption = $("invoiceQrCaption");
-
-      if (caption) {
-        caption.textContent = "Scan for Verification";
-      }
-    };
-
     /*
-     * QR.jpg is the provided static verification asset.
-     * It is not replaced with a generated payment QR.
+     * Remove the former static placeholder. The QR is generated
+     * from the unique saved invoice URL after saving.
      */
-    if (!image.getAttribute("src")) {
-      image.src = "QR.jpg";
+    const oldImage = $("invoiceQrImage");
+
+    if (oldImage) {
+      oldImage.hidden = true;
+      oldImage.removeAttribute("src");
+    }
+  }
+
+  async function renderInvoiceVerificationQR(invoice) {
+    const section = $("printQrSection");
+    const container = section?.querySelector(".inv-qr");
+    const caption = $("invoiceQrCaption");
+
+    if (!container || section.hidden) return;
+
+    container.replaceChildren();
+
+    const verificationId = textValue(
+      invoice.verificationId || invoice._recordKey
+    );
+
+    if (!verificationId) {
+      if (caption) caption.textContent = "Verification ID Unavailable";
+      return;
+    }
+
+    const verificationURL = new URL(
+      "QRVerification.html",
+      window.location.href
+    );
+
+    verificationURL.searchParams.set("invoice", verificationId);
+
+    if (caption) caption.textContent = "Generating Verification QR...";
+
+    const qr = window.restaurantQR;
+
+    if (!qr || typeof qr.generate !== "function") {
+      if (caption) caption.textContent = "QR Generator Unavailable";
+      return;
+    }
+
+    try {
+      await qr.generate(container, verificationURL.href, {
+        width: 108,
+        height: 108,
+        margin: 1
+      });
+
+      if (caption) caption.textContent = "Scan to Verify Invoice";
+    } catch (error) {
+      console.error("Invoice verification QR generation failed:", error);
+
+      if (caption) caption.textContent = "QR Generation Failed";
     }
   }
 
   /* ---------------------------------------------------------
-     10. Invoice preview rendering
+     9. Preview item rows
      --------------------------------------------------------- */
 
   function createInvoicePrintRow(item, index) {
     const row = document.createElement("div");
     row.className = "inv-row";
 
-    const values = [
-      String(index + 1),
-      item.name,
-      String(item.quantity),
-      formatMoney(item.unitPrice),
-      formatMoney(item.lineTotal)
-    ];
-
-    const classNames = [
-      "col-num",
-      "col-item",
-      "col-qty",
-      "col-rate",
-      "col-amt"
-    ];
-
-    values.forEach(function (value, indexValue) {
+    [
+      ["col-num", String(index + 1)],
+      ["col-item", item.name],
+      ["col-qty", String(item.quantity)],
+      ["col-rate", formatMoney(item.unitPrice)],
+      ["col-amt", formatMoney(item.lineTotal)]
+    ].forEach(([className, value]) => {
       const cell = document.createElement("span");
-
-      cell.className = classNames[indexValue];
+      cell.className = className;
       cell.textContent = value;
-
       row.appendChild(cell);
     });
 
     return row;
   }
 
+  /* ---------------------------------------------------------
+     10. Render saved invoice preview
+     --------------------------------------------------------- */
+
   function renderSavedInvoice(invoice) {
     const preview = $("invoicePreviewSection");
-
     if (!preview) return;
 
     setText("printInvoiceNumber", invoice.invoiceNumber);
@@ -1403,50 +1335,52 @@
       settingFlag(["showTableNumber"], true)
     );
 
-    const paymentMethodVisible = settingFlag(
-      ["showPaymentMethod"],
-      true
+    const rightParty = $("printTableNumber")?.parentElement;
+    const taxIds = $("printBusinessTaxIds");
+
+    const hasTable = Boolean(
+      invoice.tableNumber &&
+      settingFlag(["showTableNumber"], true)
     );
 
-    const paymentStatusVisible = settingFlag(
-      ["showPaymentStatus"],
-      true
-    );
+    const hasTaxIds = Boolean(taxIds && !taxIds.hidden);
+
+    if (rightParty) {
+      rightParty.hidden = !hasTable && !hasTaxIds;
+
+      const label = rightParty.querySelector(".inv-label");
+      if (label) label.textContent = hasTable ? "Table" : "Business Details";
+    }
+
+    const showMethod = settingFlag(["showPaymentMethod"], true);
+    const showPaymentStatus = settingFlag(["showPaymentStatus"], true);
 
     setText("printPaymentMethod", invoice.paymentMethod);
     setText("printPaymentStatus", invoice.paymentStatus);
 
-    const paymentMethodRow = $("printPaymentMethodRow");
-    const paymentStatusRow = $("printPaymentStatusRow");
+    const methodRow = $("printPaymentMethodRow");
+    const statusRow = $("printPaymentStatusRow");
 
-    if (paymentMethodRow) {
-      paymentMethodRow.hidden = !paymentMethodVisible;
-    }
+    if (methodRow) methodRow.hidden = !showMethod;
+    if (statusRow) statusRow.hidden = !showPaymentStatus;
 
-    if (paymentStatusRow) {
-      paymentStatusRow.hidden = !paymentStatusVisible;
-    }
-
-    const paymentBlock = $("printPaymentMethodRow")?.closest(
-      ".inv-payment-block"
-    );
+    const paymentBlock = methodRow?.closest(".inv-payment-block");
 
     if (paymentBlock) {
-      paymentBlock.hidden =
-        !paymentMethodVisible && !paymentStatusVisible;
+      paymentBlock.hidden = !showMethod && !showPaymentStatus;
     }
 
     setText("printInvoiceSubtotal", formatMoney(invoice.subtotal));
     setText("printInvoiceDiscount", formatMoney(invoice.discount));
     setText("printInvoiceTax", formatMoney(invoice.taxAmount));
-    setText("printInvoiceGrandTotal", formatMoney(invoice.grandTotal));
     setText("printInvoiceRoundOff", formatMoney(invoice.roundOff || 0));
+    setText("printInvoiceGrandTotal", formatMoney(invoice.grandTotal));
 
     setText(
       "printInvoiceTaxLabel",
-      "GST (" +
-        Number(invoice.taxRate || 0).toFixed(2).replace(/\.00$/, "") +
-        "%)"
+      "GST (" + Number(invoice.taxRate || 0)
+        .toFixed(2)
+        .replace(/\.00$/, "") + "%)"
     );
 
     const discountRow = $("printDiscountRow");
@@ -1454,20 +1388,17 @@
     const roundOffRow = $("printRoundOffRow");
 
     if (discountRow) {
-      discountRow.hidden =
-        invoice.discount <= 0 ||
+      discountRow.hidden = invoice.discount <= 0 ||
         !settingFlag(["showDiscount", "showInvoiceDiscount"], true);
     }
 
     if (taxRow) {
-      taxRow.hidden =
-        !invoice.taxEnabled ||
+      taxRow.hidden = !invoice.taxEnabled ||
         !settingFlag(["showTax", "showInvoiceTax"], true);
     }
 
     if (roundOffRow) {
-      roundOffRow.hidden =
-        !invoice.roundOffEnabled ||
+      roundOffRow.hidden = !invoice.roundOffEnabled ||
         !settingFlag(["showRoundOff"], true);
     }
 
@@ -1475,8 +1406,7 @@
     const notesSection = $("printInvoiceNotesSection");
 
     if (notesSection) {
-      notesSection.hidden =
-        !notes ||
+      notesSection.hidden = !notes ||
         !settingFlag(["showNotes", "showInvoiceNotes"], true);
     }
 
@@ -1487,27 +1417,20 @@
     if (body) {
       body.replaceChildren();
 
-      invoice.items.forEach(function (item, index) {
+      invoice.items.forEach((item, index) => {
         body.appendChild(createInvoicePrintRow(item, index));
       });
     }
 
     renderInvoiceBusinessDetails();
-    preview.hidden = false;
 
+    preview.hidden = false;
     updatePaymentQRVisibility();
 
-    setMessage(
-      "Invoice recorded successfully. Preview is ready.",
-      "success"
-    );
+    setMessage("Invoice Recorded Successfully. Preview Is Ready.", "success");
+    setPageStatus("Invoice Saved To The Business Database.", "connected");
 
-    setPageStatus(
-      "Invoice saved to the business database.",
-      "connected"
-    );
-
-    setFooterStatus("Invoice Recorded");
+    setText("invoiceFooterStatus", "Invoice Recorded");
 
     preview.scrollIntoView({
       behavior: window.matchMedia(
@@ -1515,48 +1438,29 @@
       ).matches ? "auto" : "smooth",
       block: "start"
     });
+
+    renderInvoiceVerificationQR(invoice);
   }
 
   /* ---------------------------------------------------------
-     11. Validation and Firebase persistence
+     11. Save invoice to Firebase
      --------------------------------------------------------- */
 
   function validateCart() {
     if (!state.cart.length) {
-      throw new Error(
-        "Add at least one item before recording the invoice."
-      );
+      throw new Error("Add at least one item before recording the invoice.");
     }
 
     for (const item of state.cart) {
-      if (
-        !item.name ||
-        !Number.isSafeInteger(item.quantity) ||
-        item.quantity < 1
-      ) {
+      if (!item.name ||
+          !Number.isSafeInteger(item.quantity) ||
+          item.quantity < 1) {
         throw new Error("One or more invoice items are invalid.");
       }
 
-      if (
-        !Number.isFinite(item.unitPrice) ||
-        item.unitPrice <= 0
-      ) {
+      if (!Number.isFinite(item.unitPrice) || item.unitPrice <= 0) {
         throw new Error("An invoice item has an invalid unit price.");
       }
-    }
-  }
-
-  function ensureOwnerAuthorized() {
-    const access = window.restaurantAccess;
-
-    if (
-      !access ||
-      !access.ready ||
-      !access.authorized ||
-      !access.user ||
-      access.user.uid !== OWNER_UID
-    ) {
-      throw new Error("The authorized owner session is required.");
     }
   }
 
@@ -1567,9 +1471,7 @@
 
     try {
       if (!state.ready) {
-        throw new Error(
-          "Invoice data is still loading. Try again shortly."
-        );
+        throw new Error("Invoice data is still loading. Try again shortly.");
       }
 
       ensureOwnerAuthorized();
@@ -1577,80 +1479,58 @@
 
       const tax = getTaxSettings();
 
-      if (
-        tax.enabled &&
-        (!Number.isFinite(tax.rate) ||
-          tax.rate < 0 ||
-          tax.rate > 100)
-      ) {
-        throw new Error(
-          "Check the tax rate in Settings before recording an invoice."
-        );
+      if (tax.enabled && (
+        !Number.isFinite(tax.rate) ||
+        tax.rate < 0 ||
+        tax.rate > 100
+      )) {
+        throw new Error("Check the tax rate in Settings before recording an invoice.");
       }
 
-      const formDetails = getInvoiceFormDetails();
-
-      if (
-        settingFlag(["showCustomerName", "showBillTo"], true) &&
-        !$("customerName")?.closest(".form-field")?.hidden &&
-        !formDetails.customerName
-      ) {
-        throw new Error("Enter the customer name.");
-      }
+      const details = getInvoiceFormDetails();
+      const totals = calculateTotals();
 
       state.saving = true;
 
       setMessage("");
-      setPageStatus("Recording invoice...", "warning");
+      setPageStatus("Recording Invoice...", "warning");
       setEditingDisabled(true);
 
-      const submitButton = $("generateInvoiceBtn");
-
-      if (submitButton) {
-        submitButton.disabled = true;
-      }
-
       const submitLabel = $("invoiceSubmitLabel");
-
-      if (submitLabel) {
-        submitLabel.textContent = "Recording Invoice...";
-      }
+      if (submitLabel) submitLabel.textContent = "Recording Invoice...";
 
       const createdAt = new Date();
-      const totals = calculateTotals();
       const invoiceNumber = await reserveInvoiceNumber(createdAt);
 
       ensureOwnerAuthorized();
 
-      const items = state.cart.map(function (item) {
-        return {
-          productId: item.productId,
-          name: item.name,
-          category: item.category || "",
-          quantity: item.quantity,
-          unitPrice: roundMoney(item.unitPrice),
-          lineTotal: roundMoney(item.unitPrice * item.quantity),
-          custom: Boolean(item.custom)
-        };
-      });
+      const items = state.cart.map((item) => ({
+        productId: item.productId,
+        name: item.name,
+        category: item.category || "",
+        quantity: item.quantity,
+        unitPrice: roundMoney(item.unitPrice),
+        lineTotal: roundMoney(item.unitPrice * item.quantity),
+        custom: Boolean(item.custom)
+      }));
 
       const invoiceRecord = {
         ownerUid: OWNER_UID,
 
-        invoiceNumber: invoiceNumber,
+        invoiceNumber,
         invoiceDate: localDateString(createdAt),
         invoiceTime: localTimeString(createdAt),
         createdAt: createdAt.toISOString(),
         createdAtMs: createdAt.getTime(),
 
-        customerName: formDetails.customerName,
-        customerPhone: formDetails.customerPhone,
-        tableNumber: formDetails.tableNumber,
+        customerName: details.customerName,
+        customerPhone: details.customerPhone,
+        tableNumber: details.tableNumber,
 
-        paymentMethod: formDetails.paymentMethod,
-        paymentStatus: formDetails.paymentStatus,
+        paymentMethod: details.paymentMethod,
+        paymentStatus: details.paymentStatus,
 
-        items: items,
+        items,
 
         subtotal: totals.subtotal,
         discount: totals.discount,
@@ -1661,23 +1541,22 @@
         roundOff: totals.roundOff,
         grandTotal: totals.grandTotal,
 
-        notes: formDetails.notes,
-
+        notes: details.notes,
         recordStatus: "valid"
       };
 
-      const invoiceListRef = state.api.ref(
-        state.db,
-        PATHS.invoices
-      );
-
+      const invoiceListRef = state.api.ref(state.db, PATHS.invoices);
       const newInvoiceRef = state.api.push(invoiceListRef);
 
       if (!newInvoiceRef || !newInvoiceRef.key) {
-        throw new Error(
-          "Unable to create a database invoice reference."
-        );
+        throw new Error("Unable to create a database invoice reference.");
       }
+
+      /*
+       * Unique Firebase invoice key is the QR verification ID.
+       * QRVerification.html will use it to retrieve the record.
+       */
+      invoiceRecord.verificationId = newInvoiceRef.key;
 
       await state.api.set(newInvoiceRef, invoiceRecord);
 
@@ -1691,58 +1570,40 @@
       $("addInvoiceItemForm")?.reset();
       $("customItemForm")?.reset();
 
-      if ($("itemQuantity")) {
-        $("itemQuantity").value = "1";
-      }
+      if ($("itemQuantity")) $("itemQuantity").value = "1";
+      if ($("customItemQuantity")) $("customItemQuantity").value = "1";
+      if ($("invoiceDiscountAmount")) $("invoiceDiscountAmount").value = "";
 
-      if ($("customItemQuantity")) {
-        $("customItemQuantity").value = "1";
-      }
-
-      if ($("invoiceDiscountAmount")) {
-        $("invoiceDiscountAmount").value = "";
-      }
-
-      setText("itemCount", "0 items added");
+      setText("itemCount", "0 Items Added");
 
     } catch (error) {
       console.error("Invoice recording failed:", {
-        code: error && error.code
-          ? error.code
-          : "invoice-save-error",
-        message: error instanceof Error
-          ? error.message
-          : "Unknown error"
+        code: error && error.code ? error.code : "invoice-save-error",
+        message: error instanceof Error ? error.message : "Unknown Error"
       });
 
       setMessage(
         error instanceof Error
           ? error.message
-          : "Unable to record the invoice. Please try again.",
+          : "Unable To Record The Invoice. Please Try Again.",
         "error"
       );
 
-      setPageStatus(
-        "Invoice was not confirmed as saved.",
-        "error"
-      );
+      setPageStatus("Invoice Was Not Confirmed As Saved.", "error");
 
     } finally {
       state.saving = false;
       setEditingDisabled(false);
 
       const submitLabel = $("invoiceSubmitLabel");
-
-      if (submitLabel) {
-        submitLabel.textContent = "Record / Save Invoice";
-      }
+      if (submitLabel) submitLabel.textContent = "Record / Save Invoice";
 
       renderCart();
     }
   }
 
   /* ---------------------------------------------------------
-     12. Realtime database loading
+     12. Realtime Database subscriptions
      --------------------------------------------------------- */
 
   function subscribe(path, callback, errorCallback) {
@@ -1763,7 +1624,6 @@
     );
 
     state.loaded.products = true;
-
     populateProductSelect();
     renderCart();
     checkReady();
@@ -1775,7 +1635,6 @@
     );
 
     state.loaded.categories = true;
-
     populateProductSelect();
     renderCart();
     checkReady();
@@ -1795,19 +1654,17 @@
 
   function onReadError(path, error) {
     console.error("Invoice data read failed:", {
-      path: path,
-      code: error && error.code
-        ? error.code
-        : "unknown"
+      path,
+      code: error && error.code ? error.code : "unknown"
     });
 
     setPageStatus(
-      "Unable to load required billing data. Check the database connection and access rules.",
+      "Unable To Load Required Billing Data. Check The Database Connection And Access Rules.",
       "error"
     );
 
     setMessage(
-      "Required data could not be loaded. Invoice recording is unavailable.",
+      "Required Data Could Not Be Loaded. Invoice Recording Is Unavailable.",
       "error"
     );
 
@@ -1819,15 +1676,15 @@
     state.ready = Object.values(state.loaded).every(Boolean);
 
     if (state.ready) {
-      setPageStatus("Billing data is ready.", "connected");
-      setFooterStatus("Billing Data Loaded");
+      setPageStatus("Billing Data Is Ready.", "connected");
+      setText("invoiceFooterStatus", "Billing Data Loaded");
     }
 
     renderCart();
   }
 
   /* ---------------------------------------------------------
-     13. Reset and preview controls
+     13. Reset, close and print controls
      --------------------------------------------------------- */
 
   function resetInvoice() {
@@ -1836,48 +1693,33 @@
     clearCart();
 
     const preview = $("invoicePreviewSection");
-
-    if (preview) {
-      preview.hidden = true;
-    }
+    if (preview) preview.hidden = true;
 
     $("invoiceForm")?.reset();
 
-    if ($("customerName")) {
-      $("customerName").value = "Walk-in Customer";
-    }
-
-    if ($("paymentMethod")) {
-      $("paymentMethod").value = "Cash";
-    }
-
-    if ($("paymentStatus")) {
-      $("paymentStatus").value = "Paid";
-    }
+    if ($("customerName")) $("customerName").value = "Walk-in Customer";
+    if ($("paymentMethod")) $("paymentMethod").value = "Cash";
+    if ($("paymentStatus")) $("paymentStatus").value = "Paid";
+    if ($("invoiceDiscountAmount")) $("invoiceDiscountAmount").value = "";
 
     applyFormFieldVisibility();
 
     setMessage("");
 
     setPageStatus(
-      state.ready
-        ? "Billing data is ready."
-        : "Loading billing data.",
+      state.ready ? "Billing Data Is Ready." : "Loading Billing Data.",
       state.ready ? "connected" : "warning"
     );
   }
 
   function closePreview() {
     const preview = $("invoicePreviewSection");
-
-    if (preview) {
-      preview.hidden = true;
-    }
+    if (preview) preview.hidden = true;
   }
 
   function printInvoice() {
     if ($("invoicePreviewSection")?.hidden) {
-      setMessage("Record an invoice before printing.", "warning");
+      setMessage("Record An Invoice Before Printing.", "warning");
       return;
     }
 
@@ -1885,17 +1727,17 @@
   }
 
   /* ---------------------------------------------------------
-     14. Initialization
+     14. Initialize
      --------------------------------------------------------- */
 
   async function initialize() {
     try {
-      setPageStatus("Checking owner session...", "warning");
+      setPageStatus("Checking Owner Session...", "warning");
 
       const access = window.restaurantAccess;
 
       if (!access || !access.readyPromise) {
-        throw new Error("Owner authorization is unavailable.");
+        throw new Error("Owner Authorization Is Unavailable.");
       }
 
       const authorized = await access.readyPromise;
@@ -1906,23 +1748,20 @@
         !access.user ||
         access.user.uid !== OWNER_UID
       ) {
-        throw new Error(
-          "Only the authorized owner may create invoices."
-        );
+        throw new Error("Only The Authorized Owner May Create Invoices.");
       }
 
       const firebase = window.restaurantFirebase;
 
       if (!firebase || !firebase.readyPromise) {
-        throw new Error("Firebase configuration is unavailable.");
+        throw new Error("Firebase Configuration Is Unavailable.");
       }
 
       const ready = await firebase.readyPromise;
 
       if (!ready || !firebase.ready) {
         throw new Error(
-          firebase.error?.message ||
-          "Firebase initialization failed."
+          firebase.error?.message || "Firebase Initialization Failed."
         );
       }
 
@@ -1938,96 +1777,55 @@
         typeof state.api.set !== "function" ||
         typeof state.api.runTransaction !== "function"
       ) {
-        throw new Error(
-          "Required Realtime Database methods are unavailable."
-        );
+        throw new Error("Required Realtime Database Methods Are Unavailable.");
       }
 
-      subscribe(PATHS.products, onProducts, function (error) {
-        onReadError(PATHS.products, error);
-      });
+      subscribe(PATHS.products, onProducts, (error) =>
+        onReadError(PATHS.products, error)
+      );
 
-      subscribe(PATHS.categories, onCategories, function (error) {
-        onReadError(PATHS.categories, error);
-      });
+      subscribe(PATHS.categories, onCategories, (error) =>
+        onReadError(PATHS.categories, error)
+      );
 
-      subscribe(PATHS.settings, onSettings, function (error) {
-        onReadError(PATHS.settings, error);
-      });
+      subscribe(PATHS.settings, onSettings, (error) =>
+        onReadError(PATHS.settings, error)
+      );
 
     } catch (error) {
       state.ready = false;
 
-      console.error(
-        "Invoice page initialization failed:",
-        error
-      );
+      console.error("Invoice page initialization failed:", error);
 
       setPageStatus(
         error instanceof Error
           ? error.message
-          : "Invoice page initialization failed.",
+          : "Invoice Page Initialization Failed.",
         "error"
       );
 
       setMessage(
-        "Invoice creation is unavailable until initialization succeeds.",
+        "Invoice Creation Is Unavailable Until Initialization Succeeds.",
         "error"
       );
     }
   }
 
   /* ---------------------------------------------------------
-     15. Event handlers
+     15. Event handlers and safe defaults
      --------------------------------------------------------- */
 
-  $("addInvoiceItemForm")?.addEventListener(
-    "submit",
-    addSavedProduct
-  );
+  $("addInvoiceItemForm")?.addEventListener("submit", addSavedProduct);
+  $("customItemForm")?.addEventListener("submit", addCustomItem);
+  $("toggleCustomItemBtn")?.addEventListener("click", toggleCustomItem);
+  $("clearItemsBtn")?.addEventListener("click", clearCart);
+  $("resetInvoiceBtn")?.addEventListener("click", resetInvoice);
+  $("invoiceForm")?.addEventListener("submit", saveInvoice);
+  $("closeInvoicePreviewBtn")?.addEventListener("click", closePreview);
+  $("printInvoiceBtn")?.addEventListener("click", printInvoice);
 
-  $("customItemForm")?.addEventListener(
-    "submit",
-    addCustomItem
-  );
+  $("productSelect")?.addEventListener("change", () => setMessage(""));
 
-  $("toggleCustomItemBtn")?.addEventListener(
-    "click",
-    toggleCustomItem
-  );
-
-  $("clearItemsBtn")?.addEventListener(
-    "click",
-    clearCart
-  );
-
-  $("resetInvoiceBtn")?.addEventListener(
-    "click",
-    resetInvoice
-  );
-
-  $("invoiceForm")?.addEventListener(
-    "submit",
-    saveInvoice
-  );
-
-  $("closeInvoicePreviewBtn")?.addEventListener(
-    "click",
-    closePreview
-  );
-
-  $("printInvoiceBtn")?.addEventListener(
-    "click",
-    printInvoice
-  );
-
-  $("productSelect")?.addEventListener("change", function () {
-    setMessage("");
-  });
-
-  $("invoiceDiscountAmount")?.addEventListener("input", renderCart);
-
-  /* Initialize safe defaults for the newly added fields. */
   if ($("customerName") && !$("customerName").value.trim()) {
     $("customerName").value = "Walk-in Customer";
   }
@@ -2047,16 +1845,15 @@
   window.addEventListener("pagehide", function () {
     state.disposed = true;
 
-    state.subscriptions.forEach(function (unsubscribe) {
+    state.subscriptions.forEach((unsubscribe) => {
       try {
-        if (typeof unsubscribe === "function") {
-          unsubscribe();
-        }
-      } catch (error) {
+        if (typeof unsubscribe === "function") unsubscribe();
+      } catch (_) {
         console.warn("Invoice subscription cleanup failed.");
       }
     });
 
     state.subscriptions = [];
   });
+
 })();
