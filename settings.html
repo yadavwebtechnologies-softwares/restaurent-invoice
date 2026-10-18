@@ -13,19 +13,20 @@
   >
 
   <link rel="stylesheet" href="style.css">
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  >
 </head>
 
 <body class="settings-page">
-
   <div class="app" id="app">
-
-    <!-- Shared Sidebar -->
     <aside class="sidebar" id="sidebar">
-
       <div class="brand">
         <a class="brand-link" href="dashboard.html" aria-label="Dashboard">
           <span class="brand-mark" id="brandMark" aria-hidden="true">B</span>
-
           <span class="brand-text">
             <span
               class="brand-name"
@@ -43,7 +44,6 @@
       </div>
 
       <nav class="sidebar-navigation" aria-label="Main navigation">
-
         <p class="nav-section">Main</p>
 
         <a class="nav-item" href="dashboard.html">
@@ -110,15 +110,13 @@
                stroke-width="1.8" stroke-linecap="round"
                stroke-linejoin="round" aria-hidden="true">
             <circle cx="12" cy="12" r="3"/>
-            <path d="M19.4 15a2 2 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a2 2 0 0 0-1.8-.3 2 2 0 0 0-1 1.5v.2a2 2 0 1 1-4 0v-.2a2 2 0 0 0-1-1.5 2 2 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a2 2 0 0 0 .3-1.8 2 2 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.2a2 2 0 0 0 1.5-1 2 2 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a2 2 0 0 0 1.8.3 2 2 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.2a2 2 0 0 0 1 1.5 2 2 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a2 2 0 0 0-.3 1.8 2 2 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.2a2 2 0 0 0-1.5 1Z"/>
+            <path d="M19.4 15a2 2 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a2 2 0 0 0-1.8-.3 2 2 0 0 0-1 1.5v.2a2 2 0 1 1-4 0v-.2a2 2 0 0 0-1-1.5 2 2 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l-.1-.1a2 2 0 0 0 .3-1.8 2 2 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.2a2 2 0 0 0 1.5-1 2 2 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a2 2 0 0 0 1.8.3 2 2 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.2a2 2 0 0 0 1 1.5 2 2 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l.1.1a2 2 0 0 0-.3 1.8 2 2 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.2a2 2 0 0 0-1.5 1Z"/>
           </svg>
           <span>Settings</span>
         </a>
-
       </nav>
 
       <div class="sidebar-footer">
-
         <div class="sidebar-business-status">
           <span class="status-indicator" aria-hidden="true"></span>
           <span id="sidebarConnectionStatus">Connecting to database</span>
@@ -137,11 +135,9 @@
           </svg>
           <span>Sign Out</span>
         </button>
-
       </div>
     </aside>
 
-    <!-- Mobile Navigation Backdrop -->
     <button
       type="button"
       class="overlay"
@@ -151,12 +147,8 @@
     ></button>
 
     <div class="main">
-
-      <!-- Shared Header -->
       <header class="topbar">
-
         <div class="topbar-left">
-
           <button
             type="button"
             class="menu-btn"
@@ -176,25 +168,20 @@
             <p class="breadcrumb">Management / Settings</p>
             <h1>Settings</h1>
           </div>
-
         </div>
 
         <div class="topbar-right">
           <div class="owner-profile" id="ownerProfile">
             <span class="owner-avatar" id="ownerAvatar" aria-hidden="true">—</span>
-
             <span class="owner-profile-text">
               <span class="owner-name" id="ownerDisplayName">Loading account</span>
               <span class="owner-role" id="ownerDisplayRole">Owner</span>
             </span>
           </div>
         </div>
-
       </header>
 
-      <!-- Settings Content -->
       <main class="content" id="settingsContent">
-
         <section class="page-heading">
           <div>
             <p class="section-eyebrow">BUSINESS CONFIGURATION</p>
@@ -217,7 +204,6 @@
 
         <!-- Business Profile -->
         <section class="dashboard-section" aria-labelledby="businessProfileHeading">
-
           <div class="section-heading">
             <div>
               <h2 id="businessProfileHeading">Business Profile</h2>
@@ -228,7 +214,6 @@
           </div>
 
           <div class="panel">
-
             <form id="businessProfileForm" class="management-form">
 
               <div class="form-field">
@@ -263,6 +248,106 @@
                   autocomplete="street-address"
                 ></textarea>
               </div>
+
+              <div class="form-field">
+                <label for="businessMapsUrlInput">Google Maps Location URL</label>
+                <input
+                  type="url"
+                  id="businessMapsUrlInput"
+                  name="businessMapsUrl"
+                  inputmode="url"
+                  maxlength="2048"
+                  autocomplete="url"
+                  placeholder="Pin a location on the map"
+                  aria-describedby="businessMapsUrlHelp"
+                >
+
+                <p class="muted-text" id="businessMapsUrlHelp">
+                  Click the map button, select the restaurant location, and the Google Maps URL will be generated automatically.
+                </p>
+
+                <div class="form-actions business-map-url-actions">
+                  <button
+                    type="button"
+                    class="btn btn-secondary"
+                    id="pickBusinessLocationBtn"
+                    aria-expanded="false"
+                    aria-controls="businessMapPickerPanel"
+                  >
+                    Pick Location on Map
+                  </button>
+
+                  <a
+                    id="previewBusinessMapsLink"
+                    class="business-map-preview-link"
+                    href="#"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    hidden
+                  >
+                    Preview in Google Maps
+                  </a>
+                </div>
+              </div>
+
+              <section
+                class="business-map-picker-panel panel"
+                id="businessMapPickerPanel"
+                aria-labelledby="businessMapPickerHeading"
+                hidden
+              >
+                <div class="section-heading">
+                  <div>
+                    <h3 id="businessMapPickerHeading">Choose Restaurant Location</h3>
+                    <p class="muted-text">
+                      Zoom or move the map, then click the exact location to place the pin.
+                    </p>
+                  </div>
+                </div>
+
+                <p
+                  class="muted-text business-map-picker-status"
+                  id="businessMapPickerStatus"
+                  role="status"
+                  aria-live="polite"
+                >
+                  Loading map...
+                </p>
+
+                <div
+                  id="businessLocationMap"
+                  class="business-location-map"
+                  role="application"
+                  aria-label="Interactive map to select the restaurant location"
+                ></div>
+
+                <p
+                  class="muted-text business-location-coordinates"
+                  id="businessLocationCoordinates"
+                  aria-live="polite"
+                >
+                  No location selected.
+                </p>
+
+                <div class="form-actions business-map-picker-actions">
+                  <button
+                    type="button"
+                    class="btn btn-primary"
+                    id="useSelectedBusinessLocationBtn"
+                    disabled
+                  >
+                    Use Selected Location
+                  </button>
+
+                  <button
+                    type="button"
+                    class="btn btn-secondary"
+                    id="closeBusinessMapPickerBtn"
+                  >
+                    Close Map
+                  </button>
+                </div>
+              </section>
 
               <div class="form-field">
                 <label for="businessPhoneInput">Contact phone (optional)</label>
@@ -314,132 +399,125 @@
                 role="status"
                 aria-live="polite"
               ></div>
-
             </form>
-
           </div>
         </section>
 
         <!-- Invoice Preferences -->
-<section class="dashboard-section" aria-labelledby="invoiceSettingsHeading">
+        <section class="dashboard-section" aria-labelledby="invoiceSettingsHeading">
+          <div class="section-heading">
+            <div>
+              <h2 id="invoiceSettingsHeading">Invoice Preferences</h2>
+              <p class="muted-text">
+                Configure invoice numbering and printed invoice text.
+              </p>
+            </div>
+          </div>
 
-  <div class="section-heading">
-    <div>
-      <h2 id="invoiceSettingsHeading">Invoice Preferences</h2>
-      <p class="muted-text">
-        Configure invoice numbering and printed invoice text.
-      </p>
-    </div>
-  </div>
+          <div class="panel">
+            <form id="invoiceSettingsForm" class="management-form">
 
-  <div class="panel">
+              <div class="form-field">
+                <label for="invoicePrefixInput">Invoice Number Prefix</label>
+                <input
+                  type="text"
+                  id="invoicePrefixInput"
+                  name="invoicePrefix"
+                  maxlength="20"
+                  pattern="[A-Za-z0-9-]+"
+                  autocomplete="off"
+                >
+              </div>
 
-    <form id="invoiceSettingsForm" class="management-form">
+              <div class="form-field">
+                <label for="invoiceFooterInput">Invoice Footer Message (Optional)</label>
+                <textarea
+                  id="invoiceFooterInput"
+                  name="invoiceFooter"
+                  rows="3"
+                  maxlength="500"
+                ></textarea>
+              </div>
 
-      <div class="form-field">
-        <label for="invoicePrefixInput">Invoice Number Prefix</label>
-        <input
-          type="text"
-          id="invoicePrefixInput"
-          name="invoicePrefix"
-          maxlength="20"
-          pattern="[A-Za-z0-9-]+"
-          autocomplete="off"
-        >
-      </div>
+              <div class="form-field">
+                <label for="thankYouMessageInput">Thank You Message (Optional)</label>
+                <input
+                  type="text"
+                  id="thankYouMessageInput"
+                  name="thankYouMessage"
+                  maxlength="200"
+                  placeholder="Thank you for your business"
+                >
+              </div>
 
-      <div class="form-field">
-        <label for="invoiceFooterInput">Invoice Footer Message (Optional)</label>
-        <textarea
-          id="invoiceFooterInput"
-          name="invoiceFooter"
-          rows="3"
-          maxlength="500"
-        ></textarea>
-      </div>
+              <div class="form-field">
+                <label for="termsLine1Input">Terms Line 1 (Optional)</label>
+                <input
+                  type="text"
+                  id="termsLine1Input"
+                  name="termsLine1"
+                  maxlength="250"
+                  placeholder="Please check your order before leaving"
+                >
+              </div>
 
-      <div class="form-field">
-        <label for="thankYouMessageInput">Thank You Message (Optional)</label>
-        <input
-          type="text"
-          id="thankYouMessageInput"
-          name="thankYouMessage"
-          maxlength="200"
-          placeholder="Thank you for your business"
-        >
-      </div>
+              <div class="form-field">
+                <label for="termsLine2Input">Terms Line 2 (Optional)</label>
+                <input
+                  type="text"
+                  id="termsLine2Input"
+                  name="termsLine2"
+                  maxlength="250"
+                  placeholder="Thank you for choosing us"
+                >
+              </div>
 
-      <div class="form-field">
-        <label for="termsLine1Input">Terms Line 1 (Optional)</label>
-        <input
-          type="text"
-          id="termsLine1Input"
-          name="termsLine1"
-          maxlength="250"
-          placeholder="Please check your order before leaving"
-        >
-      </div>
+              <div class="form-field">
+                <label for="authorisedSignatoryInput">Authorised Signatory (Optional)</label>
+                <input
+                  type="text"
+                  id="authorisedSignatoryInput"
+                  name="authorisedSignatory"
+                  maxlength="150"
+                  placeholder="Authorised Signatory"
+                >
+              </div>
 
-      <div class="form-field">
-        <label for="termsLine2Input">Terms Line 2 (Optional)</label>
-        <input
-          type="text"
-          id="termsLine2Input"
-          name="termsLine2"
-          maxlength="250"
-          placeholder="Thank you for choosing us"
-        >
-      </div>
+              <div class="form-field">
+                <label for="dailySalesTargetInput">Daily Sales Target (₹, Optional)</label>
+                <input
+                  type="number"
+                  id="dailySalesTargetInput"
+                  name="dailySalesTarget"
+                  min="0"
+                  max="999999999"
+                  step="0.01"
+                  inputmode="decimal"
+                >
+              </div>
 
-      <div class="form-field">
-        <label for="authorisedSignatoryInput">Authorised Signatory (Optional)</label>
-        <input
-          type="text"
-          id="authorisedSignatoryInput"
-          name="authorisedSignatory"
-          maxlength="150"
-          placeholder="Authorised Signatory"
-        >
-      </div>
+              <div class="form-actions">
+                <button
+                  type="submit"
+                  class="btn btn-primary"
+                  id="saveInvoiceSettingsBtn"
+                >
+                  Save Invoice Preferences
+                </button>
+              </div>
 
-      <div class="form-field">
-        <label for="dailySalesTargetInput">Daily Sales Target (₹, Optional)</label>
-        <input
-          type="number"
-          id="dailySalesTargetInput"
-          name="dailySalesTarget"
-          min="0"
-          max="999999999"
-          step="0.01"
-          inputmode="decimal"
-        >
-      </div>
-
-      <div class="form-actions">
-        <button
-          type="submit"
-          class="btn btn-primary"
-          id="saveInvoiceSettingsBtn"
-        >
-          Save Invoice Preferences
-        </button>
-      </div>
-
-      <div
-        class="form-message"
-        id="invoiceSettingsMessage"
-        role="status"
-        aria-live="polite"
-      ></div>
-
-    </form>
-
-  </div>
-</section>
+              <div
+                class="form-message"
+                id="invoiceSettingsMessage"
+                role="status"
+                aria-live="polite"
+              ></div>
+            </form>
+          </div>
+        </section>
 
         <!-- Tax and Discount -->
         <section class="dashboard-section" aria-labelledby="taxSettingsHeading">
-
           <div class="section-heading">
             <div>
               <h2 id="taxSettingsHeading">Tax and Discount</h2>
@@ -450,7 +528,6 @@
           </div>
 
           <div class="panel">
-
             <form id="taxSettingsForm" class="management-form">
 
               <div class="form-field setting-toggle-row">
@@ -513,15 +590,12 @@
                 role="status"
                 aria-live="polite"
               ></div>
-
             </form>
-
           </div>
         </section>
 
         <!-- Payment and QR -->
         <section class="dashboard-section" aria-labelledby="paymentSettingsHeading">
-
           <div class="section-heading">
             <div>
               <h2 id="paymentSettingsHeading">Payment and QR Settings</h2>
@@ -532,7 +606,6 @@
           </div>
 
           <div class="panel">
-
             <form id="paymentSettingsForm" class="management-form">
 
               <div class="form-field">
@@ -579,15 +652,12 @@
                 role="status"
                 aria-live="polite"
               ></div>
-
             </form>
-
           </div>
         </section>
 
         <!-- Overall Status -->
         <section class="dashboard-section" aria-labelledby="settingsStatusHeading">
-
           <div class="panel">
             <h2 id="settingsStatusHeading">Settings Status</h2>
 
@@ -600,7 +670,6 @@
               Waiting for saved settings.
             </p>
           </div>
-
         </section>
 
         <footer class="app-footer">
@@ -609,22 +678,25 @@
           </span>
           <span id="settingsFooterStatus">Settings</span>
         </footer>
-
       </main>
-
     </div>
-
   </div>
 
-  <!-- Shared scripts: same order as dashboard.html -->
+  <!-- Shared scripts -->
   <script src="js/script.js" defer></script>
   <script src="js/firebase-config.js" defer></script>
   <script src="js/auth.js" defer></script>
   <script src="js/guard.js" defer></script>
   <script src="js/logout.js" defer></script>
 
-  <!-- Page-specific functionality -->
-  <script src="js/settings.js" defer></script>
+  <!-- Leaflet interactive map picker -->
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+    defer
+  ></script>
 
+  <script src="js/settings.js" defer></script>
 </body>
 </html>
