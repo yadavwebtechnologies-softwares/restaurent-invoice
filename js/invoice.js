@@ -1,999 +1,740 @@
-"use strict";
+/* =========================================================
+   RESTAURANT BILLING SOFTWARE
+   Invoice Creation, Calculation, Saving and Preview
+   Database root: restaurantBilling/
+   No demo invoices, fake products or embedded secrets
+   ========================================================= */
 
-/*
- * Restaurant Billing Software
- * File: js/invoice.js
- *
- * Features:
- * - Product selection and cart management
- * - Automatic subtotal, discount, tax and grand total
- * - Cash / UPI selection
- * - Dynamic A4 invoice with approved layout
- * - Sequential Firebase invoice numbers: INV-YYYY-0001
- * - Full invoice records in restaurantBilling/invoices
- * - Public verification records for QR scanning
- * - Atomic invoice counter using Firebase transactions
- *
- * Requirements:
- * - js/firebase-config.js must load before this file.
- * - Firebase Authentication is required.
- * - The owner UID must be permitted by Realtime Database rules.
- */
-
-(() => {
+(function () {
   "use strict";
-
-  // --------------------------------------------------
-  // DOM REFERENCES
-  // --------------------------------------------------
-
-  const form = document.getElementById("invoiceForm");
-
-  if (!form) {
-    console.error("Invoice: invoiceForm was not found.");
-    return;
-  }
-
-  const invoiceNumberInput = document.getElementById("invoiceNumber");
-  const invoiceDateInput = document.getElementById("invoiceDate");
-  const invoiceTimeInput = document.getElementById("invoiceTime");
-
-  const customerNameInput = document.getElementById("customerName");
-  const customerPhoneInput = document.getElementById("customerPhone");
-  const orderTypeInput = document.getElementById("orderType");
-
-  const productSelect = document.getElementById("productSelect");
-  const quantityInput = document.getElementById("itemQuantity");
-  const addItemButton = document.getElementById("addItemBtn");
-
-  const itemsBody = document.getElementById("invoiceItemsBody");
-  const itemCountLabel = document.getElementById("itemCount");
-  const clearItemsButton = document.getElementById("clearItemsBtn");
-
-  const discountInput = document.getElementById("invoiceDiscount");
-  const taxRateInput = document.getElementById("invoiceTaxRate");
-  const notesInput = document.getElementById("invoiceNotes");
-
-  const subtotalOutput = document.getElementById("subtotalAmount");
-  const discountOutput = document.getElementById("discountAmount");
-  const taxOutput = document.getElementById("taxAmount");
-  const grandTotalOutput = document.getElementById("grandTotalAmount");
-
-  const invoiceMessage = document.getElementById("invoiceMessage");
-  const invoiceStatus = document.getElementById("invoiceStatus");
-
-  const resetButton = document.getElementById("resetInvoiceBtn");
-  const previewButton = document.getElementById("previewInvoiceBtn");
-
-  if (
-    !invoiceNumberInput ||
-    !invoiceDateInput ||
-    !invoiceTimeInput ||
-    !customerNameInput ||
-    !customerPhoneInput ||
-    !orderTypeInput ||
-    !productSelect ||
-    !quantityInput ||
-    !addItemButton ||
-    !itemsBody ||
-    !itemCountLabel ||
-    !clearItemsButton ||
-    !discountInput ||
-    !taxRateInput ||
-    !notesInput ||
-    !subtotalOutput ||
-    !discountOutput ||
-    !taxOutput ||
-    !grandTotalOutput ||
-    !resetButton ||
-    !previewButton
-  ) {
-    console.error("Invoice: One or more required HTML elements are missing.");
-    return;
-  }
-
-  // --------------------------------------------------
-  // CONFIGURATION
-  // --------------------------------------------------
 
   const OWNER_UID = "20wif9y7LQhBZgFPDsAlrQpFjnI2";
 
-  const INVOICES_PATH = "restaurantBilling/invoices";
-  const COUNTERS_PATH = "restaurantBilling/invoiceCounters";
-  const VERIFICATION_PATH = "publicInvoiceVerification";
-
-  const VERIFICATION_PAGE = new URL(
-    "verify-invoice.html",
-    window.location.href
-  ).href.split("?")[0];
-
-  const MAX_QUANTITY = 9999;
-  const MAX_PRICE = 99999999;
-  const MAX_DISCOUNT = 99999999;
-  const MAX_TAX_RATE = 100;
-
-  const currency = new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
+  const PATHS = Object.freeze({
+    products: "restaurantBilling/products",
+    categories: "restaurantBilling/categories",
+    settings: "restaurantBilling/settings",
+    invoices: "restaurantBilling/invoices",
+    counters: "restaurantBilling/invoiceCounters"
   });
 
-  const cart = new Map();
+  const $ = function (id) {
+    return document.getElementById(id);
+  };
 
-  let firebaseServicesPromise = null;
+  const state = {
+    db: null,
+    api: null,
+    settings: {},
+    products: [],
+    categories: [],
+    cart: [],
+    loaded: {
+      products: false,
+      categories: false,
+      settings: false
+    },
+    subscriptions: [],
+    ready: false,
+    saving: false,
+    disposed: false,
+    nextItemId: 1
+  };
 
-  // --------------------------------------------------
-  // HELPERS
-  // --------------------------------------------------
+  const ui = window.restaurantUI;
 
-  function escapeHTML(value) {
-    return String(value ?? "").replace(/[&<>"']/g, character => {
-      const entities = {
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#39;"
-      };
+  /* ---------------------------------------------------------
+     1. Shared helpers
+     --------------------------------------------------------- */
 
-      return entities[character];
-    });
+  function setText(id, value) {
+    const node = $(id);
+    if (!node) return;
+
+    node.textContent =
+      value === null || value === undefined ? "" : String(value);
+  }
+
+  function setMessage(message, type) {
+    const node = $("invoiceMessage");
+    if (!node) return;
+
+    node.textContent = message || "";
+
+    node.classList.remove(
+      "is-success",
+      "is-error",
+      "is-warning"
+    );
+
+    if (type) {
+      node.classList.add("is-" + type);
+    }
+  }
+
+  function setPageStatus(message, type) {
+    const node = $("invoicePageStatus");
+    if (!node) return;
+
+    node.textContent = message || "";
+
+    node.classList.remove(
+      "is-connected",
+      "is-error",
+      "is-warning"
+    );
+
+    if (type === "connected") {
+      node.classList.add("is-connected");
+    } else if (type === "error") {
+      node.classList.add("is-error");
+    } else if (type === "warning") {
+      node.classList.add("is-warning");
+    }
+  }
+
+  function setFooterStatus(message) {
+    setText("invoiceFooterStatus", message);
+  }
+
+  function formatMoney(value) {
+    if (ui && typeof ui.formatCurrency === "function") {
+      return ui.formatCurrency(value);
+    }
+
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(value);
   }
 
   function roundMoney(value) {
     return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
   }
 
-  function formatMoney(value) {
-    return currency.format(roundMoney(value));
-  }
-
-  function localDateString(date = new Date()) {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-
-    return `${year}-${month}-${day}`;
-  }
-
-  function localTimeString(date = new Date()) {
-    const hours = String(date.getHours()).padStart(2, "0");
-    const minutes = String(date.getMinutes()).padStart(2, "0");
-
-    return `${hours}:${minutes}`;
-  }
-
-  function generateVerificationId() {
-    if (
-      !window.crypto ||
-      typeof window.crypto.getRandomValues !== "function"
-    ) {
-      throw new Error(
-        "Secure verification IDs require HTTPS. Open the website using its secure URL."
-      );
+  function toNumber(value) {
+    if (value === "" || value === null || value === undefined) {
+      return null;
     }
 
-    const bytes = new Uint8Array(24);
-    window.crypto.getRandomValues(bytes);
-
-    return Array.from(bytes)
-      .map(byte => byte.toString(16).padStart(2, "0"))
-      .join("");
+    const result = Number(value);
+    return Number.isFinite(result) ? result : null;
   }
 
-  function showMessage(message, type = "info") {
-    if (!invoiceMessage) {
-      console.log(message);
-      return;
+  function textValue(value) {
+    return String(value ?? "").trim();
+  }
+
+  function firstValue(object, keys) {
+    for (const key of keys) {
+      const value = object && object[key];
+
+      if (value !== null && value !== undefined && value !== "") {
+        return value;
+      }
     }
 
-    invoiceMessage.textContent = message;
-    invoiceMessage.dataset.type = type;
-    invoiceMessage.hidden = !message;
+    return null;
+  }
 
-    if (message) {
-      invoiceMessage.scrollIntoView({
-        behavior: "smooth",
-        block: "nearest"
+  function recordEntries(data) {
+    if (!data || typeof data !== "object") {
+      return [];
+    }
+
+    if (Array.isArray(data)) {
+      return data
+        .map(function (record, index) {
+          if (!record || typeof record !== "object") return null;
+
+          return {
+            ...record,
+            _recordKey: record._recordKey || String(index)
+          };
+        })
+        .filter(Boolean);
+    }
+
+    return Object.entries(data)
+      .filter(function (entry) {
+        return entry[1] && typeof entry[1] === "object";
+      })
+      .map(function (entry) {
+        return {
+          ...entry[1],
+          _recordKey: entry[0]
+        };
       });
-    }
   }
 
-  function clearMessage() {
-    if (!invoiceMessage) return;
-
-    invoiceMessage.textContent = "";
-    invoiceMessage.hidden = true;
-    delete invoiceMessage.dataset.type;
+  function recordIsActive(record) {
+    return record.isActive !== false &&
+      record.active !== false &&
+      record.deleted !== true &&
+      !record.deletedAt;
   }
 
-  function setInvoiceStatus(message, className = "pill pending") {
-    if (!invoiceStatus) return;
-
-    invoiceStatus.textContent = message;
-    invoiceStatus.className = className;
+  function localDateString(date) {
+    return [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, "0"),
+      String(date.getDate()).padStart(2, "0")
+    ].join("-");
   }
 
-  // --------------------------------------------------
-  // INITIALISE INVOICE DETAILS
-  // --------------------------------------------------
-
-  function initialiseInvoiceDetails() {
-    const now = new Date();
-
-    /*
-     * A final invoice number is allocated from Firebase
-     * when the owner generates and saves the invoice.
-     * Preview drafts do not consume invoice numbers.
-     */
-
-    invoiceNumberInput.value = "Assigned when saved";
-    invoiceNumberInput.readOnly = true;
-
-    invoiceDateInput.value = localDateString(now);
-    invoiceTimeInput.value = localTimeString(now);
-
-    setInvoiceStatus("Draft");
+  function localTimeString(date) {
+    return [
+      String(date.getHours()).padStart(2, "0"),
+      String(date.getMinutes()).padStart(2, "0"),
+      String(date.getSeconds()).padStart(2, "0")
+    ].join(":");
   }
 
-  // --------------------------------------------------
-  // READ SELECTED PRODUCT
-  // --------------------------------------------------
+  function newLocalId() {
+    state.nextItemId += 1;
+    return "item-" + state.nextItemId;
+  }
 
-  function readSelectedProduct() {
-    const option = productSelect.selectedOptions[0];
-
-    if (!option || !option.value) {
-      return null;
-    }
-
-    if (option.disabled) {
-      showMessage(
-        "This product is unavailable. Select another product.",
-        "error"
-      );
-
-      return null;
-    }
-
-    const label = option.textContent.trim();
-    const priceMatch = label.match(/₹\s*([\d,]+(?:\.\d{1,2})?)/);
-
-    if (!priceMatch) {
-      showMessage(
-        "The selected product has no valid price.",
-        "error"
-      );
-
-      return null;
-    }
-
-    const price = Number(priceMatch[1].replace(/,/g, ""));
-
-    const name = label
-      .replace(/\s*[—–-]\s*₹[\d,.]+\s*$/, "")
-      .trim();
+  function getFirebase() {
+    const firebase = window.restaurantFirebase;
 
     if (
-      !name ||
-      !Number.isFinite(price) ||
-      price < 0 ||
-      price > MAX_PRICE
+      !firebase ||
+      !firebase.ready ||
+      !firebase.db ||
+      !firebase.sdk ||
+      !firebase.sdk.database
     ) {
-      showMessage("The selected product details are invalid.", "error");
-      return null;
+      throw new Error("Firebase Realtime Database is unavailable.");
     }
 
     return {
-      id: option.value,
-      name,
-      price
+      db: firebase.db,
+      api: firebase.sdk.database
     };
   }
 
-  // --------------------------------------------------
-  // CART AND CALCULATIONS
-  // --------------------------------------------------
+  function settingsSections() {
+    const settings = state.settings || {};
 
-  function getCartQuantity() {
-    let total = 0;
+    return {
+      business:
+        settings.businessProfile ||
+        settings.business ||
+        settings.profile ||
+        settings.forms?.businessProfileForm ||
+        settings.forms?.businessProfile ||
+        settings,
 
-    for (const item of cart.values()) {
-      total += item.quantity;
-    }
+      invoice:
+        settings.invoiceSettings ||
+        settings.invoice ||
+        settings.forms?.invoiceSettingsForm ||
+        settings,
 
-    return total;
+      tax:
+        settings.taxSettings ||
+        settings.tax ||
+        settings.forms?.taxSettingsForm ||
+        settings,
+
+      payment:
+        settings.paymentSettings ||
+        settings.payment ||
+        settings.forms?.paymentSettingsForm ||
+        settings
+    };
   }
 
-  function getSubtotal() {
-    let subtotal = 0;
-
-    for (const item of cart.values()) {
-      subtotal += item.price * item.quantity;
-    }
-
-    return roundMoney(subtotal);
+  function booleanSetting(value) {
+    return value === true ||
+      value === 1 ||
+      value === "true" ||
+      value === "1";
   }
 
-  function getDiscount() {
-    const entered = Number(discountInput.value);
-
-    if (!Number.isFinite(entered) || entered < 0) {
-      return 0;
-    }
-
-    return roundMoney(Math.min(entered, getSubtotal()));
-  }
-
-  function getTaxRate() {
-    const entered = Number(taxRateInput.value);
-
-    if (!Number.isFinite(entered) || entered < 0) {
-      return 0;
-    }
-
-    return Math.min(entered, MAX_TAX_RATE);
-  }
-
-  function calculateTotals() {
-    const subtotal = getSubtotal();
-    const discount = getDiscount();
-
-    const taxableAmount = Math.max(
-      0,
-      roundMoney(subtotal - discount)
+  function getTaxSettings() {
+    const sections = settingsSections();
+    const taxEnabled = booleanSetting(
+      firstValue(sections.tax, [
+        "taxEnabled",
+        "enabled",
+        "enableTax"
+      ])
     );
 
-    const taxRate = getTaxRate();
-
-    const tax = roundMoney(
-      taxableAmount * taxRate / 100
-    );
-
-    const grandTotal = roundMoney(
-      taxableAmount + tax
+    const taxRate = toNumber(
+      firstValue(sections.tax, [
+        "taxRate",
+        "rate",
+        "taxPercentage"
+      ])
     );
 
     return {
-      subtotal,
-      discount,
-      taxableAmount,
-      taxRate,
-      tax,
-      grandTotal,
-      itemCount: getCartQuantity()
+      enabled: taxEnabled,
+      rate: taxRate === null ? 0 : Math.min(100, Math.max(0, taxRate))
     };
   }
 
-  function updateTotals() {
-    const totals = calculateTotals();
+  /* ---------------------------------------------------------
+     2. Product loading and selection
+     --------------------------------------------------------- */
 
-    subtotalOutput.textContent = formatMoney(totals.subtotal);
-    discountOutput.textContent = `−${formatMoney(totals.discount)}`;
-    taxOutput.textContent = formatMoney(totals.tax);
-    grandTotalOutput.textContent = formatMoney(totals.grandTotal);
-
-    return totals;
+  function productName(product) {
+    return textValue(
+      firstValue(product, [
+        "productName",
+        "name",
+        "itemName",
+        "title"
+      ]) || ""
+    );
   }
 
-  // --------------------------------------------------
-  // RENDER CART
-  // --------------------------------------------------
-
-  function renderCart() {
-    const items = Array.from(cart.values());
-
-    if (items.length === 0) {
-      itemsBody.innerHTML = `
-        <tr id="emptyItemsRow">
-          <td colspan="5" style="text-align:center;padding:36px 16px;">
-            <strong>No items added yet</strong>
-            <div style="margin-top:6px;">
-              Select a product above to start the invoice.
-            </div>
-          </td>
-        </tr>
-      `;
-    } else {
-      itemsBody.innerHTML = items.map(item => {
-        const amount = roundMoney(item.price * item.quantity);
-
-        return `
-          <tr data-product-id="${escapeHTML(item.id)}">
-            <td>
-              <div class="cust-name">${escapeHTML(item.name)}</div>
-            </td>
-
-            <td class="num">${formatMoney(item.price)}</td>
-
-            <td>
-              <input
-                type="number"
-                class="invoice-line-quantity"
-                data-product-id="${escapeHTML(item.id)}"
-                aria-label="Quantity for ${escapeHTML(item.name)}"
-                min="1"
-                max="${MAX_QUANTITY}"
-                step="1"
-                value="${item.quantity}"
-                style="width:88px;max-width:100%;padding:8px;border:1px solid #e5e7eb;border-radius:5px;"
-                inputmode="numeric"
-                required
-              >
-            </td>
-
-            <td class="num">
-              <strong>${formatMoney(amount)}</strong>
-            </td>
-
-            <td>
-              <button
-                type="button"
-                class="btn-icon"
-                data-action="remove-item"
-                data-product-id="${escapeHTML(item.id)}"
-                aria-label="Remove ${escapeHTML(item.name)}"
-                title="Remove item"
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M3 6h18"/>
-                  <path d="M8 6V4h8v2"/>
-                  <path d="M19 6l-1 14H6L5 6"/>
-                  <path d="M10 11v5M14 11v5"/>
-                </svg>
-              </button>
-            </td>
-          </tr>
-        `;
-      }).join("");
-    }
-
-    const quantity = getCartQuantity();
-
-    itemCountLabel.textContent =
-      `${quantity} item${quantity === 1 ? "" : "s"} added`;
-
-    updateTotals();
-  }
-
-  // --------------------------------------------------
-  // ADD PRODUCT
-  // --------------------------------------------------
-
-  function addSelectedProduct() {
-    clearMessage();
-
-    const product = readSelectedProduct();
-
-    if (!product) {
-      if (!productSelect.value) {
-        showMessage("Please select a product first.", "error");
-      }
-
-      return;
-    }
-
-    const quantity = Number(quantityInput.value);
-
-    if (
-      !Number.isSafeInteger(quantity) ||
-      quantity < 1 ||
-      quantity > MAX_QUANTITY
-    ) {
-      showMessage(
-        `Quantity must be a whole number between 1 and ${MAX_QUANTITY}.`,
-        "error"
-      );
-
-      quantityInput.focus();
-      return;
-    }
-
-    const existing = cart.get(product.id);
-    const updatedQuantity = (existing?.quantity || 0) + quantity;
-
-    if (updatedQuantity > MAX_QUANTITY) {
-      showMessage(
-        `The maximum quantity per product is ${MAX_QUANTITY}.`,
-        "error"
-      );
-
-      return;
-    }
-
-    if (existing) {
-      existing.quantity = updatedQuantity;
-    } else {
-      cart.set(product.id, {
-        id: product.id,
-        name: product.name,
-        price: product.price,
-        quantity
-      });
-    }
-
-    renderCart();
-
-    productSelect.value = "";
-    quantityInput.value = "1";
-    productSelect.focus();
-  }
-
-  addItemButton.addEventListener("click", addSelectedProduct);
-  productSelect.addEventListener("change", clearMessage);
-
-  // --------------------------------------------------
-  // EDIT QUANTITY / REMOVE PRODUCT
-  // --------------------------------------------------
-
-  itemsBody.addEventListener("change", event => {
-    const input = event.target.closest(".invoice-line-quantity");
-
-    if (!input) return;
-
-    const item = cart.get(input.dataset.productId);
-
-    if (!item) return;
-
-    const quantity = Number(input.value);
-
-    if (
-      !Number.isSafeInteger(quantity) ||
-      quantity < 1 ||
-      quantity > MAX_QUANTITY
-    ) {
-      showMessage(
-        `Enter a whole-number quantity between 1 and ${MAX_QUANTITY}.`,
-        "error"
-      );
-
-      renderCart();
-      return;
-    }
-
-    item.quantity = quantity;
-
-    clearMessage();
-    renderCart();
-  });
-
-  itemsBody.addEventListener("click", event => {
-    const button = event.target.closest(
-      'button[data-action="remove-item"]'
+  function productPrice(product) {
+    const value = toNumber(
+      firstValue(product, [
+        "price",
+        "unitPrice",
+        "sellingPrice",
+        "amount"
+      ])
     );
 
-    if (!button) return;
+    return value !== null && value >= 0 ? roundMoney(value) : null;
+  }
 
-    cart.delete(button.dataset.productId);
+  function categoryName(category) {
+    return textValue(
+      firstValue(category, [
+        "categoryName",
+        "name",
+        "title"
+      ]) || ""
+    );
+  }
 
-    clearMessage();
-    renderCart();
-  });
-
-  // --------------------------------------------------
-  // CLEAR CART
-  // --------------------------------------------------
-
-  clearItemsButton.addEventListener("click", () => {
-    if (cart.size === 0) return;
-
-    if (!window.confirm("Remove all items from this invoice?")) {
-      return;
-    }
-
-    cart.clear();
-
-    clearMessage();
-    renderCart();
-  });
-
-  // --------------------------------------------------
-  // DISCOUNT AND TAX
-  // --------------------------------------------------
-
-  discountInput.addEventListener("input", () => {
-    clearMessage();
-    updateTotals();
-  });
-
-  taxRateInput.addEventListener("input", () => {
-    clearMessage();
-    updateTotals();
-  });
-
-  // --------------------------------------------------
-  // PAYMENT METHOD
-  // --------------------------------------------------
-
-  function getPaymentMethod() {
-    const selected = form.querySelector(
-      'input[name="paymentMethod"]:checked'
+  function resolveCategory(product) {
+    const categoryId = textValue(
+      firstValue(product, ["categoryId", "categoryID", "categoryKey"]) || ""
     );
 
-    if (!selected) return "";
-
-    const method = selected.value.toLowerCase();
-
-    return ["cash", "upi"].includes(method) ? method : "";
-  }
-
-  form.querySelectorAll('input[name="paymentMethod"]').forEach(input => {
-    input.addEventListener("change", clearMessage);
-  });
-
-  // --------------------------------------------------
-  // VALIDATE INVOICE
-  // --------------------------------------------------
-
-  function validateInvoice() {
-    clearMessage();
-
-    if (cart.size === 0) {
-      showMessage("Add at least one product before continuing.", "error");
-      productSelect.focus();
-      return false;
-    }
-
-    if (!invoiceDateInput.value || !invoiceTimeInput.value) {
-      showMessage("Please enter the invoice date and time.", "error");
-      invoiceDateInput.focus();
-      return false;
-    }
-
-    const date = new Date(
-      `${invoiceDateInput.value}T${invoiceTimeInput.value}`
+    const categoryText = textValue(
+      firstValue(product, ["categoryName", "category"]) || ""
     );
 
-    if (Number.isNaN(date.getTime())) {
-      showMessage("Please enter a valid invoice date and time.", "error");
-      invoiceDateInput.focus();
-      return false;
-    }
-
-    if (customerNameInput.value.trim().length > 100) {
-      showMessage("Customer name is too long.", "error");
-      customerNameInput.focus();
-      return false;
-    }
-
-    if (customerPhoneInput.value.trim().length > 20) {
-      showMessage("Phone number must not exceed 20 characters.", "error");
-      customerPhoneInput.focus();
-      return false;
-    }
-
-    const discount = Number(discountInput.value);
-
-    if (
-      !Number.isFinite(discount) ||
-      discount < 0 ||
-      discount > MAX_DISCOUNT
-    ) {
-      showMessage("Enter a valid discount amount.", "error");
-      discountInput.focus();
-      return false;
-    }
-
-    if (discount > getSubtotal()) {
-      showMessage(
-        "The discount cannot be greater than the subtotal.",
-        "error"
-      );
-
-      discountInput.focus();
-      return false;
-    }
-
-    const taxRate = Number(taxRateInput.value);
-
-    if (
-      !Number.isFinite(taxRate) ||
-      taxRate < 0 ||
-      taxRate > MAX_TAX_RATE
-    ) {
-      showMessage(
-        `Tax rate must be between 0 and ${MAX_TAX_RATE}%.`,
-        "error"
-      );
-
-      taxRateInput.focus();
-      return false;
-    }
-
-    if (notesInput.value.length > 500) {
-      showMessage("Invoice notes must not exceed 500 characters.", "error");
-      notesInput.focus();
-      return false;
-    }
-
-    if (!getPaymentMethod()) {
-      showMessage(
-        "Please select Cash or UPI as the payment method.",
-        "error"
-      );
-
-      return false;
-    }
-
-    return true;
-  }
-
-  // --------------------------------------------------
-  // BUILD INVOICE SNAPSHOT
-  // --------------------------------------------------
-
-  function buildInvoiceData(invoiceNumber = "DRAFT") {
-    const totals = calculateTotals();
-    const dateParts = invoiceDateInput.value.split("-");
-
-    const formattedDate = dateParts.length === 3
-      ? `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`
-      : invoiceDateInput.value;
-
-    return {
-      invoiceNumber,
-      invoiceDate: invoiceDateInput.value,
-      formattedDate,
-      invoiceTime: invoiceTimeInput.value,
-
-      customerName:
-        customerNameInput.value.trim() || "Walk-in Customer",
-
-      customerPhone: customerPhoneInput.value.trim(),
-
-      orderType: orderTypeInput.value || "dine-in",
-      paymentMethod: getPaymentMethod(),
-
-      items: Array.from(cart.values()).map(item => ({
-        id: item.id,
-        name: item.name,
-        price: item.price,
-        quantity: item.quantity,
-        amount: roundMoney(item.price * item.quantity)
-      })),
-
-      notes: notesInput.value.trim(),
-
-      subtotal: totals.subtotal,
-      discount: totals.discount,
-      taxableAmount: totals.taxableAmount,
-      taxRate: totals.taxRate,
-      tax: totals.tax,
-      grandTotal: totals.grandTotal
-    };
-  }
-
-  // --------------------------------------------------
-  // FIREBASE SHARED SERVICES
-  // --------------------------------------------------
-
-  async function getFirebaseServices() {
-    if (firebaseServicesPromise) {
-      return firebaseServicesPromise;
-    }
-
-    firebaseServicesPromise = (async () => {
-      const firebase = window.restaurantFirebase;
-
-      if (!firebase || !firebase.ready) {
-        throw new Error(
-          "Firebase is not initialised. Check js/firebase-config.js."
-        );
-      }
-
-      await firebase.ready;
-
-      if (firebase.error) {
-        throw new Error(
-          firebase.error.message || "Firebase failed to initialise."
-        );
-      }
-
-      const sdk = firebase.sdk;
-
-      if (
-        !sdk ||
-        !sdk.auth ||
-        !sdk.database ||
-        !firebase.app
-      ) {
-        throw new Error(
-          "The shared Firebase Authentication or Database SDK is unavailable."
-        );
-      }
-
-      const auth = firebase.auth || sdk.auth.getAuth(firebase.app);
-      const db = firebase.db || sdk.database.getDatabase(firebase.app);
-
-      return {
-        app: firebase.app,
-        config: firebase.config,
-        auth,
-        db,
-        authSDK: sdk.auth,
-        dbSDK: sdk.database
-      };
-    })();
-
-    try {
-      return await firebaseServicesPromise;
-    } catch (error) {
-      firebaseServicesPromise = null;
-      throw error;
-    }
-  }
-
-  // --------------------------------------------------
-  // GET AUTHENTICATED OWNER
-  // --------------------------------------------------
-
-  async function getAuthenticatedUser(services) {
-    const { auth, authSDK } = services;
-
-    function validateOwner(user) {
-      if (!user) {
-        throw new Error(
-          "Please sign in before generating a verified invoice."
-        );
-      }
-
-      if (user.uid !== OWNER_UID) {
-        throw new Error(
-          "This account is not authorised to generate invoices."
-        );
-      }
-
-      return user;
-    }
-
-    if (auth.currentUser) {
-      return validateOwner(auth.currentUser);
-    }
-
-    return new Promise((resolve, reject) => {
-      let unsubscribe = null;
-      let settled = false;
-
-      const finish = (callback, value) => {
-        if (settled) return;
-
-        settled = true;
-        window.clearTimeout(timeout);
-
-        if (typeof unsubscribe === "function") {
-          unsubscribe();
-        }
-
-        callback(value);
-      };
-
-      const timeout = window.setTimeout(() => {
-        finish(
-          reject,
-          new Error(
-            "Authentication timed out. Please sign in and try again."
-          )
-        );
-      }, 10000);
-
-      unsubscribe = authSDK.onAuthStateChanged(
-        auth,
-        user => {
-          try {
-            finish(resolve, validateOwner(user));
-          } catch (error) {
-            finish(reject, error);
-          }
-        },
-        error => finish(reject, error)
+    const match = state.categories.find(function (category) {
+      return (
+        (categoryId && category._recordKey === categoryId) ||
+        (categoryText &&
+          categoryName(category).toLowerCase() === categoryText.toLowerCase())
       );
     });
+
+    return match ? categoryName(match) : categoryText;
   }
 
-  // --------------------------------------------------
-  // READ EXISTING INVOICES TO PREVENT NUMBER REUSE
-  // --------------------------------------------------
+  function populateProductSelect() {
+    const select = $("productSelect");
+    if (!select) return;
 
-  async function getHighestExistingSequence(services, year) {
-    const { db, dbSDK } = services;
+    select.replaceChildren();
 
-    const invoicesRef = dbSDK.ref(db, INVOICES_PATH);
-    const snapshot = await dbSDK.get(invoicesRef);
+    const firstOption = document.createElement("option");
+    firstOption.value = "";
 
-    if (!snapshot.exists()) {
-      return 0;
+    if (!state.loaded.products) {
+      firstOption.textContent = "Loading saved products...";
+      select.appendChild(firstOption);
+      select.disabled = true;
+      return;
     }
 
-    const value = snapshot.val();
-
-    const records = Array.isArray(value)
-      ? value
-      : Object.values(value || {});
-
-    let highest = 0;
-
-    const numberPattern = new RegExp(
-      `^INV-${year}-(\\d+)$`,
-      "i"
-    );
-
-    for (const record of records) {
-      if (!record || typeof record !== "object") {
-        continue;
-      }
-
-      const number = String(
-        record.invoiceNumber || record.invoiceNo || ""
-      ).trim();
-
-      const match = number.match(numberPattern);
-
-      if (!match) continue;
-
-      const sequence = Number(match[1]);
-
-      if (Number.isSafeInteger(sequence)) {
-        highest = Math.max(highest, sequence);
-      }
+    if (!state.loaded.categories) {
+      firstOption.textContent = "Loading saved categories...";
+      select.appendChild(firstOption);
+      select.disabled = true;
+      return;
     }
 
-    return highest;
+    const availableProducts = state.products.filter(function (product) {
+      return recordIsActive(product) &&
+        productName(product) &&
+        productPrice(product) !== null;
+    });
+
+    if (!availableProducts.length) {
+      firstOption.textContent = "No saved products available";
+      select.appendChild(firstOption);
+      select.disabled = true;
+      return;
+    }
+
+    firstOption.textContent = "Select a product";
+    select.appendChild(firstOption);
+
+    availableProducts
+      .slice()
+      .sort(function (a, b) {
+        return productName(a).localeCompare(productName(b));
+      })
+      .forEach(function (product) {
+        const option = document.createElement("option");
+        option.value = product._recordKey;
+
+        const price = productPrice(product);
+
+        option.textContent =
+          productName(product) + " — " + formatMoney(price);
+
+        select.appendChild(option);
+      });
+
+    select.disabled = false;
   }
 
-  // --------------------------------------------------
-  // ATOMIC SEQUENTIAL INVOICE NUMBER
-  // --------------------------------------------------
+  function getSelectedProduct() {
+    const select = $("productSelect");
+    if (!select || !select.value) return null;
 
-  async function allocateInvoiceNumber(services, invoiceDate) {
-    const { db, dbSDK } = services;
+    return state.products.find(function (product) {
+      return product._recordKey === select.value;
+    }) || null;
+  }
 
-    const year = String(invoiceDate).slice(0, 4);
+  function addSavedProduct(event) {
+    event.preventDefault();
 
-    if (!/^\d{4}$/.test(year)) {
-      throw new Error("A valid invoice year is required.");
+    if (!state.ready || state.saving) return;
+
+    const product = getSelectedProduct();
+    const quantityInput = $("itemQuantity");
+    const quantity = Number(quantityInput?.value);
+
+    if (!product || !recordIsActive(product)) {
+      setMessage("Select a valid saved product first.", "warning");
+      return;
     }
 
-    /*
-     * Scan saved invoice records in case invoices already exist
-     * but the sequence counter has not yet been created.
-     */
+    if (!Number.isSafeInteger(quantity) || quantity < 1) {
+      setMessage("Enter a valid whole-number quantity.", "error");
+      quantityInput?.focus();
+      return;
+    }
 
-    const highestExisting = await getHighestExistingSequence(
-      services,
-      year
+    const unitPrice = productPrice(product);
+
+    if (unitPrice === null) {
+      setMessage("This product does not have a valid saved price.", "error");
+      return;
+    }
+
+    state.cart.push({
+      itemId: newLocalId(),
+      productId: product._recordKey,
+      name: productName(product),
+      category: resolveCategory(product),
+      unitPrice: unitPrice,
+      quantity: quantity,
+      custom: false
+    });
+
+    setText("productSelect", $("productSelect").value);
+    if (quantityInput) quantityInput.value = "1";
+
+    setMessage("");
+    renderCart();
+  }
+
+  /* ---------------------------------------------------------
+     3. Custom item
+     --------------------------------------------------------- */
+
+  function addCustomItem(event) {
+    event.preventDefault();
+
+    if (!state.ready || state.saving) return;
+
+    const name = textValue($("customItemName")?.value);
+    const unitPrice = toNumber($("customItemPrice")?.value);
+    const quantity = Number($("customItemQuantity")?.value);
+
+    if (!name) {
+      setMessage("Enter the custom item name.", "warning");
+      $("customItemName")?.focus();
+      return;
+    }
+
+    if (unitPrice === null || unitPrice <= 0) {
+      setMessage("Enter a valid custom item price.", "error");
+      $("customItemPrice")?.focus();
+      return;
+    }
+
+    if (!Number.isSafeInteger(quantity) || quantity < 1) {
+      setMessage("Enter a valid whole-number quantity.", "error");
+      $("customItemQuantity")?.focus();
+      return;
+    }
+
+    state.cart.push({
+      itemId: newLocalId(),
+      productId: null,
+      name: name,
+      category: "",
+      unitPrice: roundMoney(unitPrice),
+      quantity: quantity,
+      custom: true
+    });
+
+    $("customItemForm").reset();
+
+    const customQuantity = $("customItemQuantity");
+    if (customQuantity) customQuantity.value = "1";
+
+    setMessage("");
+    renderCart();
+  }
+
+  function toggleCustomItem() {
+    const panel = $("customItemPanel");
+    const button = $("toggleCustomItemBtn");
+
+    if (!panel || !button) return;
+
+    const isOpening = panel.hidden;
+    panel.hidden = !isOpening;
+
+    button.setAttribute("aria-expanded", String(isOpening));
+
+    if (isOpening) {
+      $("customItemName")?.focus();
+    }
+  }
+
+  /* ---------------------------------------------------------
+     4. Cart rendering and totals
+     --------------------------------------------------------- */
+
+  function calculateTotals() {
+    const subtotal = roundMoney(
+      state.cart.reduce(function (total, item) {
+        return total + item.unitPrice * item.quantity;
+      }, 0)
     );
 
-    const counterRef = dbSDK.ref(
-      db,
-      `${COUNTERS_PATH}/${year}`
+    const taxSettings = getTaxSettings();
+
+    const taxAmount = taxSettings.enabled
+      ? roundMoney(subtotal * taxSettings.rate / 100)
+      : 0;
+
+    return {
+      subtotal: subtotal,
+      discount: 0,
+      taxRate: taxSettings.enabled ? taxSettings.rate : 0,
+      taxEnabled: taxSettings.enabled,
+      taxAmount: taxAmount,
+      grandTotal: roundMoney(subtotal + taxAmount)
+    };
+  }
+
+  function createTextCell(row, value) {
+    const cell = document.createElement("td");
+    cell.textContent = String(value ?? "");
+    row.appendChild(cell);
+    return cell;
+  }
+
+  function removeCartItem(itemId) {
+    if (state.saving) return;
+
+    state.cart = state.cart.filter(function (item) {
+      return item.itemId !== itemId;
+    });
+
+    renderCart();
+  }
+
+  function renderCart() {
+    const body = $("invoiceItemsBody");
+    if (!body) return;
+
+    body.replaceChildren();
+
+    if (!state.cart.length) {
+      const row = document.createElement("tr");
+      const cell = document.createElement("td");
+
+      cell.colSpan = 5;
+      cell.className = "table-empty";
+      cell.textContent = "No items added yet.";
+
+      row.appendChild(cell);
+      body.appendChild(row);
+    } else {
+      state.cart.forEach(function (item) {
+        const row = document.createElement("tr");
+
+        createTextCell(row, item.name);
+        createTextCell(row, formatMoney(item.unitPrice));
+        createTextCell(row, String(item.quantity));
+        createTextCell(
+          row,
+          formatMoney(roundMoney(item.unitPrice * item.quantity))
+        );
+
+        const actionCell = document.createElement("td");
+        const removeButton = document.createElement("button");
+
+        removeButton.type = "button";
+        removeButton.className = "btn btn-secondary btn-small";
+        removeButton.textContent = "Remove";
+        removeButton.disabled = state.saving;
+        removeButton.setAttribute(
+          "aria-label",
+          "Remove " + item.name
+        );
+
+        removeButton.addEventListener("click", function () {
+          removeCartItem(item.itemId);
+        });
+
+        actionCell.appendChild(removeButton);
+        row.appendChild(actionCell);
+
+        body.appendChild(row);
+      });
+    }
+
+    setText(
+      "itemCount",
+      state.cart.length === 1
+        ? "1 item added"
+        : state.cart.length + " items added"
     );
 
-    /*
-     * runTransaction atomically increments the counter.
-     * Concurrent invoice generation requests will not receive
-     * the same sequence number.
-     */
+    const totals = calculateTotals();
 
-    const result = await dbSDK.runTransaction(
+    setText("invoiceSubtotal", formatMoney(totals.subtotal));
+    setText("invoiceDiscount", formatMoney(totals.discount));
+    setText("invoiceTax", formatMoney(totals.taxAmount));
+    setText("invoiceGrandTotal", formatMoney(totals.grandTotal));
+
+    const discountRow = $("discountTotalRow");
+    const taxRow = $("taxTotalRow");
+
+    if (discountRow) {
+      discountRow.hidden = totals.discount <= 0;
+    }
+
+    if (taxRow) {
+      taxRow.hidden = !totals.taxEnabled;
+    }
+
+    setText(
+      "invoiceTaxLabel",
+      "Tax (" + totals.taxRate.toFixed(2).replace(/\.00$/, "") + "%)"
+    );
+
+    const submitButton = $("generateInvoiceBtn");
+
+    if (submitButton) {
+      submitButton.disabled =
+        !state.ready || state.saving || state.cart.length === 0;
+    }
+  }
+
+  function setEditingDisabled(disabled) {
+    const ids = [
+      "productSelect",
+      "itemQuantity",
+      "addItemBtn",
+      "toggleCustomItemBtn",
+      "clearItemsBtn",
+      "resetInvoiceBtn"
+    ];
+
+    ids.forEach(function (id) {
+      const node = $(id);
+      if (node) node.disabled = disabled;
+    });
+
+    const customPanel = $("customItemPanel");
+
+    if (customPanel) {
+      customPanel.querySelectorAll("input, button").forEach(function (node) {
+        node.disabled = disabled;
+      });
+    }
+
+    renderCart();
+  }
+
+  function clearCart() {
+    if (state.saving) return;
+
+    state.cart = [];
+
+    if ($("addInvoiceItemForm")) {
+      $("addInvoiceItemForm").reset();
+    }
+
+    if ($("customItemForm")) {
+      $("customItemForm").reset();
+    }
+
+    if ($("itemQuantity")) {
+      $("itemQuantity").value = "1";
+    }
+
+    if ($("customItemQuantity")) {
+      $("customItemQuantity").value = "1";
+    }
+
+    setMessage("");
+    renderCart();
+  }
+
+  /* ---------------------------------------------------------
+     5. Invoice numbering
+     --------------------------------------------------------- */
+
+  function getInvoicePrefix() {
+    const sections = settingsSections();
+
+    const configured = textValue(
+      firstValue(sections.invoice, [
+        "invoicePrefix",
+        "prefix"
+      ]) || ""
+    );
+
+    const normalized = configured.replace(/[^A-Za-z0-9-]/g, "");
+
+    return normalized || "INV";
+  }
+
+  async function reserveInvoiceNumber(date) {
+    const year = String(date.getFullYear());
+    const counterRef = state.api.ref(
+      state.db,
+      PATHS.counters + "/" + year
+    );
+
+    const result = await state.api.runTransaction(
       counterRef,
-      currentValue => {
-        const current = Number(currentValue);
+      function (currentValue) {
+        const current = Number(currentValue) || 0;
 
-        const safeCurrent =
-          Number.isSafeInteger(current) && current >= 0
-            ? current
-            : 0;
+        if (!Number.isSafeInteger(current) || current < 0) {
+          return;
+        }
 
-        return Math.max(safeCurrent, highestExisting) + 1;
+        return current + 1;
       },
       {
         applyLocally: false
@@ -1001,1033 +742,726 @@
     );
 
     if (!result.committed || !result.snapshot) {
-      throw new Error(
-        "Firebase could not allocate a unique invoice number. Please try again."
-      );
+      throw new Error("Unable to reserve an invoice number.");
     }
 
     const sequence = Number(result.snapshot.val());
 
     if (!Number.isSafeInteger(sequence) || sequence < 1) {
-      throw new Error("Firebase returned an invalid invoice sequence.");
+      throw new Error("The invoice counter returned an invalid value.");
     }
 
-    return `INV-${year}-${String(sequence).padStart(4, "0")}`;
+    return getInvoicePrefix() + "-" + year + "-" +
+      String(sequence).padStart(4, "0");
   }
 
-  // --------------------------------------------------
-  // SAVE COMPLETE INVOICE TO FIREBASE
-  // --------------------------------------------------
+  /* ---------------------------------------------------------
+     6. Business information for printed invoice
+     --------------------------------------------------------- */
 
-  async function saveInvoiceRecord(
-    services,
-    user,
-    data,
-    verificationId,
-    verificationUrl
-  ) {
-    const { db, dbSDK } = services;
+  function renderInvoiceBusinessDetails() {
+    const sections = settingsSections();
+    const business = sections.business;
+    const invoice = sections.invoice;
 
-    const invoicesRef = dbSDK.ref(db, INVOICES_PATH);
-    const newInvoiceRef = dbSDK.push(invoicesRef);
+    const name = textValue(
+      firstValue(business, [
+        "businessName",
+        "name"
+      ]) || ""
+    );
 
-    const createdAt = new Date().toISOString();
+    const address = textValue(
+      firstValue(business, [
+        "businessAddress",
+        "address"
+      ]) || ""
+    );
 
-    const record = {
-      ...data,
+    const phone = textValue(
+      firstValue(business, [
+        "businessPhone",
+        "phone",
+        "contactPhone"
+      ]) || ""
+    );
 
-      id: newInvoiceRef.key,
-      verificationId,
-      verificationUrl,
+    const email = textValue(
+      firstValue(business, [
+        "businessEmail",
+        "email"
+      ]) || ""
+    );
 
-      recordStatus: "valid",
-      paymentStatus: "recorded",
+    const footer = textValue(
+      firstValue(invoice, [
+        "invoiceFooter",
+        "footerText",
+        "footer"
+      ]) || ""
+    );
 
-      ownerUid: user.uid,
-      createdAt,
-      createdAtMs: Date.now()
-    };
+    setText("printBusinessName", name);
+    setText("printBusinessAddress", address);
 
-    await dbSDK.set(newInvoiceRef, record);
+    const contactParts = [];
 
-    return {
-      key: newInvoiceRef.key,
-      record
-    };
+    if (phone) contactParts.push(phone);
+    if (email) contactParts.push(email);
+
+    setText("printBusinessContact", contactParts.join(" | "));
+    setText("printInvoiceFooterText", footer);
   }
 
-  // --------------------------------------------------
-  // SAVE MINIMAL PUBLIC VERIFICATION RECORD
-  // --------------------------------------------------
+  /* ---------------------------------------------------------
+     7. QR payload
+     --------------------------------------------------------- */
 
-  async function saveVerificationRecord(
-    services,
-    user,
-    data,
-    verificationId
-  ) {
-    const { config, auth } = services;
+  function getPaymentQRPayload(invoice) {
+    const payment = settingsSections().payment;
 
-    const idToken = await user.getIdToken();
+    const upiId = textValue(
+      firstValue(payment, [
+        "upiId",
+        "upiID",
+        "vpa"
+      ]) || ""
+    );
 
-    const publicRecord = {
-      verificationId,
+    const accountName = textValue(
+      firstValue(payment, [
+        "paymentAccountName",
+        "accountName",
+        "payeeName"
+      ]) || ""
+    );
 
-      invoiceNumber: data.invoiceNumber,
-      invoiceDate: data.invoiceDate,
-      invoiceTime: data.invoiceTime,
-      orderType: data.orderType,
-      paymentMethod: data.paymentMethod,
+    if (upiId) {
+      const params = new URLSearchParams();
 
-      items: data.items.map(item => ({
-        name: item.name,
-        price: item.price,
-        quantity: item.quantity,
-        amount: item.amount
-      })),
+      params.set("pa", upiId);
 
-      totals: {
-        subtotal: data.subtotal,
-        discount: data.discount,
-        taxRate: data.taxRate,
-        tax: data.tax,
-        grandTotal: data.grandTotal
-      },
-
-      recordStatus: "valid",
-      createdAt: new Date().toISOString()
-    };
-
-    if (!auth.currentUser || auth.currentUser.uid !== user.uid) {
-      throw new Error(
-        "Your login session changed. Please sign in again."
-      );
-    }
-
-    const databaseUrl = String(config.databaseURL || "")
-      .replace(/\/+$/, "");
-
-    if (!databaseUrl) {
-      throw new Error("Firebase Database URL is missing.");
-    }
-
-    const recordUrl =
-      `${databaseUrl}/${VERIFICATION_PATH}/${encodeURIComponent(verificationId)}.json` +
-      `?auth=${encodeURIComponent(idToken)}`;
-
-    const response = await fetch(recordUrl, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(publicRecord)
-    });
-
-    if (!response.ok) {
-      let errorMessage =
-        "Firebase could not save the verification record.";
-
-      try {
-        const errorData = await response.json();
-
-        if (errorData.error === "Permission denied") {
-          errorMessage =
-            "Firebase denied the verification write. Check your Realtime Database rules.";
-        }
-      } catch {
-        // Keep the general error message.
+      if (accountName) {
+        params.set("pn", accountName);
       }
 
-      throw new Error(errorMessage);
-    }
+      params.set("am", invoice.grandTotal.toFixed(2));
+      params.set("cu", "INR");
+      params.set("tn", "Invoice " + invoice.invoiceNumber);
 
-    const savedRecord = await response.json();
-
-    if (
-      !savedRecord ||
-      savedRecord.verificationId !== verificationId ||
-      savedRecord.invoiceNumber !== data.invoiceNumber
-    ) {
-      throw new Error(
-        "Firebase did not confirm the correct verification record."
-      );
+      return {
+        payload: "upi://pay?" + params.toString(),
+        caption: "Scan to pay " + formatMoney(invoice.grandTotal)
+      };
     }
 
     return {
-      verificationId,
-      verificationUrl:
-        `${VERIFICATION_PAGE}?vid=${encodeURIComponent(verificationId)}`
+      payload: [
+        "Invoice: " + invoice.invoiceNumber,
+        "Date: " + invoice.invoiceDate,
+        "Total: INR " + invoice.grandTotal.toFixed(2)
+      ].join("\n"),
+      caption: "Invoice details"
     };
   }
 
-  // --------------------------------------------------
-  // LOCKED A4 INVOICE CSS
-  // --------------------------------------------------
+  async function renderInvoiceQR(invoice) {
+    const container = $("invoiceQrCode");
+    const caption = $("invoiceQrCaption");
 
-  function getInvoiceStyles() {
-    return `
-      * {
-        box-sizing: border-box;
-      }
+    if (!container) return;
 
-      html {
-        background: #eeeeee;
-      }
+    container.replaceChildren();
 
-      body {
-        margin: 0;
-        padding: 20px;
-        background: #eeeeee;
-        color: #222222;
-        font-family: Arial, Helvetica, sans-serif;
-        font-size: 13px;
-      }
+    const qr = window.restaurantQR;
+    const qrDetails = getPaymentQRPayload(invoice);
 
-      .toolbar {
-        width: 100%;
-        max-width: 210mm;
-        margin: 0 auto 15px;
-        display: flex;
-        justify-content: flex-end;
-        gap: 8px;
-      }
-
-      .toolbar button {
-        padding: 10px 20px;
-        background: #222222;
-        color: #ffffff;
-        border: 1px solid #222222;
-        border-radius: 6px;
-        font-size: 14px;
-        font-weight: 600;
-        cursor: pointer;
-      }
-
-      .toolbar .secondary {
-        background: #ffffff;
-        color: #222222;
-      }
-
-      .invoice {
-        width: 100%;
-        max-width: 210mm;
-        min-height: 297mm;
-        margin: 0 auto;
-        padding: 10mm;
-        background: #ffffff;
-        border: 1px solid #d5d5d5;
-        border-radius: 8px;
-        overflow-wrap: anywhere;
-      }
-
-      .section {
-        width: 100%;
-        padding: 12px;
-        margin-bottom: 12px;
-        border: 1px solid #bdbdbd;
-        border-radius: 7px;
-        break-inside: avoid;
-      }
-
-      .business-header {
-        padding: 22px 12px;
-        text-align: center;
-      }
-
-      .business-name {
-        margin: 0 0 9px;
-        font-size: 30px;
-        line-height: 1.25;
-        font-weight: 800;
-        overflow-wrap: anywhere;
-      }
-
-      .business-details {
-        margin: 4px 0;
-        font-size: 12px;
-        line-height: 1.5;
-      }
-
-      .invoice-title {
-        margin: 14px 0 0;
-        font-size: 21px;
-        font-weight: 700;
-        letter-spacing: 1px;
-      }
-
-      .section-title {
-        margin: 0 0 10px;
-        padding-bottom: 8px;
-        border-bottom: 1px solid #dddddd;
-        font-size: 14px;
-        font-weight: 700;
-      }
-
-      .info-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 10px 20px;
-      }
-
-      .info-item {
-        min-width: 0;
-        line-height: 1.6;
-        overflow-wrap: anywhere;
-      }
-
-      .label {
-        font-weight: 700;
-      }
-
-      .table-section {
-        padding: 0;
-        overflow: hidden;
-      }
-
-      table {
-        width: 100%;
-        table-layout: fixed;
-        border-collapse: collapse;
-      }
-
-      th,
-      td {
-        padding: 11px 8px;
-        border-bottom: 1px solid #dddddd;
-        vertical-align: top;
-        overflow-wrap: anywhere;
-      }
-
-      th {
-        background: #f2f2f2;
-        font-size: 12px;
-        font-weight: 700;
-        text-align: left;
-      }
-
-      tbody tr:last-child td {
-        border-bottom: none;
-      }
-
-      .center {
-        text-align: center;
-      }
-
-      .right {
-        text-align: right;
-      }
-
-      .item-col {
-        width: 39%;
-      }
-
-      .qty-col {
-        width: 12%;
-      }
-
-      .price-col {
-        width: 23%;
-      }
-
-      .amount-col {
-        width: 26%;
-      }
-
-      .summary-inner {
-        width: 100%;
-        max-width: none;
-      }
-
-      .summary-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 12px;
-        width: 100%;
-        padding: 11px 10px;
-        border-bottom: 1px solid #e2e2e2;
-        line-height: 1.4;
-      }
-
-      .summary-row span:first-child {
-        flex: 1;
-      }
-
-      .summary-row span:last-child {
-        min-width: 95px;
-        text-align: right;
-        font-variant-numeric: tabular-nums;
-      }
-
-      .grand-total {
-        margin-top: 8px;
-        padding: 15px 10px;
-        border: 1px solid #999999;
-        border-radius: 6px;
-        font-size: 19px;
-        font-weight: 800;
-      }
-
-      .payment-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 12px 20px;
-        line-height: 1.6;
-      }
-
-      .payment-item {
-        min-width: 0;
-        overflow-wrap: anywhere;
-      }
-
-      .qr-section {
-        display: flex;
-        justify-content: flex-end;
-        align-items: center;
-        width: 100%;
-        margin: 0 0 12px;
-        padding: 0;
-        break-inside: avoid;
-      }
-
-      .qr-code {
-        width: 90px;
-        height: 90px;
-        flex: 0 0 90px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-
-      .qr-code canvas,
-      .qr-code img {
-        display: block;
-        width: 90px !important;
-        height: 90px !important;
-        max-width: 100%;
-        image-rendering: pixelated;
-      }
-
-      .qr-pending {
-        width: 90px;
-        height: 90px;
-        border: 1px dashed #888888;
-        border-radius: 6px;
-      }
-
-      .footer {
-        width: 100%;
-        margin-top: 8px;
-        padding: 14px 12px;
-        text-align: center;
-        font-size: 12px;
-        line-height: 1.7;
-      }
-
-      .footer strong {
-        font-size: 14px;
-      }
-
-      @page {
-        size: A4 portrait;
-        margin: 0;
-      }
-
-      @media print {
-        html,
-        body {
-          width: 210mm;
-          margin: 0;
-          padding: 0;
-          background: #ffffff;
-        }
-
-        .toolbar {
-          display: none !important;
-        }
-
-        .invoice {
-          width: 210mm;
-          max-width: none;
-          min-height: 297mm;
-          margin: 0;
-          padding: 10mm;
-          border: none;
-          border-radius: 0;
-          box-shadow: none;
-          overflow: visible;
-        }
-
-        .section {
-          -webkit-print-color-adjust: exact;
-          print-color-adjust: exact;
-        }
-
-        .table-section {
-          overflow: visible;
-        }
-
-        thead {
-          display: table-header-group;
-        }
-
-        tr {
-          break-inside: avoid;
-        }
-      }
-
-      @media screen and (max-width: 600px) {
-        body {
-          padding: 8px;
-        }
-
-        .invoice {
-          min-height: auto;
-          padding: 12px;
-        }
-
-        .business-name {
-          font-size: 24px;
-        }
-
-        .info-grid,
-        .payment-grid {
-          grid-template-columns: 1fr;
-        }
-
-        th,
-        td {
-          padding: 8px 4px;
-          font-size: 11px;
-        }
-
-        .summary-row {
-          padding: 10px 5px;
-        }
-
-        .grand-total {
-          font-size: 17px;
-        }
-      }
-    `;
-  }
-
-  // --------------------------------------------------
-  // PRINTABLE INVOICE HTML
-  // --------------------------------------------------
-
-  function buildPrintableInvoice(data, verification = null) {
-    const orderTypeLabels = {
-      "dine-in": "Dine In",
-      takeaway: "Takeaway",
-      delivery: "Delivery"
-    };
-
-    const paymentLabels = {
-      cash: "Cash",
-      upi: "UPI"
-    };
-
-    const itemRows = data.items.map(item => `
-      <tr>
-        <td>${escapeHTML(item.name)}</td>
-        <td class="center">${item.quantity}</td>
-        <td class="right">${formatMoney(item.price)}</td>
-        <td class="right">${formatMoney(item.amount)}</td>
-      </tr>
-    `).join("");
-
-    const qrMarkup = verification
-      ? `<div id="invoiceQr" class="qr-code" aria-label="Invoice verification QR code"></div>`
-      : `<div class="qr-pending" aria-hidden="true"></div>`;
-
-    const notesMarkup = data.notes
-      ? `
-        <section class="section">
-          <h3 class="section-title">Notes</h3>
-          <div>${escapeHTML(data.notes).replace(/\n/g, "<br>")}</div>
-        </section>
-      `
-      : "";
-
-    return `
-      <!DOCTYPE html>
-      <html lang="en">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Invoice ${escapeHTML(data.invoiceNumber)}</title>
-        <style>${getInvoiceStyles()}</style>
-      </head>
-
-      <body>
-        <div class="toolbar">
-          <button type="button" class="secondary" id="closePreview">
-            Close
-          </button>
-
-          <button type="button" id="printInvoice">
-            Print / Save as PDF
-          </button>
-        </div>
-
-        <main class="invoice">
-
-          <header class="section business-header">
-            <h1 class="business-name">[Business Name]</h1>
-            <p class="business-details">Business Address</p>
-            <p class="business-details">Contact Number</p>
-            <h2 class="invoice-title">INVOICE</h2>
-          </header>
-
-          <section class="section">
-            <h3 class="section-title">Invoice Details</h3>
-
-            <div class="info-grid">
-              <div class="info-item">
-                <span class="label">Invoice No:</span>
-                ${escapeHTML(data.invoiceNumber)}
-              </div>
-
-              <div class="info-item">
-                <span class="label">Date:</span>
-                ${escapeHTML(data.formattedDate)}
-              </div>
-
-              <div class="info-item">
-                <span class="label">Time:</span>
-                ${escapeHTML(data.invoiceTime)}
-              </div>
-
-              <div class="info-item">
-                <span class="label">Order Type:</span>
-                ${escapeHTML(orderTypeLabels[data.orderType] || "Dine In")}
-              </div>
-            </div>
-          </section>
-
-          <section class="section">
-            <h3 class="section-title">Customer Details</h3>
-
-            <div class="info-grid">
-              <div class="info-item">
-                <span class="label">Customer:</span>
-                ${escapeHTML(data.customerName)}
-              </div>
-
-              <div class="info-item">
-                <span class="label">Contact:</span>
-                ${data.customerPhone
-                  ? escapeHTML(data.customerPhone)
-                  : "Not provided"}
-              </div>
-            </div>
-          </section>
-
-          <section class="section table-section">
-            <table>
-              <colgroup>
-                <col class="item-col">
-                <col class="qty-col">
-                <col class="price-col">
-                <col class="amount-col">
-              </colgroup>
-
-              <thead>
-                <tr>
-                  <th>Item Description</th>
-                  <th class="center">Qty</th>
-                  <th class="right">Price</th>
-                  <th class="right">Amount</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                ${itemRows}
-              </tbody>
-            </table>
-          </section>
-
-          <section class="section">
-            <div class="summary-inner">
-
-              <div class="summary-row">
-                <span>Subtotal</span>
-                <span>${formatMoney(data.subtotal)}</span>
-              </div>
-
-              <div class="summary-row">
-                <span>Discount</span>
-                <span>−${formatMoney(data.discount)}</span>
-              </div>
-
-              <div class="summary-row">
-                <span>Tax (${data.taxRate.toFixed(2)}%)</span>
-                <span>${formatMoney(data.tax)}</span>
-              </div>
-
-              <div class="summary-row grand-total">
-                <span>Grand Total</span>
-                <span>${formatMoney(data.grandTotal)}</span>
-              </div>
-
-            </div>
-          </section>
-
-          <section class="section">
-            <h3 class="section-title">Payment Details</h3>
-
-            <div class="payment-grid">
-              <div class="payment-item">
-                <span class="label">Payment Method:</span>
-                ${escapeHTML(paymentLabels[data.paymentMethod] || "Cash")}
-              </div>
-
-              <div class="payment-item">
-                <span class="label">Payment Status:</span>
-                Recorded
-              </div>
-            </div>
-          </section>
-
-          <section class="qr-section">
-            ${qrMarkup}
-          </section>
-
-          ${notesMarkup}
-
-          <footer class="section footer">
-            <strong>Thank you for visiting!</strong>
-            We appreciate your business.
-          </footer>
-
-        </main>
-
-        ${
-          verification
-            ? `
-              <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
-              <script>
-                (() => {
-                  const verifyUrl = ${JSON.stringify(verification.verificationUrl)};
-                  const container = document.getElementById("invoiceQr");
-
-                  if (window.QRCode && container) {
-                    new QRCode(container, {
-                      text: verifyUrl,
-                      width: 90,
-                      height: 90,
-                      colorDark: "#111111",
-                      colorLight: "#ffffff",
-                      correctLevel: QRCode.CorrectLevel.M
-                    });
-                  } else if (container) {
-                    container.textContent = "";
-                    container.className = "qr-pending";
-                    container.setAttribute(
-                      "aria-label",
-                      "QR code could not be loaded"
-                    );
-                  }
-                })();
-              <\/script>
-            `
-            : ""
-        }
-
-        <script>
-          document.getElementById("closePreview")
-            .addEventListener("click", () => window.close());
-
-          document.getElementById("printInvoice")
-            .addEventListener("click", () => window.print());
-        <\/script>
-      </body>
-      </html>
-    `;
-  }
-
-  // --------------------------------------------------
-  // DISPLAY THE INVOICE
-  // --------------------------------------------------
-
-  function writeInvoiceToWindow(
-    previewWindow,
-    data,
-    verification = null
-  ) {
-    try {
-      previewWindow.document.open();
-
-      previewWindow.document.write(
-        buildPrintableInvoice(data, verification)
-      );
-
-      previewWindow.document.close();
-
-      return true;
-    } catch (error) {
-      console.error("Unable to render invoice:", error);
-
-      try {
-        previewWindow.close();
-      } catch {
-        // Ignore window closing errors.
-      }
-
-      showMessage(
-        "Unable to create the invoice preview. Please try again.",
-        "error"
-      );
-
-      return false;
+    if (caption) {
+      caption.textContent = qrDetails.caption;
     }
-  }
 
-  // --------------------------------------------------
-  // PREVIEW WITHOUT SAVING
-  // --------------------------------------------------
+    if (!qr || typeof qr.generate !== "function") {
+      const note = document.createElement("p");
 
-  previewButton.addEventListener("click", () => {
-    if (!validateInvoice()) return;
+      note.textContent = "QR generator is unavailable.";
+      note.className = "form-message is-warning";
 
-    const data = buildInvoiceData("DRAFT");
-    const previewWindow = window.open("", "_blank");
-
-    if (!previewWindow) {
-      showMessage(
-        "The invoice preview was blocked. Allow pop-ups for this site and try again.",
-        "error"
-      );
-
+      container.appendChild(note);
       return;
     }
 
-    writeInvoiceToWindow(previewWindow, data, null);
+    try {
+      await qr.generate(container, qrDetails.payload, {
+        width: 108,
+        height: 108,
+        margin: 1
+      });
+    } catch (error) {
+      console.error("Invoice QR generation failed:", error);
 
-    showMessage(
-      "Draft preview opened. A permanent invoice number is assigned when you generate and save the invoice.",
-      "info"
+      container.replaceChildren();
+
+      const note = document.createElement("p");
+      note.textContent = "QR code could not be generated.";
+      note.className = "form-message is-warning";
+
+      container.appendChild(note);
+    }
+  }
+
+  /* ---------------------------------------------------------
+     8. Saved invoice preview
+     --------------------------------------------------------- */
+
+  function renderSavedInvoice(invoice) {
+    const preview = $("invoicePreviewSection");
+
+    if (!preview) return;
+
+    setText("printInvoiceNumber", invoice.invoiceNumber);
+    setText("printInvoiceDate", invoice.invoiceDate);
+    setText("printInvoiceTime", invoice.invoiceTime);
+
+    setText("printInvoiceSubtotal", formatMoney(invoice.subtotal));
+    setText("printInvoiceDiscount", formatMoney(invoice.discount));
+    setText("printInvoiceTax", formatMoney(invoice.taxAmount));
+    setText("printInvoiceGrandTotal", formatMoney(invoice.grandTotal));
+
+    setText(
+      "printInvoiceTaxLabel",
+      invoice.taxEnabled
+        ? "Tax (" + invoice.taxRate + "%)"
+        : "Tax"
     );
-  });
 
-  // --------------------------------------------------
-  // GENERATE AND SAVE VERIFIED INVOICE
-  // --------------------------------------------------
+    const discountRow = $("printDiscountRow");
+    const taxRow = $("printTaxRow");
 
-  form.addEventListener("submit", async event => {
+    if (discountRow) {
+      discountRow.hidden = invoice.discount <= 0;
+    }
+
+    if (taxRow) {
+      taxRow.hidden = !invoice.taxEnabled;
+    }
+
+    const notes = textValue(invoice.notes);
+    const notesSection = $("printInvoiceNotesSection");
+
+    if (notesSection) {
+      notesSection.hidden = !notes;
+    }
+
+    setText("printInvoiceNotes", notes);
+
+    const body = $("printInvoiceItemsBody");
+
+    if (body) {
+      body.replaceChildren();
+
+      invoice.items.forEach(function (item) {
+        const row = document.createElement("tr");
+
+        createTextCell(row, item.name);
+        createTextCell(row, String(item.quantity));
+        createTextCell(row, formatMoney(item.unitPrice));
+        createTextCell(row, formatMoney(item.lineTotal));
+
+        body.appendChild(row);
+      });
+    }
+
+    renderInvoiceBusinessDetails();
+
+    preview.hidden = false;
+
+    renderInvoiceQR(invoice);
+
+    setMessage(
+      "Invoice recorded successfully. Preview is ready.",
+      "success"
+    );
+
+    setPageStatus(
+      "Invoice saved to the business database.",
+      "connected"
+    );
+
+    setFooterStatus("Invoice recorded");
+
+    preview.scrollIntoView({
+      behavior: window.matchMedia(
+        "(prefers-reduced-motion: reduce)"
+      ).matches ? "auto" : "smooth",
+      block: "start"
+    });
+  }
+
+  /* ---------------------------------------------------------
+     9. Invoice persistence
+     --------------------------------------------------------- */
+
+  function validateCart() {
+    if (!state.cart.length) {
+      throw new Error("Add at least one item before recording the invoice.");
+    }
+
+    for (const item of state.cart) {
+      if (!item.name || !Number.isSafeInteger(item.quantity) ||
+          item.quantity < 1) {
+        throw new Error("One or more invoice items are invalid.");
+      }
+
+      if (!Number.isFinite(item.unitPrice) || item.unitPrice <= 0) {
+        throw new Error("An invoice item has an invalid unit price.");
+      }
+    }
+  }
+
+  function ensureOwnerAuthorized() {
+    const access = window.restaurantAccess;
+
+    if (
+      !access ||
+      !access.ready ||
+      !access.authorized ||
+      !access.user ||
+      access.user.uid !== OWNER_UID
+    ) {
+      throw new Error("The authorized owner session is required.");
+    }
+  }
+
+  async function saveInvoice(event) {
     event.preventDefault();
 
-    if (!validateInvoice()) return;
-
-    /*
-     * Open the window before awaiting Firebase,
-     * preventing most browser popup-blocking issues.
-     */
-
-    const previewWindow = window.open("", "_blank");
-
-    if (!previewWindow) {
-      showMessage(
-        "The invoice preview was blocked. Allow pop-ups for this site and try again.",
-        "error"
-      );
-
-      return;
-    }
-
-    previewWindow.document.open();
-    previewWindow.document.write(`
-      <!DOCTYPE html>
-      <html lang="en">
-      <head><title>Generating invoice</title></head>
-      <body style="font-family:Arial;padding:30px">
-        Saving invoice and creating verification record...
-      </body>
-      </html>
-    `);
-    previewWindow.document.close();
-
-    const submitButton = form.querySelector(
-      'button[type="submit"]'
-    );
-
-    if (submitButton) {
-      submitButton.disabled = true;
-    }
-
-    setInvoiceStatus("Saving");
-
-    let savedInvoiceKey = null;
-    let verificationId = null;
+    if (state.saving) return;
 
     try {
-      const services = await getFirebaseServices();
-      const user = await getAuthenticatedUser(services);
-
-      /*
-       * Build the invoice from the current cart, then assign
-       * its number through the atomic Firebase counter.
-       */
-
-      const data = buildInvoiceData("PENDING");
-
-      data.invoiceNumber = await allocateInvoiceNumber(
-        services,
-        data.invoiceDate
-      );
-
-      invoiceNumberInput.value = data.invoiceNumber;
-
-      verificationId = generateVerificationId();
-
-      const verificationUrl =
-        `${VERIFICATION_PAGE}?vid=${encodeURIComponent(verificationId)}`;
-
-      /*
-       * Save the canonical invoice first.
-       * The public QR record is written afterwards.
-       */
-
-      const saved = await saveInvoiceRecord(
-        services,
-        user,
-        data,
-        verificationId,
-        verificationUrl
-      );
-
-      savedInvoiceKey = saved.key;
-
-      const verification = await saveVerificationRecord(
-        services,
-        user,
-        data,
-        verificationId
-      );
-
-      /*
-       * Confirm both records refer to the same invoice number.
-       */
-
-      if (!verification.verificationId || !data.invoiceNumber) {
-        throw new Error(
-          "Invoice verification could not be confirmed."
-        );
+      if (!state.ready) {
+        throw new Error("Invoice data is still loading. Try again shortly.");
       }
 
-      const opened = writeInvoiceToWindow(
-        previewWindow,
-        data,
-        verification
-      );
+      ensureOwnerAuthorized();
+      validateCart();
 
-      if (!opened) {
-        throw new Error(
-          "The invoice was saved, but the printable preview could not be rendered. Check the invoice record before retrying."
-        );
+      const tax = getTaxSettings();
+
+      if (tax.enabled && (!Number.isFinite(tax.rate) ||
+          tax.rate < 0 || tax.rate > 100)) {
+        throw new Error("Check the tax rate in Settings before recording an invoice.");
       }
 
-      setInvoiceStatus("Generated", "pill paid");
+      state.saving = true;
 
-      showMessage(
-        `Invoice ${data.invoiceNumber} generated and saved successfully.`,
-        "success"
+      setMessage("");
+      setPageStatus("Recording invoice...", "warning");
+      setEditingDisabled(true);
+
+      const submitButton = $("generateInvoiceBtn");
+
+      if (submitButton) {
+        submitButton.disabled = true;
+      }
+
+      const submitLabel = $("invoiceSubmitLabel");
+
+      if (submitLabel) {
+        submitLabel.textContent = "Recording Invoice...";
+      }
+
+      const createdAt = new Date();
+      const totals = calculateTotals();
+      const invoiceNumber = await reserveInvoiceNumber(createdAt);
+
+      ensureOwnerAuthorized();
+
+      const items = state.cart.map(function (item) {
+        return {
+          productId: item.productId,
+          name: item.name,
+          category: item.category || "",
+          quantity: item.quantity,
+          unitPrice: roundMoney(item.unitPrice),
+          lineTotal: roundMoney(item.unitPrice * item.quantity),
+          custom: Boolean(item.custom)
+        };
+      });
+
+      const invoiceRecord = {
+        ownerUid: OWNER_UID,
+        invoiceNumber: invoiceNumber,
+        invoiceDate: localDateString(createdAt),
+        invoiceTime: localTimeString(createdAt),
+        createdAt: createdAt.toISOString(),
+        createdAtMs: createdAt.getTime(),
+
+        items: items,
+
+        subtotal: totals.subtotal,
+        discount: totals.discount,
+        taxEnabled: totals.taxEnabled,
+        taxRate: totals.taxRate,
+        taxAmount: totals.taxAmount,
+        grandTotal: totals.grandTotal,
+
+        notes: textValue($("invoiceNotes")?.value),
+
+        recordStatus: "valid",
+        paymentStatus: "recorded"
+      };
+
+      const invoiceListRef = state.api.ref(
+        state.db,
+        PATHS.invoices
       );
+
+      const newInvoiceRef = state.api.push(invoiceListRef);
+
+      if (!newInvoiceRef || !newInvoiceRef.key) {
+        throw new Error("Unable to create a database invoice reference.");
+      }
+
+      await state.api.set(newInvoiceRef, invoiceRecord);
+
+      invoiceRecord._recordKey = newInvoiceRef.key;
+
+      /*
+       * Keep the recently recorded invoice locally available
+       * for the preview. Realtime listeners on dashboard and
+       * other pages will receive the same database record.
+       */
+      renderSavedInvoice(invoiceRecord);
+
+      state.cart = [];
+      renderCart();
+
+      if ($("addInvoiceItemForm")) {
+        $("addInvoiceItemForm").reset();
+      }
+
+      if ($("customItemForm")) {
+        $("customItemForm").reset();
+      }
+
+      if ($("itemQuantity")) {
+        $("itemQuantity").value = "1";
+      }
+
+      if ($("customItemQuantity")) {
+        $("customItemQuantity").value = "1";
+      }
+
+      setText("itemCount", "0 items added");
+
     } catch (error) {
-      console.error("Invoice generation failed:", error);
+      console.error("Invoice recording failed:", {
+        code: error && error.code ? error.code : "invoice-save-error",
+        message: error instanceof Error ? error.message : "Unknown error"
+      });
 
-      /*
-       * If the public verification write fails after saving the
-       * invoice, try to remove the incomplete invoice record.
-       * The allocated sequence number is intentionally not reused.
-       */
-
-      if (savedInvoiceKey && !verificationId) {
-        try {
-          const services = await getFirebaseServices();
-
-          await services.dbSDK.remove(
-            services.dbSDK.ref(
-              services.db,
-              `${INVOICES_PATH}/${savedInvoiceKey}`
-            )
-          );
-        } catch (rollbackError) {
-          console.error(
-            "Could not remove the incomplete invoice:",
-            rollbackError
-          );
-        }
-      }
-
-      try {
-        previewWindow.close();
-      } catch {
-        // Ignore closing errors.
-      }
-
-      setInvoiceStatus("Draft");
-
-      showMessage(
-        error.message ||
-          "Unable to save the invoice. Please check Firebase and try again.",
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to record the invoice. Please try again.",
         "error"
       );
+
+      setPageStatus("Invoice was not confirmed as saved.", "error");
+
     } finally {
-      if (submitButton) {
-        submitButton.disabled = false;
+      state.saving = false;
+      setEditingDisabled(false);
+
+      const submitLabel = $("invoiceSubmitLabel");
+
+      if (submitLabel) {
+        submitLabel.textContent = "Record / Save Invoice";
       }
+
+      renderCart();
     }
-  });
+  }
 
-  // --------------------------------------------------
-  // RESET INVOICE
-  // --------------------------------------------------
+  /* ---------------------------------------------------------
+     10. Realtime loading
+     --------------------------------------------------------- */
 
-  resetButton.addEventListener("click", () => {
-    const hasData =
-      cart.size > 0 ||
-      customerNameInput.value.trim() !== "" ||
-      customerPhoneInput.value.trim() !== "" ||
-      notesInput.value.trim() !== "" ||
-      Number(discountInput.value) !== 0 ||
-      Number(taxRateInput.value) !== 0;
+  function subscribe(path, callback, errorCallback) {
+    const reference = state.api.ref(state.db, path);
 
-    if (
-      hasData &&
-      !window.confirm(
-        "Reset the invoice form and remove all currently entered details?"
-      )
-    ) {
+    const unsubscribe = state.api.onValue(
+      reference,
+      callback,
+      errorCallback
+    );
+
+    state.subscriptions.push(unsubscribe);
+  }
+
+  function onProducts(snapshot) {
+    state.products = recordEntries(
+      snapshot.exists() ? snapshot.val() : null
+    );
+
+    state.loaded.products = true;
+
+    populateProductSelect();
+    renderCart();
+
+    setPageStatus("Products loaded.", "connected");
+    checkReady();
+  }
+
+  function onCategories(snapshot) {
+    state.categories = recordEntries(
+      snapshot.exists() ? snapshot.val() : null
+    );
+
+    state.loaded.categories = true;
+
+    populateProductSelect();
+    renderCart();
+
+    checkReady();
+  }
+
+  function onSettings(snapshot) {
+    state.settings = snapshot.exists()
+      ? snapshot.val()
+      : {};
+
+    state.loaded.settings = true;
+
+    renderInvoiceBusinessDetails();
+    renderCart();
+
+    checkReady();
+  }
+
+  function onReadError(path, error) {
+    console.error("Invoice data read failed:", {
+      path: path,
+      code: error && error.code ? error.code : "unknown"
+    });
+
+    setPageStatus(
+      "Unable to load required billing data. Check the database connection and access rules.",
+      "error"
+    );
+
+    setMessage(
+      "Required data could not be loaded. Invoice recording is unavailable.",
+      "error"
+    );
+
+    state.ready = false;
+    renderCart();
+  }
+
+  function checkReady() {
+    state.ready = Object.values(state.loaded).every(Boolean);
+
+    if (state.ready) {
+      setPageStatus("Billing data is ready.", "connected");
+      setFooterStatus("Billing data loaded");
+    }
+
+    renderCart();
+  }
+
+  /* ---------------------------------------------------------
+     11. Reset and preview controls
+     --------------------------------------------------------- */
+
+  function resetInvoice() {
+    if (state.saving) return;
+
+    clearCart();
+
+    const preview = $("invoicePreviewSection");
+
+    if (preview) {
+      preview.hidden = true;
+    }
+
+    if ($("invoiceForm")) {
+      $("invoiceForm").reset();
+    }
+
+    setMessage("");
+    setPageStatus(
+      state.ready ? "Billing data is ready." : "Loading billing data.",
+      state.ready ? "connected" : "warning"
+    );
+  }
+
+  function closePreview() {
+    const preview = $("invoicePreviewSection");
+
+    if (preview) {
+      preview.hidden = true;
+    }
+  }
+
+  function printInvoice() {
+    if ($("invoicePreviewSection")?.hidden) {
+      setMessage("Record an invoice before printing.", "warning");
       return;
     }
 
-    form.reset();
-    cart.clear();
-
-    quantityInput.value = "1";
-    discountInput.value = "0";
-    taxRateInput.value = "0";
-    productSelect.value = "";
-
-    initialiseInvoiceDetails();
-    clearMessage();
-    renderCart();
-
-    customerNameInput.focus();
-  });
-
-  // --------------------------------------------------
-  // INITIALISE
-  // --------------------------------------------------
-
-  initialiseInvoiceDetails();
-  renderCart();
-
-  if (invoiceMessage) {
-    invoiceMessage.hidden = true;
+    window.print();
   }
 
-  console.info("Invoice module initialised successfully.");
+  /* ---------------------------------------------------------
+     12. Initialization
+     --------------------------------------------------------- */
+
+  async function initialize() {
+    try {
+      setPageStatus("Checking owner session...", "warning");
+
+      const access = window.restaurantAccess;
+
+      if (!access || !access.readyPromise) {
+        throw new Error("Owner authorization is unavailable.");
+      }
+
+      const authorized = await access.readyPromise;
+
+      if (
+        !authorized ||
+        !access.authorized ||
+        !access.user ||
+        access.user.uid !== OWNER_UID
+      ) {
+        throw new Error("Only the authorized owner may create invoices.");
+      }
+
+      const firebase = window.restaurantFirebase;
+
+      if (!firebase || !firebase.readyPromise) {
+        throw new Error("Firebase configuration is unavailable.");
+      }
+
+      const ready = await firebase.readyPromise;
+
+      if (!ready || !firebase.ready) {
+        throw new Error(
+          firebase.error?.message || "Firebase initialization failed."
+        );
+      }
+
+      const connected = getFirebase();
+
+      state.db = connected.db;
+      state.api = connected.api;
+
+      if (
+        typeof state.api.ref !== "function" ||
+        typeof state.api.onValue !== "function" ||
+        typeof state.api.push !== "function" ||
+        typeof state.api.set !== "function" ||
+        typeof state.api.runTransaction !== "function"
+      ) {
+        throw new Error("Required Realtime Database methods are unavailable.");
+      }
+
+      subscribe(PATHS.products, onProducts, function (error) {
+        onReadError(PATHS.products, error);
+      });
+
+      subscribe(PATHS.categories, onCategories, function (error) {
+        onReadError(PATHS.categories, error);
+      });
+
+      subscribe(PATHS.settings, onSettings, function (error) {
+        onReadError(PATHS.settings, error);
+      });
+
+    } catch (error) {
+      state.ready = false;
+
+      console.error("Invoice page initialization failed:", error);
+
+      setPageStatus(
+        error instanceof Error
+          ? error.message
+          : "Invoice page initialization failed.",
+        "error"
+      );
+
+      setMessage("Invoice creation is unavailable until initialization succeeds.", "error");
+    }
+  }
+
+  /* ---------------------------------------------------------
+     13. Event handlers
+     --------------------------------------------------------- */
+
+  $("addInvoiceItemForm")?.addEventListener(
+    "submit",
+    addSavedProduct
+  );
+
+  $("customItemForm")?.addEventListener(
+    "submit",
+    addCustomItem
+  );
+
+  $("toggleCustomItemBtn")?.addEventListener(
+    "click",
+    toggleCustomItem
+  );
+
+  $("clearItemsBtn")?.addEventListener(
+    "click",
+    clearCart
+  );
+
+  $("resetInvoiceBtn")?.addEventListener(
+    "click",
+    resetInvoice
+  );
+
+  $("invoiceForm")?.addEventListener(
+    "submit",
+    saveInvoice
+  );
+
+  $("closeInvoicePreviewBtn")?.addEventListener(
+    "click",
+    closePreview
+  );
+
+  $("printInvoiceBtn")?.addEventListener(
+    "click",
+    printInvoice
+  );
+
+  $("productSelect")?.addEventListener("change", function () {
+    setMessage("");
+  });
+
+  /* Disable invoice submission before loading is complete. */
+  renderCart();
+
+  window.addEventListener("pagehide", function () {
+    state.disposed = true;
+
+    state.subscriptions.forEach(function (unsubscribe) {
+      try {
+        if (typeof unsubscribe === "function") {
+          unsubscribe();
+        }
+      } catch (error) {
+        console.warn("Invoice subscription cleanup failed.");
+      }
+    });
+
+    state.subscriptions = [];
+  });
+
+  initialize();
+
 })();
