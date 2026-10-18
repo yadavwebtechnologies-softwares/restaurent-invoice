@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="robots" content="noindex, nofollow">
+
+  <title>Dashboard | Restaurant Billing</title>
+
+  <meta
+    name="description"
+    content="Manage business billing, invoices and sales."
+  >
+
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body class="dashboard-page">
+
+  <div class="app" id="app">
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+
+      <div class="brand">
+        <a class="brand-link" href="dashboard.html" aria-label="Dashboard">
+          <span class="brand-mark" id="brandMark" aria-hidden="true">B</span>
+
+          <span class="brand-text">
+            <span
+              class="brand-name"
+              id="sidebarBusinessName"
+              data-business-name
+            >Business profile</span>
+
+            <span
+              class="brand-description"
+              id="sidebarBusinessTagline"
+              data-business-tagline
+            >Billing and management</span>
+          </span>
+        </a>
+      </div>
+
+      <nav class="sidebar-navigation" aria-label="Main navigation">
+
+        <p class="nav-section">Main</p>
+
+        <a
+          class="nav-item active"
+          href="dashboard.html"
+          aria-current="page"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="3" width="7" height="9" rx="1.5"/>
+            <rect x="14" y="3" width="7" height="5" rx="1.5"/>
+            <rect x="14" y="12" width="7" height="9" rx="1.5"/>
+            <rect x="3" y="16" width="7" height="5" rx="1.5"/>
+          </svg>
+          <span>Dashboard</span>
+        </a>
+
+        <a class="nav-item" href="invoice.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 5v14M5 12h14"/>
+            <rect x="3" y="3" width="18" height="18" rx="3"/>
+          </svg>
+          <span>New Invoice</span>
+        </a>
+
+        <a class="nav-item" href="invoices.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <path d="M14 2v6h6M8 13h8M8 17h6"/>
+          </svg>
+          <span>Invoice History</span>
+        </a>
+
+        <a class="nav-item" href="reports.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 3v18h18"/>
+            <path d="m7 14 4-4 3 3 5-7"/>
+          </svg>
+          <span>Reports</span>
+        </a>
+
+        <p class="nav-section">Management</p>
+
+        <a class="nav-item" href="products.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true">
+            <path d="m12 3 9 5-9 5-9-5 9-5Z"/>
+            <path d="M3 8v9l9 5 9-5V8"/>
+            <path d="M12 13v9"/>
+          </svg>
+          <span>Products &amp; Categories</span>
+        </a>
+
+        <a class="nav-item" href="settings.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="m19.4 15 .1.1a2 2 0 1 1-2.8 2.8l-.1-.1a2 2 0 0 0-3.4 1.4v.2a2 2 0 1 1-4 0v-.2A2 2 0 0 0 5.8 17l-.1.1a2 2 0 1 1-2.8-2.8L3 14.2a2 2 0 0 0-1.4-3.4h-.2a2 2 0 1 1 0-4h.2A2 2 0 0 0 3 3.4l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a2 2 0 0 0 3.4-1.4V-.9"/>
+          </svg>
+          <span>Settings</span>
+        </a>
+
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-business-status">
+          <span class="status-indicator" aria-hidden="true"></span>
+          <span id="sidebarConnectionStatus">Connecting to database</span>
+        </div>
+
+        <button
+          type="button"
+          class="nav-item logout-button"
+          id="logoutBtn"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true">
+            <path d="M10 17l5-5-5-5M15 12H3"/>
+            <path d="M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7"/>
+          </svg>
+          <span>Sign Out</span>
+        </button>
+      </div>
+
+    </aside>
+
+    <!-- Mobile menu backdrop -->
+    <button
+      type="button"
+      class="overlay"
+      id="overlay"
+      aria-label="Close navigation"
+      hidden
+    ></button>
+
+    <!-- Main column -->
+    <div class="main">
+
+      <!-- Header -->
+      <header class="topbar">
+
+        <div class="topbar-left">
+
+          <button
+            type="button"
+            class="menu-btn"
+            id="menuBtn"
+            aria-label="Open navigation"
+            aria-controls="sidebar"
+            aria-expanded="false"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round"
+                 aria-hidden="true">
+              <path d="M3 6h18M3 12h18M3 18h18"/>
+            </svg>
+          </button>
+
+          <div class="topbar-heading">
+            <p class="breadcrumb">Main / Dashboard</p>
+            <h1>Dashboard</h1>
+          </div>
+
+        </div>
+
+        <div class="topbar-right">
+          <div class="owner-profile" id="ownerProfile">
+            <span class="owner-avatar" id="ownerAvatar" aria-hidden="true">—</span>
+
+            <span class="owner-profile-text">
+              <span class="owner-name" id="ownerDisplayName">Loading account</span>
+              <span class="owner-role" id="ownerDisplayRole">Owner</span>
+            </span>
+          </div>
+        </div>
+
+      </header>
+
+      <!-- Dashboard content -->
+      <main class="content" id="dashboardContent">
+
+        <section class="page-heading" aria-labelledby="welcomeHeading">
+
+          <div>
+            <p class="section-eyebrow">BUSINESS OVERVIEW</p>
+
+            <h2 id="welcomeHeading">Business summary</h2>
+
+            <p class="muted-text">
+              View current sales and invoice activity.
+            </p>
+
+            <p class="current-date" id="dashboardCurrentDate">
+              Loading current date
+            </p>
+          </div>
+
+          <a class="btn btn-primary" href="invoice.html">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round"
+                 aria-hidden="true">
+              <path d="M12 5v14M5 12h14"/>
+            </svg>
+            <span>New Invoice</span>
+          </a>
+
+        </section>
+
+        <!-- Live database status -->
+        <section
+          class="dashboard-status"
+          aria-label="Application status"
+        >
+          <span class="status-indicator" aria-hidden="true"></span>
+
+          <p id="dashboardStatus" role="status" aria-live="polite">
+            Waiting for database connection
+          </p>
+        </section>
+
+        <!-- Summary cards -->
+        <section class="dashboard-section" aria-labelledby="summaryHeading">
+
+          <div class="section-heading">
+            <div>
+              <h2 id="summaryHeading">Today's Summary</h2>
+              <p class="muted-text">
+                Values update when invoice and product records change.
+              </p>
+            </div>
+          </div>
+
+          <div class="stats-grid">
+
+            <article class="stat-card">
+              <div class="stat-card-heading">
+                <span class="stat-label">Today's Sales</span>
+              </div>
+
+              <p class="stat-value" id="dashboardTodaySales" aria-live="polite">—</p>
+
+              <p class="stat-description" id="dashboardSalesDescription">
+                Waiting for invoice records
+              </p>
+            </article>
+
+            <article class="stat-card">
+              <div class="stat-card-heading">
+                <span class="stat-label">Invoices Today</span>
+              </div>
+
+              <p class="stat-value" id="dashboardTodayInvoices" aria-live="polite">—</p>
+
+              <p class="stat-description" id="dashboardInvoicesDescription">
+                Waiting for invoice records
+              </p>
+            </article>
+
+            <article class="stat-card">
+              <div class="stat-card-heading">
+                <span class="stat-label">Saved Products</span>
+              </div>
+
+              <p class="stat-value" id="dashboardProductCount" aria-live="polite">—</p>
+
+              <p class="stat-description">
+                <a href="products.html">Manage products</a>
+              </p>
+            </article>
+
+            <article class="stat-card">
+              <div class="stat-card-heading">
+                <span class="stat-label">Categories</span>
+              </div>
+
+              <p class="stat-value" id="dashboardCategoryCount" aria-live="polite">—</p>
+
+              <p class="stat-description">
+                <a href="products.html">Manage categories</a>
+              </p>
+            </article>
+
+          </div>
+
+        </section>
+
+        <!-- Daily target -->
+        <section class="dashboard-section" aria-labelledby="dailyTargetHeading">
+
+          <div class="section-heading">
+            <div>
+              <h2 id="dailyTargetHeading">Daily Sales Target</h2>
+              <p class="muted-text">
+                Progress based on the target configured in settings.
+              </p>
+            </div>
+
+            <a class="text-link" href="settings.html">Configure target</a>
+          </div>
+
+          <div class="target-card">
+            <div class="target-summary">
+              <div>
+                <p class="target-label">Target amount</p>
+                <p class="target-value" id="dailyTargetValue">—</p>
+              </div>
+
+              <div class="target-result">
+                <p class="target-label">Achieved</p>
+                <p class="target-value" id="dailyTargetStatus">—</p>
+              </div>
+            </div>
+
+            <div
+              class="target-track"
+              id="dailyTargetTrack"
+              role="progressbar"
+              aria-label="Daily sales target progress"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow="0"
+            >
+              <div class="target-fill" id="dailyTargetProgress"></div>
+            </div>
+
+            <p class="target-remaining" id="dailyTargetRemaining">
+              Waiting for sales and target data
+            </p>
+          </div>
+
+        </section>
+
+        <!-- Recent invoices -->
+        <section class="dashboard-section" aria-labelledby="recentInvoicesHeading">
+
+          <div class="section-heading">
+            <div>
+              <h2 id="recentInvoicesHeading">Recent Invoices</h2>
+              <p class="muted-text">Latest saved invoice records.</p>
+            </div>
+
+            <a class="text-link" href="invoices.html">View all invoices</a>
+          </div>
+
+          <div class="table-container">
+
+            <div class="table-scroll">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Invoice</th>
+                    <th scope="col">Customer</th>
+                    <th scope="col">Date</th>
+                    <th scope="col">Payment</th>
+                    <th scope="col">Total</th>
+                  </tr>
+                </thead>
+
+                <tbody id="recentInvoicesTableBody">
+                  <tr>
+                    <td colspan="5" class="table-empty">
+                      Loading saved invoices
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="table-footer">
+              <span id="recentInvoicesSummary">
+                Waiting for invoice records
+              </span>
+
+              <a href="invoices.html">Open invoice history</a>
+            </div>
+
+          </div>
+
+        </section>
+
+        <!-- Product performance -->
+        <section class="dashboard-section" aria-labelledby="topProductsHeading">
+
+          <div class="section-heading">
+            <div>
+              <h2 id="topProductsHeading">Top-Selling Products</h2>
+              <p class="muted-text">
+                Product performance calculated from recorded invoices.
+              </p>
+            </div>
+
+            <a class="text-link" href="products.html">Manage products</a>
+          </div>
+
+          <div class="panel product-performance-panel">
+            <div
+              class="product-performance-list"
+              id="topProductsList"
+              aria-live="polite"
+            >
+              <p class="empty-state">
+                Waiting for recorded invoice items
+              </p>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- Footer -->
+        <footer class="app-footer">
+          <span id="businessFooterName">Business billing dashboard</span>
+          <span id="dashboardFooterStatus">Checking application status</span>
+        </footer>
+
+      </main>
+
+    </div>
+
+  </div>
+
+  <!-- Shared scripts -->
+  <script src="js/script.js" defer></script>
+  <script src="js/firebase-config.js" defer></script>
+  <script src="js/auth.js" defer></script>
+  <script src="js/guard.js" defer></script>
+  <script src="js/logout.js" defer></script>
+  <script src="js/dashboard.js" defer></script>
+
+</body>
+</html>
