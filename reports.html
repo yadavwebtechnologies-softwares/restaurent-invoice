@@ -2,534 +2,488 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#ffffff">
+  <meta name="robots" content="noindex, nofollow">
+
+  <title>Reports | Restaurant Billing</title>
   <meta
     name="description"
-    content="Restaurant sales reports, product performance, purchase trends and business insights."
+    content="Review business sales, invoice totals and product performance."
   >
-  <title>Reports | Restaurant Billing</title>
+
   <link rel="stylesheet" href="style.css">
 </head>
 
-<body>
+<body class="reports-page">
+
   <div class="app" id="app">
 
-    <aside class="sidebar" id="sidebar" aria-label="Main navigation">
-      <a class="sidebar-brand" href="dashboard.html">
-        <span class="brand-mark" id="brandMark" aria-hidden="true">R</span>
-        <span class="brand-copy">
-          <span class="brand-name" id="sidebarBusinessName" data-business-name>
-            Restaurant Billing
-          </span>
-          <span class="brand-description" id="sidebarBusinessTagline" data-business-tagline>
-            Billing and Invoice Software
-          </span>
-        </span>
-      </a>
+    <!-- Shared Sidebar -->
+    <aside class="sidebar" id="sidebar">
 
-      <nav class="sidebar-nav">
-        <p class="nav-section-label">Main</p>
+      <div class="brand">
+        <a class="brand-link" href="dashboard.html" aria-label="Dashboard">
+          <span class="brand-mark" id="brandMark" aria-hidden="true">B</span>
+
+          <span class="brand-text">
+            <span
+              class="brand-name"
+              id="sidebarBusinessName"
+              data-business-name
+            >Business Profile</span>
+
+            <span
+              class="brand-description"
+              id="sidebarBusinessTagline"
+              data-business-tagline
+            >Billing and Management</span>
+          </span>
+        </a>
+      </div>
+
+      <nav class="sidebar-navigation" aria-label="Main navigation">
+
+        <p class="nav-section">Main</p>
 
         <a class="nav-item" href="dashboard.html">
-          <span class="nav-icon" aria-hidden="true">D</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="3" width="7" height="9" rx="1.5"/>
+            <rect x="14" y="3" width="7" height="5" rx="1.5"/>
+            <rect x="14" y="12" width="7" height="9" rx="1.5"/>
+            <rect x="3" y="16" width="7" height="5" rx="1.5"/>
+          </svg>
           <span>Dashboard</span>
         </a>
 
         <a class="nav-item" href="invoice.html">
-          <span class="nav-icon" aria-hidden="true">N</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 5v14M5 12h14"/>
+            <rect x="3" y="3" width="18" height="18" rx="3"/>
+          </svg>
           <span>New Invoice</span>
         </a>
 
         <a class="nav-item" href="invoices.html">
-          <span class="nav-icon" aria-hidden="true">I</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <path d="M14 2v6h6M8 13h8M8 17h5"/>
+          </svg>
           <span>Invoice History</span>
         </a>
 
-        <a class="nav-item active" href="reports.html" aria-current="page">
-          <span class="nav-icon" aria-hidden="true">R</span>
+        <a
+          class="nav-item active"
+          href="reports.html"
+          aria-current="page"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 3v18h18"/>
+            <path d="M7 14l4-4 3 3 5-6"/>
+          </svg>
           <span>Reports</span>
         </a>
 
-        <p class="nav-section-label">Management</p>
+        <p class="nav-section">Management</p>
 
         <a class="nav-item" href="products.html">
-          <span class="nav-icon" aria-hidden="true">P</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true">
+            <path d="m12 3 9 5-9 5-9-5 9-5Z"/>
+            <path d="M3 8v9l9 5 9-5V8"/>
+            <path d="M12 13v9"/>
+          </svg>
           <span>Products &amp; Categories</span>
         </a>
 
         <a class="nav-item" href="settings.html">
-          <span class="nav-icon" aria-hidden="true">S</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a2 2 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a2 2 0 0 0-1.8-.3 2 2 0 0 0-1 1.5v.2a2 2 0 1 1-4 0v-.2a2 2 0 0 0-1-1.5 2 2 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a2 2 0 0 0 .3-1.8 2 2 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.2a2 2 0 0 0 1.5-1 2 2 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a2 2 0 0 0 1.8.3 2 2 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.2a2 2 0 0 0 1 1.5 2 2 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a2 2 0 0 0-.3 1.8 2 2 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.2a2 2 0 0 0-1.5 1Z"/>
+          </svg>
           <span>Settings</span>
         </a>
+
       </nav>
 
       <div class="sidebar-footer">
-        <div class="connection-indicator">
-          <span class="connection-dot" aria-hidden="true"></span>
-          <span id="sidebarConnectionStatus" role="status">
-            Connecting
-          </span>
+
+        <div class="sidebar-business-status">
+          <span class="status-indicator" aria-hidden="true"></span>
+          <span id="sidebarConnectionStatus">Connecting to database</span>
         </div>
 
-        <button class="logout-btn" id="logoutBtn" type="button">
-          <span class="nav-icon" aria-hidden="true">L</span>
-          <span>Logout</span>
+        <button
+          type="button"
+          class="nav-item logout-button"
+          id="logoutBtn"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true">
+            <path d="M10 17l5-5-5-5M15 12H3"/>
+            <path d="M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7"/>
+          </svg>
+          <span>Sign Out</span>
         </button>
+
       </div>
     </aside>
 
+    <!-- Shared Mobile Backdrop -->
     <button
+      type="button"
       class="overlay"
       id="overlay"
-      type="button"
-      aria-label="Close navigation menu"
+      aria-label="Close navigation"
       hidden
     ></button>
 
-    <main class="main">
+    <div class="main">
+
+      <!-- Shared Header -->
       <header class="topbar">
-        <button
-          class="menu-btn"
-          id="menuBtn"
-          type="button"
-          aria-label="Open navigation menu"
-          aria-controls="sidebar"
-          aria-expanded="false"
-        >
-          <span aria-hidden="true">☰</span>
-        </button>
 
-        <div class="topbar-heading">
-          <p class="topbar-eyebrow">Business management</p>
-          <h1>Reports &amp; Insights</h1>
+        <div class="topbar-left">
+
+          <button
+            type="button"
+            class="menu-btn"
+            id="menuBtn"
+            aria-label="Open navigation"
+            aria-controls="sidebar"
+            aria-expanded="false"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round"
+                 aria-hidden="true">
+              <path d="M3 6h18M3 12h18M3 18h18"/>
+            </svg>
+          </button>
+
+          <div class="topbar-heading">
+            <p class="breadcrumb">Main / Reports</p>
+            <h1>Reports</h1>
+          </div>
+
         </div>
 
-        <div class="owner-profile">
-          <span class="owner-avatar" id="ownerAvatar" aria-hidden="true">O</span>
-          <span class="owner-profile-copy">
-            <strong id="ownerDisplayName">Owner</strong>
-            <span id="ownerDisplayRole">Business Owner</span>
-          </span>
+        <div class="topbar-right">
+          <div class="owner-profile" id="ownerProfile">
+            <span class="owner-avatar" id="ownerAvatar" aria-hidden="true">—</span>
+
+            <span class="owner-profile-text">
+              <span class="owner-name" id="ownerDisplayName">Loading account</span>
+              <span class="owner-role" id="ownerDisplayRole">Owner</span>
+            </span>
+          </div>
         </div>
+
       </header>
 
-      <div class="page-content" id="reportsContent">
+      <!-- Reports Content -->
+      <main class="content" id="reportsContent">
 
         <section class="page-heading">
+
           <div>
-            <p class="section-eyebrow">Sales intelligence</p>
-            <h2>Understand your business</h2>
-            <p>
-              Review sales performance, purchase trends and product insights
-              using your recorded invoices.
+            <p class="section-eyebrow">BUSINESS ANALYTICS</p>
+            <h2>Sales Reports</h2>
+            <p class="muted-text">
+              Review recorded sales, invoices and item performance.
             </p>
           </div>
 
-          <div class="page-heading-actions">
-            <button
-              class="secondary-button"
-              id="reportExportBtn"
-              type="button"
-            >
-              Export CSV
-            </button>
-          </div>
+          <button
+            type="button"
+            class="btn btn-secondary"
+            id="exportReportBtn"
+          >
+            Export Report
+          </button>
+
         </section>
 
         <div
-          class="page-status"
+          class="dashboard-status"
           id="reportsPageStatus"
           role="status"
           aria-live="polite"
+          aria-atomic="true"
         >
-          Connecting to report data…
+          Loading saved invoice records.
         </div>
 
-        <!-- REPORT DATE FILTERS -->
-        <section class="panel" aria-labelledby="reportFiltersHeading">
-          <div class="panel-header">
-            <div>
-              <h2 id="reportFiltersHeading">Report period</h2>
-              <p>Select the date range for your business analysis.</p>
-            </div>
-          </div>
+        <!-- Report Filters -->
+        <section class="dashboard-section" aria-labelledby="reportFiltersHeading">
 
-          <form id="reportFiltersForm" class="filter-form">
-            <div class="form-group">
-              <label for="reportStartDate">Start date</label>
-              <input
-                id="reportStartDate"
-                name="startDate"
-                type="date"
-              >
-            </div>
-
-            <div class="form-group">
-              <label for="reportEndDate">End date</label>
-              <input
-                id="reportEndDate"
-                name="endDate"
-                type="date"
-              >
-            </div>
-
-            <div class="form-group">
-              <label for="reportPreset">Quick selection</label>
-              <select id="reportPreset" name="reportPreset">
-                <option value="">Custom date range</option>
-                <option value="today">Today</option>
-                <option value="7days">Last 7 days</option>
-                <option value="30days">Last 30 days</option>
-                <option value="all">All recorded dates</option>
-              </select>
-            </div>
-
-            <div class="filter-actions">
-              <button
-                class="primary-button"
-                id="reportApplyFiltersBtn"
-                type="submit"
-              >
-                Apply filters
-              </button>
-
-              <button
-                class="secondary-button"
-                id="reportResetFiltersBtn"
-                type="button"
-              >
-                Reset
-              </button>
-            </div>
-          </form>
-
-          <p class="field-hint" id="reportGeneratedAt">
-            Report period will appear here.
-          </p>
-        </section>
-
-        <!-- SALES OVERVIEW -->
-        <section class="report-section" aria-labelledby="salesOverviewHeading">
           <div class="section-heading">
             <div>
-              <h2 id="salesOverviewHeading">Sales overview</h2>
-              <p>Key figures for the selected reporting period.</p>
+              <h2 id="reportFiltersHeading">Report Period</h2>
+              <p class="muted-text">
+                Select a date range to recalculate the report.
+              </p>
+            </div>
+          </div>
+
+          <div class="panel">
+
+            <form id="reportFiltersForm" class="management-form">
+
+              <div class="table-toolbar">
+
+                <div class="form-field">
+                  <label for="reportStartDate">From date</label>
+                  <input
+                    type="date"
+                    id="reportStartDate"
+                    name="startDate"
+                    required
+                  >
+                </div>
+
+                <div class="form-field">
+                  <label for="reportEndDate">To date</label>
+                  <input
+                    type="date"
+                    id="reportEndDate"
+                    name="endDate"
+                    required
+                  >
+                </div>
+
+              </div>
+
+              <div class="form-actions">
+
+                <button
+                  type="submit"
+                  class="btn btn-primary"
+                  id="applyReportFiltersBtn"
+                >
+                  Apply Period
+                </button>
+
+                <button
+                  type="button"
+                  class="btn btn-secondary"
+                  id="currentDayReportBtn"
+                >
+                  Today
+                </button>
+
+                <button
+                  type="button"
+                  class="btn btn-secondary"
+                  id="currentMonthReportBtn"
+                >
+                  This Month
+                </button>
+
+              </div>
+
+              <div
+                class="form-message"
+                id="reportFiltersMessage"
+                role="status"
+                aria-live="polite"
+              ></div>
+
+            </form>
+
+          </div>
+
+        </section>
+
+        <!-- Summary Metrics -->
+        <section class="dashboard-section" aria-labelledby="reportSummaryHeading">
+
+          <div class="section-heading">
+            <div>
+              <h2 id="reportSummaryHeading">Report Summary</h2>
+              <p class="muted-text" id="reportPeriodDescription">
+                Waiting for report data.
+              </p>
             </div>
           </div>
 
           <div class="stats-grid">
+
             <article class="stat-card">
-              <div class="stat-card-header">
-                <span>Total sales</span>
-              </div>
+              <p class="stat-label">Total Sales</p>
               <p class="stat-value" id="reportTotalSales">—</p>
-              <p class="stat-description">Recorded invoice revenue</p>
+              <p class="stat-description">Valid saved invoices in the selected period</p>
             </article>
 
             <article class="stat-card">
-              <div class="stat-card-header">
-                <span>Invoices</span>
-              </div>
+              <p class="stat-label">Invoices</p>
               <p class="stat-value" id="reportInvoiceCount">—</p>
-              <p class="stat-description">Valid invoices in this period</p>
+              <p class="stat-description">Non-cancelled records</p>
             </article>
 
             <article class="stat-card">
-              <div class="stat-card-header">
-                <span>Average bill</span>
-              </div>
+              <p class="stat-label">Average Invoice Value</p>
               <p class="stat-value" id="reportAverageInvoice">—</p>
-              <p class="stat-description">Average value per invoice</p>
+              <p class="stat-description">Total sales divided by invoice count</p>
             </article>
 
             <article class="stat-card">
-              <div class="stat-card-header">
-                <span>Items sold</span>
-              </div>
-              <p class="stat-value" id="reportItemsSold">—</p>
-              <p class="stat-description">Total recorded item quantity</p>
+              <p class="stat-label">Cancelled Invoices</p>
+              <p class="stat-value" id="reportCancelledCount">—</p>
+              <p class="stat-description">Cancelled records in the selected period</p>
             </article>
+
           </div>
 
-          <div class="stats-grid">
-            <article class="stat-card">
-              <div class="stat-card-header">
-                <span>Tax recorded</span>
-              </div>
-              <p class="stat-value" id="reportTaxCollected">—</p>
-              <p class="stat-description">Tax amounts in valid invoices</p>
-            </article>
-
-            <article class="stat-card">
-              <div class="stat-card-header">
-                <span>Discounts</span>
-              </div>
-              <p class="stat-value" id="reportDiscountTotal">—</p>
-              <p class="stat-description">Recorded discounts</p>
-            </article>
-
-            <article class="stat-card">
-              <div class="stat-card-header">
-                <span>Products sold</span>
-              </div>
-              <p class="stat-value" id="reportProductCount">—</p>
-              <p class="stat-description">Distinct products in sales records</p>
-            </article>
-
-            <article class="stat-card">
-              <div class="stat-card-header">
-                <span>Sales days</span>
-              </div>
-              <p class="stat-value" id="reportActiveDays">—</p>
-              <p class="stat-description">Days with valid invoice activity</p>
-            </article>
-          </div>
         </section>
 
-        <!-- SALES TRENDS -->
-        <section class="panel" aria-labelledby="salesTrendsHeading">
-          <div class="panel-header">
+        <!-- Sales by Date -->
+        <section class="dashboard-section" aria-labelledby="dailySalesHeading">
+
+          <div class="section-heading">
             <div>
-              <h2 id="salesTrendsHeading">Sales trends</h2>
-              <p>
-                Compare sales performance across dates and identify changes
-                in recorded revenue.
+              <h2 id="dailySalesHeading">Sales by Date</h2>
+              <p class="muted-text">
+                Daily totals calculated from recorded invoice dates.
               </p>
             </div>
           </div>
 
-          <div
-            class="report-visualization"
-            id="salesTrendChart"
-            role="region"
-            aria-label="Sales trend analysis"
-            aria-live="polite"
-          >
-            <p class="empty-state">
-              Sales trends will appear after invoice data loads.
-            </p>
-          </div>
+          <div class="table-container">
+            <div class="table-scroll">
 
-          <div class="insight-summary" id="salesTrendSummary">
-            Trend summaries will appear when sufficient data is available.
-          </div>
-        </section>
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Date</th>
+                    <th scope="col">Invoice Count</th>
+                    <th scope="col">Total Sales</th>
+                  </tr>
+                </thead>
 
-        <!-- PEAK SALES -->
-        <section class="panel" aria-labelledby="peakSalesHeading">
-          <div class="panel-header">
-            <div>
-              <h2 id="peakSalesHeading">Peak sales analysis</h2>
-              <p>Find the strongest and weakest sales days in the selected period.</p>
+                <tbody id="dailySalesTableBody">
+                  <tr>
+                    <td colspan="3" class="table-empty">
+                      Waiting for report data.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
             </div>
           </div>
 
-          <div class="insight-grid" id="peakSalesInsights">
-            <article class="insight-card">
-              <h3>Highest sales day</h3>
-              <p class="insight-value" id="peakSalesDayValue">—</p>
-              <p class="insight-description" id="peakSalesDayDescription">
-                Waiting for sales data.
-              </p>
-            </article>
-
-            <article class="insight-card">
-              <h3>Lowest sales day</h3>
-              <p class="insight-value" id="lowestSalesDayValue">—</p>
-              <p class="insight-description" id="lowestSalesDayDescription">
-                Waiting for sales data.
-              </p>
-            </article>
-
-            <article class="insight-card">
-              <h3>Best weekday</h3>
-              <p class="insight-value" id="bestSalesWeekdayValue">—</p>
-              <p class="insight-description" id="bestSalesWeekdayDescription">
-                Waiting for sufficient historical data.
-              </p>
-            </article>
-          </div>
-
-          <div class="table-wrap">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>Weekday</th>
-                  <th>Invoices</th>
-                  <th>Total sales</th>
-                  <th>Average bill</th>
-                </tr>
-              </thead>
-              <tbody id="weekdayPerformanceBody">
-                <tr>
-                  <td colspan="4">Waiting for sales data.</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
         </section>
 
-        <!-- PRODUCT PERFORMANCE -->
-        <section class="panel" aria-labelledby="productInsightsHeading">
-          <div class="panel-header">
+        <!-- Product Performance -->
+        <section class="dashboard-section" aria-labelledby="productReportHeading">
+
+          <div class="section-heading">
             <div>
-              <h2 id="productInsightsHeading">Product insights</h2>
-              <p>
-                Understand which items contribute most to sales and which
-                items have lower recorded demand.
+              <h2 id="productReportHeading">Product Performance</h2>
+              <p class="muted-text">
+                Quantities and totals derived from saved invoice items.
               </p>
             </div>
           </div>
 
-          <div class="insight-grid">
-            <article class="insight-card">
-              <h3>Top-performing product</h3>
-              <p class="insight-value" id="topProductValue">—</p>
-              <p class="insight-description" id="topProductDescription">
-                Waiting for product sales data.
-              </p>
-            </article>
+          <div class="table-container">
+            <div class="table-scroll">
 
-            <article class="insight-card">
-              <h3>Lowest-selling product</h3>
-              <p class="insight-value" id="lowestProductValue">—</p>
-              <p class="insight-description" id="lowestProductDescription">
-                Waiting for product sales data.
-              </p>
-            </article>
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Product</th>
+                    <th scope="col">Quantity Sold</th>
+                    <th scope="col">Sales Value</th>
+                  </tr>
+                </thead>
+
+                <tbody id="productReportTableBody">
+                  <tr>
+                    <td colspan="3" class="table-empty">
+                      Waiting for product sales data.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+            </div>
           </div>
 
-          <div class="table-wrap">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>Product</th>
-                  <th>Quantity sold</th>
-                  <th>Revenue</th>
-                  <th>Invoice entries</th>
-                </tr>
-              </thead>
-              <tbody id="productReportTableBody">
-                <tr>
-                  <td colspan="4">Waiting for product sales data.</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
         </section>
 
-        <!-- CATEGORY PERFORMANCE -->
-        <section class="panel" aria-labelledby="categoryInsightsHeading">
-          <div class="panel-header">
+        <!-- Payment Breakdown -->
+        <section class="dashboard-section" aria-labelledby="paymentReportHeading">
+
+          <div class="section-heading">
             <div>
-              <h2 id="categoryInsightsHeading">Category performance</h2>
-              <p>
-                Compare recorded sales across product categories.
+              <h2 id="paymentReportHeading">Payment Method Summary</h2>
+              <p class="muted-text">
+                Recorded invoice totals grouped by payment method.
               </p>
             </div>
           </div>
 
-          <div
-            class="report-visualization"
-            id="categoryPerformanceChart"
-            role="region"
-            aria-label="Sales by product category"
-            aria-live="polite"
-          >
-            <p class="empty-state">
-              Category insights will appear after category and invoice data load.
-            </p>
-          </div>
+          <div class="table-container">
+            <div class="table-scroll">
 
-          <div class="table-wrap">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>Category</th>
-                  <th>Quantity sold</th>
-                  <th>Revenue</th>
-                  <th>Share of sales</th>
-                </tr>
-              </thead>
-              <tbody id="categoryReportTableBody">
-                <tr>
-                  <td colspan="4">Waiting for category sales data.</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Payment Method</th>
+                    <th scope="col">Invoice Count</th>
+                    <th scope="col">Total Amount</th>
+                  </tr>
+                </thead>
 
-        <!-- DAILY SALES DETAILS -->
-        <section class="panel" aria-labelledby="dailySalesHeading">
-          <div class="panel-header">
-            <div>
-              <h2 id="dailySalesHeading">Daily sales report</h2>
-              <p>Daily revenue, invoice count, tax and discount details.</p>
+                <tbody id="paymentReportTableBody">
+                  <tr>
+                    <td colspan="3" class="table-empty">
+                      Waiting for payment data.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
             </div>
           </div>
 
-          <div class="table-wrap">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Invoices</th>
-                  <th>Sales</th>
-                  <th>Tax</th>
-                  <th>Discount</th>
-                </tr>
-              </thead>
-              <tbody id="salesReportTableBody">
-                <tr>
-                  <td colspan="5">Waiting for sales data.</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
         </section>
 
-        <!-- BUSINESS INSIGHTS -->
-        <section class="panel" aria-labelledby="businessInsightsHeading">
-          <div class="panel-header">
-            <div>
-              <h2 id="businessInsightsHeading">Business insights</h2>
-              <p>
-                Useful observations calculated from actual recorded sales.
-                Insights requiring more historical data will be identified
-                as unavailable.
-              </p>
-            </div>
-          </div>
-
-          <div
-            class="business-insights-list"
-            id="businessInsightsList"
-            aria-live="polite"
-          >
-            <p class="empty-state">
-              Business insights will appear when the report data is ready.
-            </p>
-          </div>
-        </section>
-
-        <footer class="page-footer">
+        <footer class="app-footer">
           <span id="businessFooterName" data-business-name>
-            Restaurant Billing
+            Business reports
           </span>
-          <span id="reportsFooterStatus">Reports not loaded</span>
+          <span id="reportsFooterStatus">Reports</span>
         </footer>
 
-      </div>
-    </main>
+      </main>
+
+    </div>
+
   </div>
 
+  <!-- Shared scripts: same order as dashboard.html -->
   <script src="js/script.js" defer></script>
   <script src="js/firebase-config.js" defer></script>
   <script src="js/auth.js" defer></script>
   <script src="js/guard.js" defer></script>
   <script src="js/logout.js" defer></script>
+
+  <!-- Page-specific functionality -->
   <script src="js/reports.js" defer></script>
+
 </body>
 </html>
