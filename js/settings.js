@@ -1,1652 +1,928 @@
-"use strict";
+/* =========================================================
+   RESTAURANT BILLING SOFTWARE
+   Business Settings — Live Firebase Integration
+   Database root: restaurantBilling/settings/
+   No demo data, localStorage persistence or secrets
+   ========================================================= */
 
-/*
- * Restaurant Billing Software
- * File: js/settings.js
- *
- * Phase 1: Frontend control room.
- *
- * Features:
- * - Business profile settings
- * - Branding and invoice preferences
- * - Tax and pricing configuration
- * - Cash / UPI settings
- * - Billing preferences
- * - Product and inventory rules
- * - Reporting preferences
- * - Data export/import
- * - Logo and UPI QR image previews
- * - Unsaved-change handling
- * - Browser-local demo persistence
- *
- * IMPORTANT:
- * Browser-local persistence is for this frontend demo only.
- * Firebase Realtime Database integration will replace it.
- *
- * Uploaded image files are previewed, not permanently uploaded.
- * Authentication credentials and secrets are never exported.
- */
+(function () {
+  "use strict";
 
-(() => {
-  // ==================================================
-  // 1. CONFIGURATION
-  // ==================================================
+  const OWNER_UID = "20wif9y7LQhBZgFPDsAlrQpFjnI2";
+  const SETTINGS_PATH = "restaurantBilling/settings";
 
-  const STORAGE_KEY = "restaurantBilling.settings.demo.v1";
-
-  const APPLICATION_ID = "restaurant-billing";
-
-  const SCHEMA_VERSION = 1;
-
-  const MAX_IMPORT_SIZE = 2 * 1024 * 1024;
-
-  const MAX_LOGO_SIZE = 1 * 1024 * 1024;
-
-  const MAX_QR_SIZE = 2 * 1024 * 1024;
-
-  const FORM_IDS = [
-    "businessProfileForm",
-    "brandSettingsForm",
-    "invoiceSettingsForm",
-    "taxPricingForm",
-    "paymentSettingsForm",
-    "billingPreferencesForm",
-    "productSettingsForm",
-    "reportSettingsForm"
-  ];
-
-  const STATUS_IDS = {
-    businessProfileForm: "businessProfileStatus",
-    brandSettingsForm: "brandSettingsStatus",
-    invoiceSettingsForm: "invoiceSettingsStatus",
-    taxPricingForm: "taxPricingStatus",
-    paymentSettingsForm: "paymentSettingsStatus",
-    billingPreferencesForm: "billingPreferencesStatus",
-    productSettingsForm: "productSettingsStatus",
-    reportSettingsForm: "reportSettingsStatus"
+  const $ = function (id) {
+    return document.getElementById(id);
   };
 
-  const SETTINGS_FORM_TITLES = {
-    businessProfileForm: "Business Profile",
-    brandSettingsForm: "Brand Identity",
-    invoiceSettingsForm: "Invoice Configuration",
-    taxPricingForm: "Tax & Pricing",
-    paymentSettingsForm: "Payment Settings",
-    billingPreferencesForm: "Billing Preferences",
-    productSettingsForm: "Product & Inventory",
-    reportSettingsForm: "Reports & Analytics"
+  const state = {
+    db: null,
+    api: null,
+    settings: {},
+    loaded: false,
+    ready: false,
+    busy: new Set(),
+    dirty: new Set(),
+    subscriptions: [],
+    disposed: false
   };
 
-  // ==================================================
-  // 2. DOM HELPERS
-  // ==================================================
+  const ui = window.restaurantUI;
 
-  const $ = (selector, parent = document) =>
-    parent.querySelector(selector);
+  /* ---------------------------------------------------------
+     1. Common helpers
+     --------------------------------------------------------- */
 
-  const $$ = (selector, parent = document) =>
-    Array.from(parent.querySelectorAll(selector));
+  function setText(id, value) {
+    if (ui && typeof ui.setText === "function") {
+      ui.setText(id, value);
+      return;
+    }
 
-  const toast = $("#settingsToast");
-
-  const globalStatus = $("#globalSettingsStatus");
-
-  const refreshButton = $("#refreshSettingsBtn");
-
-  const exportSettingsButton = $("#exportSettingsBtn");
-
-  const exportBackupButton = $("#downloadSettingsBackupBtn");
-
-  const importFileInput = $("#settingsImportFile");
-
-  const saveAccountButton = $("#saveAccountSettingsBtn");
-
-  if (!toast || !globalStatus) {
-    console.error("Settings: Required page elements were not found.");
-    return;
+    const node = $(id);
+    if (node) node.textContent = String(value ?? "");
   }
 
-  // ==================================================
-  // 3. RUNTIME STATE
-  // ==================================================
+  function showMessage(id, message, type) {
+    const node = $(id);
+    if (!node) return;
 
-  let toastTimer = null;
+    node.textContent = message || "";
 
-  let hasUnsavedChanges = false;
+    node.classList.remove(
+      "is-success",
+      "is-error",
+      "is-warning"
+    );
 
-  let canUseLocalStorage = true;
+    if (type) node.classList.add("is-" + type);
+  }
 
-  let imageObjectURLs = {
-    logo: null,
-    qr: null
-  };
+  function setStatus(message, type) {
+    const node = $("settingsPageStatus");
+    if (!node) return;
 
-  let removedImages = {
-    logo: false,
-    qr: false
-  };
+    node.textContent = message || "";
 
-  let savedState = createDefaultState();
+    node.classList.remove(
+      "is-connected",
+      "is-error",
+      "is-warning"
+    );
 
-  // ==================================================
-  // 4. DEFAULT SETTINGS STATE
-  // ==================================================
+    if (type) node.classList.add("is-" + type);
+  }
 
-  function createDefaultState() {
-    return {
-      application: APPLICATION_ID,
-      schemaVersion: SCHEMA_VERSION,
-      forms: {},
-      misc: {
-        sessionTimeout: "10"
+  function textValue(value) {
+    return String(value ?? "").trim();
+  }
+
+  function numberValue(value) {
+    if (value === "" || value === null || value === undefined) {
+      return null;
+    }
+
+    const result = Number(value);
+    return Number.isFinite(result) ? result : null;
+  }
+
+  function firstValue(object, keys) {
+    for (const key of keys) {
+      const value = object && object[key];
+
+      if (value !== null && value !== undefined && value !== "") {
+        return value;
       }
+    }
+
+    return null;
+  }
+
+  function booleanValue(value) {
+    return value === true ||
+      value === 1 ||
+      value === "1" ||
+      value === "true";
+  }
+
+  function requireOwner() {
+    const access = window.restaurantAccess;
+
+    if (
+      !access ||
+      !access.ready ||
+      !access.authorized ||
+      !access.user ||
+      access.user.uid !== OWNER_UID
+    ) {
+      throw new Error("Only the authorized owner can update settings.");
+    }
+
+    return access.user;
+  }
+
+  function validateURL(value, label) {
+    if (!value) return "";
+
+    let url;
+
+    try {
+      url = new URL(value);
+    } catch {
+      throw new Error(label + " must be a valid URL.");
+    }
+
+    if (url.protocol !== "https:" && url.protocol !== "http:") {
+      throw new Error(label + " must use HTTP or HTTPS.");
+    }
+
+    return url.href;
+  }
+
+  function getFirebase() {
+    const firebase = window.restaurantFirebase;
+
+    if (
+      !firebase ||
+      !firebase.ready ||
+      !firebase.db ||
+      !firebase.sdk ||
+      !firebase.sdk.database
+    ) {
+      throw new Error("Firebase Realtime Database is unavailable.");
+    }
+
+    const api = firebase.sdk.database;
+
+    if (
+      typeof api.ref !== "function" ||
+      typeof api.get !== "function" ||
+      typeof api.set !== "function" ||
+      typeof api.onValue !== "function"
+    ) {
+      throw new Error("Required Firebase database methods are unavailable.");
+    }
+
+    return { db: firebase.db, api: api };
+  }
+
+  function makeMetadata() {
+    return {
+      ownerUid: OWNER_UID,
+      updatedAt: new Date().toISOString(),
+      updatedAtMs: Date.now()
     };
   }
 
-  // ==================================================
-  // 5. USER FEEDBACK
-  // ==================================================
+  /* ---------------------------------------------------------
+     2. Read canonical and older saved settings
+     --------------------------------------------------------- */
 
-  function showToast(message, type = "info") {
-    toast.textContent = message;
+  function readSections() {
+    const settings = state.settings || {};
+    const forms = settings.forms || {};
 
-    toast.dataset.type = type;
+    return {
+      businessProfile:
+        settings.businessProfile ||
+        settings.business ||
+        settings.profile ||
+        forms.businessProfileForm ||
+        forms.businessProfile ||
+        settings,
 
-    toast.hidden = false;
+      invoiceSettings:
+        settings.invoiceSettings ||
+        settings.invoice ||
+        forms.invoiceSettingsForm ||
+        settings,
 
-    window.clearTimeout(toastTimer);
+      taxSettings:
+        settings.taxSettings ||
+        settings.tax ||
+        forms.taxSettingsForm ||
+        settings,
 
-    toastTimer = window.setTimeout(() => {
-      toast.hidden = true;
-    }, 5000);
+      paymentSettings:
+        settings.paymentSettings ||
+        settings.payment ||
+        forms.paymentSettingsForm ||
+        settings
+    };
   }
 
-  function setGlobalStatus(message) {
-    globalStatus.textContent = message;
+  function getFieldValue(section, keys) {
+    return firstValue(section, keys);
   }
 
-  function setFormStatus(formId, message) {
-    const statusId = STATUS_IDS[formId];
+  function assignInput(id, value) {
+    const node = $(id);
+    if (!node) return;
 
-    if (!statusId) return;
+    node.value = value === null || value === undefined
+      ? ""
+      : String(value);
+  }
 
-    const element = document.getElementById(statusId);
+  function assignCheckbox(id, value) {
+    const node = $(id);
+    if (node) node.checked = booleanValue(value);
+  }
 
-    if (element) {
-      element.textContent = message;
+  /* ---------------------------------------------------------
+     3. Business profile form
+     --------------------------------------------------------- */
+
+  function populateBusinessProfile() {
+    if (state.dirty.has("businessProfileForm")) return;
+
+    const profile = readSections().businessProfile;
+
+    assignInput("businessNameInput", getFieldValue(profile, [
+      "businessName",
+      "name"
+    ]));
+
+    assignInput("businessTaglineInput", getFieldValue(profile, [
+      "businessTagline",
+      "tagline",
+      "description"
+    ]));
+
+    assignInput("businessAddressInput", getFieldValue(profile, [
+      "businessAddress",
+      "address"
+    ]));
+
+    assignInput("businessPhoneInput", getFieldValue(profile, [
+      "businessPhone",
+      "phone",
+      "contactPhone"
+    ]));
+
+    assignInput("businessEmailInput", getFieldValue(profile, [
+      "businessEmail",
+      "email"
+    ]));
+
+    assignInput("businessLogoUrlInput", getFieldValue(profile, [
+      "businessLogoUrl",
+      "logoUrl",
+      "logo"
+    ]));
+  }
+
+  function buildBusinessProfile() {
+    const name = textValue($("businessNameInput")?.value);
+
+    if (!name) {
+      $("businessNameInput")?.focus();
+      throw new Error("Business name is required.");
     }
-  }
 
-  function setDataManagementStatus(message) {
-    const element = $("#dataManagementStatus");
+    const email = textValue($("businessEmailInput")?.value);
 
-    if (element) {
-      element.textContent = message;
+    if (email && $("businessEmailInput") &&
+        !$("businessEmailInput").validity.valid) {
+      $("businessEmailInput").focus();
+      throw new Error("Enter a valid business email.");
     }
-  }
 
-  // ==================================================
-  // 6. LOCAL STORAGE
-  // ==================================================
-
-  function isValidStoredState(value) {
-    return Boolean(
-      value &&
-      typeof value === "object" &&
-      value.application === APPLICATION_ID &&
-      value.schemaVersion === SCHEMA_VERSION &&
-      value.forms &&
-      typeof value.forms === "object" &&
-      !Array.isArray(value.forms)
+    const phone = textValue($("businessPhoneInput")?.value);
+    const logo = validateURL(
+      textValue($("businessLogoUrlInput")?.value),
+      "Logo URL"
     );
+
+    return {
+      ...makeMetadata(),
+      businessName: name,
+      businessTagline: textValue($("businessTaglineInput")?.value),
+      businessAddress: textValue($("businessAddressInput")?.value),
+      businessPhone: phone,
+      businessEmail: email,
+      businessLogoUrl: logo
+    };
   }
 
-  function readStoredState() {
-    try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
+  /* ---------------------------------------------------------
+     4. Invoice preferences form
+     --------------------------------------------------------- */
 
-      if (!raw) {
-        return null;
-      }
+  function populateInvoiceSettings() {
+    if (state.dirty.has("invoiceSettingsForm")) return;
 
-      const parsed = JSON.parse(raw);
+    const settings = readSections().invoiceSettings;
 
-      if (!isValidStoredState(parsed)) {
-        console.warn("Settings: Stored data has an unsupported format.");
-        return null;
-      }
+    assignInput("invoicePrefixInput", getFieldValue(settings, [
+      "invoicePrefix",
+      "prefix"
+    ]));
 
-      return parsed;
-    } catch (error) {
-      canUseLocalStorage = false;
+    assignInput("invoiceFooterInput", getFieldValue(settings, [
+      "invoiceFooter",
+      "footerText",
+      "footer"
+    ]));
 
-      console.warn(
-        "Settings: Local storage is unavailable.",
-        error
+    assignInput("dailySalesTargetInput", getFieldValue(settings, [
+      "dailySalesTarget",
+      "dailyTarget"
+    ]));
+  }
+
+  function buildInvoiceSettings() {
+    const prefix = textValue($("invoicePrefixInput")?.value);
+    const footer = textValue($("invoiceFooterInput")?.value);
+    const targetText = textValue($("dailySalesTargetInput")?.value);
+
+    if (!prefix || !/^[A-Za-z0-9-]+$/.test(prefix)) {
+      $("invoicePrefixInput")?.focus();
+
+      throw new Error(
+        "Invoice prefix is required and may contain only letters, numbers and hyphens."
       );
-
-      return null;
     }
-  }
 
-  function writeStoredState() {
-    try {
-      window.localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify(savedState)
-      );
+    let dailySalesTarget = null;
 
-      canUseLocalStorage = true;
+    if (targetText) {
+      dailySalesTarget = numberValue(targetText);
 
-      return true;
-    } catch (error) {
-      canUseLocalStorage = false;
-
-      console.warn(
-        "Settings: Unable to persist settings locally.",
-        error
-      );
-
-      return false;
-    }
-  }
-
-  // ==================================================
-  // 7. READ FORM VALUES
-  // ==================================================
-
-  function readFormValues(form) {
-    const values = {};
-
-    for (const element of Array.from(form.elements)) {
       if (
-        !element.id ||
-        element.disabled ||
-        element.type === "file" ||
-        element.type === "button" ||
-        element.type === "submit" ||
-        element.type === "reset"
+        dailySalesTarget === null ||
+        dailySalesTarget < 0 ||
+        dailySalesTarget > 999999999
       ) {
-        continue;
-      }
-
-      if (element.type === "checkbox") {
-        values[element.id] = element.checked;
-        continue;
-      }
-
-      if (element.type === "radio") {
-        if (element.checked) {
-          values[element.name] = element.value;
-        }
-
-        continue;
-      }
-
-      values[element.id] = element.value;
-    }
-
-    return values;
-  }
-
-  function readAllCurrentSettings() {
-    const result = createDefaultState();
-
-    for (const formId of FORM_IDS) {
-      const form = document.getElementById(formId);
-
-      if (form) {
-        result.forms[formId] = readFormValues(form);
+        $("dailySalesTargetInput")?.focus();
+        throw new Error("Enter a valid non-negative daily sales target.");
       }
     }
 
-    result.misc.sessionTimeout =
-      $("#sessionTimeout")?.value || "10";
+    const result = {
+      ...makeMetadata(),
+      invoicePrefix: prefix,
+      invoiceFooter: footer
+    };
+
+    if (dailySalesTarget !== null) {
+      result.dailySalesTarget = dailySalesTarget;
+    }
 
     return result;
   }
 
-  // ==================================================
-  // 8. APPLY SAVED SETTINGS TO THE FORMS
-  // ==================================================
+  /* ---------------------------------------------------------
+     5. Tax and discount form
+     --------------------------------------------------------- */
 
-  function applyFormValues(form, values) {
-    if (!form || !values || typeof values !== "object") {
-      return;
-    }
+  function populateTaxSettings() {
+    if (state.dirty.has("taxSettingsForm")) return;
 
-    const entries = Object.entries(values);
+    const settings = readSections().taxSettings;
 
-    for (const [elementId, value] of entries) {
-      const element = document.getElementById(elementId);
+    assignCheckbox("taxEnabledInput", getFieldValue(settings, [
+      "taxEnabled",
+      "enableTax",
+      "enabled"
+    ]));
 
-      if (
-        !element ||
-        !form.contains(element) ||
-        element.disabled ||
-        element.type === "file"
-      ) {
-        continue;
-      }
+    assignInput("taxRateInput", getFieldValue(settings, [
+      "taxRate",
+      "rate",
+      "taxPercentage"
+    ]));
 
-      if (
-        element.type === "button" ||
-        element.type === "submit" ||
-        element.type === "reset"
-      ) {
-        continue;
-      }
+    assignCheckbox("discountEnabledInput", getFieldValue(settings, [
+      "discountEnabled",
+      "enableDiscount"
+    ]));
 
-      if (element.type === "checkbox") {
-        if (typeof value === "boolean") {
-          element.checked = value;
-        }
-
-        continue;
-      }
-
-      if (element.type === "radio") {
-        if (typeof value === "string") {
-          element.checked = element.value === value;
-        }
-
-        continue;
-      }
-
-      if (
-        typeof value !== "string" &&
-        typeof value !== "number"
-      ) {
-        continue;
-      }
-
-      const stringValue = String(value);
-
-      if (element instanceof HTMLSelectElement) {
-        const optionExists = Array.from(element.options).some(
-          option => option.value === stringValue
-        );
-
-        if (optionExists) {
-          element.value = stringValue;
-        }
-
-        continue;
-      }
-
-      element.value = stringValue;
-    }
+    assignInput("maximumDiscountInput", getFieldValue(settings, [
+      "maximumDiscount",
+      "maxDiscount",
+      "maximumDiscountPercent"
+    ]));
   }
 
-  function applySavedState(state) {
-    if (!isValidStoredState(state)) {
-      return;
+  function buildTaxSettings() {
+    const taxEnabled = Boolean($("taxEnabledInput")?.checked);
+    const taxText = textValue($("taxRateInput")?.value);
+
+    const discountEnabled = Boolean($("discountEnabledInput")?.checked);
+    const discountText = textValue($("maximumDiscountInput")?.value);
+
+    let taxRate = numberValue(taxText);
+
+    if (taxEnabled && taxRate === null) {
+      $("taxRateInput")?.focus();
+      throw new Error("Enter a tax rate when tax is enabled.");
     }
 
-    for (const formId of FORM_IDS) {
-      const form = document.getElementById(formId);
+    if (taxRate === null) taxRate = 0;
 
-      if (!form) continue;
-
-      const values = state.forms[formId];
-
-      if (values && typeof values === "object") {
-        applyFormValues(form, values);
-      }
+    if (taxRate < 0 || taxRate > 100) {
+      $("taxRateInput")?.focus();
+      throw new Error("Tax rate must be between 0 and 100 percent.");
     }
 
-    if (state.misc && typeof state.misc === "object") {
-      const timeout = $("#sessionTimeout");
+    let maximumDiscount = numberValue(discountText);
 
-      if (timeout && typeof state.misc.sessionTimeout === "string") {
-        timeout.value = state.misc.sessionTimeout;
-      }
-    }
+    if (discountEnabled && maximumDiscount === null) {
+      $("maximumDiscountInput")?.focus();
 
-    updatePaymentControls();
-    updateInvoiceQRControls();
-  }
-
-  // ==================================================
-  // 9. DIRTY-CHANGE TRACKING
-  // ==================================================
-
-  function setUnsavedState(formId) {
-    hasUnsavedChanges = true;
-
-    setGlobalStatus(
-      `${SETTINGS_FORM_TITLES[formId] || "Settings"} contains unsaved changes.`
-    );
-
-    setFormStatus(
-      formId,
-      "Unsaved changes — save this section to keep your configuration."
-    );
-  }
-
-  function markAllSettingsSaved() {
-    hasUnsavedChanges = false;
-
-    setGlobalStatus(
-      canUseLocalStorage
-        ? "Settings are saved in this browser's demo storage. Firebase synchronisation is pending."
-        : "Settings are currently available only in this page session."
-    );
-  }
-
-  for (const formId of FORM_IDS) {
-    const form = document.getElementById(formId);
-
-    if (!form) continue;
-
-    form.addEventListener("input", () => {
-      setUnsavedState(formId);
-    });
-
-    form.addEventListener("change", () => {
-      setUnsavedState(formId);
-    });
-
-    form.addEventListener("reset", () => {
-      window.setTimeout(() => {
-        const confirmedState = savedState.forms[formId];
-
-        if (confirmedState) {
-          applyFormValues(form, confirmedState);
-        }
-
-        setFormStatus(
-          formId,
-          "Restored the last saved settings for this section."
-        );
-      }, 0);
-    });
-  }
-
-  // ==================================================
-  // 10. FORM VALIDATION
-  // ==================================================
-
-  function validateForm(form) {
-    if (!form.checkValidity()) {
-      form.reportValidity();
-
-      showToast(
-        "Please review the highlighted fields and correct any invalid values.",
-        "error"
-      );
-
-      return false;
-    }
-
-    return true;
-  }
-
-  function validateBusinessProfile() {
-    const gstin = $("#businessGstin").value.trim();
-
-    if (gstin && gstin.length !== 15) {
-      showToast(
-        "The GSTIN should contain 15 characters. Verify the value before saving.",
-        "error"
-      );
-
-      $("#businessGstin").focus();
-
-      return false;
-    }
-
-    return true;
-  }
-
-  function validateTaxPricing() {
-    const taxEnabled = $("#taxEnabled").checked;
-
-    const taxRate = Number($("#defaultTaxRate").value);
-
-    const discountLimit = Number(
-      $("#defaultDiscountLimit").value
-    );
-
-    if (
-      !Number.isFinite(taxRate) ||
-      taxRate < 0 ||
-      taxRate > 100
-    ) {
-      showToast(
-        "The default tax rate must be between 0 and 100.",
-        "error"
-      );
-
-      $("#defaultTaxRate").focus();
-
-      return false;
-    }
-
-    if (
-      !Number.isFinite(discountLimit) ||
-      discountLimit < 0
-    ) {
-      showToast(
-        "The maximum discount must be a valid non-negative amount.",
-        "error"
-      );
-
-      $("#defaultDiscountLimit").focus();
-
-      return false;
-    }
-
-    if (!taxEnabled && taxRate > 0) {
-      const confirmed = window.confirm(
-        "Tax calculation is disabled, but a default tax rate is configured. " +
-        "Save both settings as they are?"
-      );
-
-      if (!confirmed) {
-        $("#taxEnabled").focus();
-
-        return false;
-      }
-    }
-
-    return true;
-  }
-
-  function validatePaymentSettings() {
-    const upiEnabled = $("#upiPaymentEnabled").checked;
-
-    const upiId = $("#upiVpa").value.trim();
-
-    if (!upiEnabled) {
-      return true;
-    }
-
-    if (upiId && !/^[^@\s]+@[^@\s]+$/.test(upiId)) {
-      showToast(
-        "Enter a UPI ID in the usual name@provider format.",
-        "error"
-      );
-
-      $("#upiVpa").focus();
-
-      return false;
-    }
-
-    return true;
-  }
-
-  function validateProductSettings() {
-    const threshold = Number($("#lowStockThreshold").value);
-
-    if (
-      !Number.isSafeInteger(threshold) ||
-      threshold < 0
-    ) {
-      showToast(
-        "Low-stock threshold must be a valid non-negative whole number.",
-        "error"
-      );
-
-      $("#lowStockThreshold").focus();
-
-      return false;
-    }
-
-    return true;
-  }
-
-  // ==================================================
-  // 11. SAVE A SETTINGS SECTION
-  // ==================================================
-
-  function saveFormSettings(formId, validationCallback = null) {
-    const form = document.getElementById(formId);
-
-    if (!form) return false;
-
-    if (!validateForm(form)) {
-      return false;
-    }
-
-    if (
-      typeof validationCallback === "function" &&
-      !validationCallback()
-    ) {
-      return false;
-    }
-
-    /*
-     * Update only this section's saved configuration.
-     * Other sections with unsaved edits remain unsaved.
-     */
-
-    savedState.forms[formId] = readFormValues(form);
-
-    const persisted = writeStoredState();
-
-    setFormStatus(
-      formId,
-      persisted
-        ? `${SETTINGS_FORM_TITLES[formId]} saved locally in demo mode.`
-        : `${SETTINGS_FORM_TITLES[formId]} saved for this page session only.`
-    );
-
-    /*
-     * Image files are not included in the settings object.
-     * Real asset upload will require backend-managed storage.
-     */
-
-    if (
-      formId === "brandSettingsForm" &&
-      $("#businessLogoFile").files.length > 0
-    ) {
-      setFormStatus(
-        formId,
-        "Text settings saved. Logo preview is temporary; permanent image upload is pending."
+      throw new Error(
+        "Enter the maximum discount when discounts are enabled."
       );
     }
 
-    if (
-      formId === "paymentSettingsForm" &&
-      $("#upiQRImage").files.length > 0
-    ) {
-      setFormStatus(
-        formId,
-        "Payment settings saved. QR preview is temporary; permanent image upload is pending."
+    if (maximumDiscount === null) maximumDiscount = 0;
+
+    if (maximumDiscount < 0 || maximumDiscount > 100) {
+      $("maximumDiscountInput")?.focus();
+
+      throw new Error(
+        "Maximum discount must be between 0 and 100 percent."
       );
     }
-
-    if (formId === "paymentSettingsForm") {
-      updatePaymentControls();
-    }
-
-    if (formId === "invoiceSettingsForm") {
-      updateInvoiceQRControls();
-    }
-
-    if (formId === "businessProfileForm") {
-      updateBrandDisplayName();
-    }
-
-    if (formId === "reportSettingsForm") {
-      updateReportDefaultsStatus();
-    }
-
-    /*
-     * Recalculate whether other forms have unsaved edits by
-     * checking them against their saved snapshots.
-     */
-
-    updateDirtyState();
-
-    showToast(
-      persisted
-        ? `${SETTINGS_FORM_TITLES[formId]} saved in demo storage.`
-        : `${SETTINGS_FORM_TITLES[formId]} saved in memory for this session.`,
-      persisted ? "success" : "info"
-    );
-
-    return true;
-  }
-
-  // ==================================================
-  // 12. ATTACH SAVE HANDLERS
-  // ==================================================
-
-  $("#businessProfileForm").addEventListener("submit", event => {
-    event.preventDefault();
-
-    saveFormSettings(
-      "businessProfileForm",
-      validateBusinessProfile
-    );
-  });
-
-  $("#brandSettingsForm").addEventListener("submit", event => {
-    event.preventDefault();
-
-    saveFormSettings("brandSettingsForm");
-  });
-
-  $("#invoiceSettingsForm").addEventListener("submit", event => {
-    event.preventDefault();
-
-    saveFormSettings("invoiceSettingsForm");
-  });
-
-  $("#taxPricingForm").addEventListener("submit", event => {
-    event.preventDefault();
-
-    saveFormSettings(
-      "taxPricingForm",
-      validateTaxPricing
-    );
-  });
-
-  $("#paymentSettingsForm").addEventListener("submit", event => {
-    event.preventDefault();
-
-    saveFormSettings(
-      "paymentSettingsForm",
-      validatePaymentSettings
-    );
-  });
-
-  $("#billingPreferencesForm").addEventListener("submit", event => {
-    event.preventDefault();
-
-    saveFormSettings("billingPreferencesForm");
-  });
-
-  $("#productSettingsForm").addEventListener("submit", event => {
-    event.preventDefault();
-
-    saveFormSettings(
-      "productSettingsForm",
-      validateProductSettings
-    );
-  });
-
-  $("#reportSettingsForm").addEventListener("submit", event => {
-    event.preventDefault();
-
-    saveFormSettings("reportSettingsForm");
-  });
-
-  // ==================================================
-  // 13. UNSAVED-STATE COMPARISON
-  // ==================================================
-
-  function valuesEqual(a, b) {
-    return JSON.stringify(a) === JSON.stringify(b);
-  }
-
-  function updateDirtyState() {
-    let dirty = false;
-
-    for (const formId of FORM_IDS) {
-      const form = document.getElementById(formId);
-
-      if (!form) continue;
-
-      const current = readFormValues(form);
-
-      const saved = savedState.forms[formId] || {};
-
-      if (!valuesEqual(current, saved)) {
-        dirty = true;
-
-        setFormStatus(
-          formId,
-          "Unsaved changes — save this section to keep your configuration."
-        );
-      }
-    }
-
-    const timeoutValue = $("#sessionTimeout").value;
-
-    const savedTimeout = savedState.misc?.sessionTimeout || "10";
-
-    if (timeoutValue !== savedTimeout) {
-      dirty = true;
-    }
-
-    if (
-      $("#businessLogoFile").files.length > 0 ||
-      $("#upiQRImage").files.length > 0
-    ) {
-      dirty = true;
-    }
-
-    hasUnsavedChanges = dirty;
-
-    if (dirty) {
-      setGlobalStatus(
-        "Some configuration sections contain unsaved changes."
-      );
-    } else {
-      markAllSettingsSaved();
-    }
-  }
-
-  // ==================================================
-  // 14. IMAGE PREVIEW HELPERS
-  // ==================================================
-
-  function releaseImageURL(type) {
-    const oldURL = imageObjectURLs[type];
-
-    if (oldURL) {
-      URL.revokeObjectURL(oldURL);
-      imageObjectURLs[type] = null;
-    }
-  }
-
-  function previewImageFile(
-    input,
-    imageElement,
-    placeholderElement,
-    type,
-    maxSize
-  ) {
-    const file = input.files?.[0];
-
-    if (!file) {
-      return;
-    }
-
-    if (!file.type.startsWith("image/")) {
-      showToast(
-        "Please select a valid image file.",
-        "error"
-      );
-
-      input.value = "";
-
-      return;
-    }
-
-    if (file.size > maxSize) {
-      showToast(
-        `The selected image exceeds the allowed ${Math.round(maxSize / 1024)} KB size.`,
-        "error"
-      );
-
-      input.value = "";
-
-      return;
-    }
-
-    const allowedTypes = type === "logo"
-      ? [
-          "image/png",
-          "image/jpeg",
-          "image/webp",
-          "image/svg+xml"
-        ]
-      : [
-          "image/png",
-          "image/jpeg",
-          "image/webp"
-        ];
-
-    if (!allowedTypes.includes(file.type)) {
-      showToast(
-        "This image format is not supported for the selected upload.",
-        "error"
-      );
-
-      input.value = "";
-
-      return;
-    }
-
-    releaseImageURL(type);
-
-    const objectURL = URL.createObjectURL(file);
-
-    imageObjectURLs[type] = objectURL;
-
-    imageElement.onload = () => {
-      imageElement.style.display = "block";
-      placeholderElement.style.display = "none";
-    };
-
-    imageElement.onerror = () => {
-      releaseImageURL(type);
-
-      imageElement.removeAttribute("src");
-      imageElement.style.display = "none";
-
-      placeholderElement.style.display = "block";
-
-      input.value = "";
-
-      showToast(
-        "The selected image could not be displayed.",
-        "error"
-      );
-    };
-
-    imageElement.src = objectURL;
-
-    removedImages[type] = false;
-  }
-
-  // ==================================================
-  // 15. LOGO PREVIEW
-  // ==================================================
-
-  const logoInput = $("#businessLogoFile");
-
-  const logoPreview = $("#businessLogoPreview");
-
-  const logoPlaceholder = $("#businessLogoPlaceholder");
-
-  $("#businessLogoFile").addEventListener("change", () => {
-    const file = logoInput.files?.[0];
-
-    if (!file) return;
-
-    previewImageFile(
-      logoInput,
-      logoPreview,
-      logoPlaceholder,
-      "logo",
-      MAX_LOGO_SIZE
-    );
-
-    setUnsavedState("brandSettingsForm");
-  });
-
-  $("#removeBusinessLogoBtn").addEventListener("click", () => {
-    releaseImageURL("logo");
-
-    logoInput.value = "";
-
-    logoPreview.removeAttribute("src");
-    logoPreview.style.display = "none";
-
-    logoPlaceholder.style.display = "block";
-
-    removedImages.logo = true;
-
-    setUnsavedState("brandSettingsForm");
-
-    showToast(
-      "Logo selection cleared from the preview. Save the branding configuration to confirm your changes.",
-      "info"
-    );
-  });
-
-  // ==================================================
-  // 16. UPI QR PREVIEW
-  // ==================================================
-
-  const qrInput = $("#upiQRImage");
-
-  const qrPreview = $("#upiQRPreview");
-
-  const qrPlaceholder = $("#upiQRPlaceholder");
-
-  qrInput.addEventListener("change", () => {
-    const file = qrInput.files?.[0];
-
-    if (!file) return;
-
-    previewImageFile(
-      qrInput,
-      qrPreview,
-      qrPlaceholder,
-      "qr",
-      MAX_QR_SIZE
-    );
-
-    setUnsavedState("paymentSettingsForm");
-  });
-
-  $("#removeUPIQRBtn").addEventListener("click", () => {
-    releaseImageURL("qr");
-
-    qrInput.value = "";
-
-    qrPreview.removeAttribute("src");
-    qrPreview.style.display = "none";
-
-    qrPlaceholder.style.display = "block";
-
-    removedImages.qr = true;
-
-    setUnsavedState("paymentSettingsForm");
-
-    showToast(
-      "UPI QR selection cleared from the preview. Save the payment configuration to confirm the change.",
-      "info"
-    );
-  });
-
-  // ==================================================
-  // 17. INVOICE QR DISPLAY CONTROLS
-  // ==================================================
-
-  function updateInvoiceQRControls() {
-    const invoiceQR = $("#invoiceShowUPIQR");
-
-    const paymentQR = $("#upiQRDisplayEnabled");
-
-    if (!invoiceQR || !paymentQR) return;
-
-    /*
-     * Both controls affect whether a UPI QR should eventually
-     * appear in the invoice.
-     *
-     * The actual invoice page must read these settings from
-     * the shared configuration source after integration.
-     */
-
-    if (!$("#upiPaymentEnabled").checked) {
-      paymentQR.checked = false;
-      paymentQR.disabled = true;
-    } else {
-      paymentQR.disabled = false;
-    }
-
-    const upiEnabled = $("#upiPaymentEnabled").checked;
-
-    if (!upiEnabled) {
-      invoiceQR.checked = false;
-    }
-  }
-
-  function updatePaymentControls() {
-    const upiEnabled = $("#upiPaymentEnabled").checked;
-
-    const upiId = $("#upiVpa");
-
-    const payee = $("#upiPayeeName");
-
-    const qrUpload = $("#upiQRImage");
-
-    const qrDisplay = $("#upiQRDisplayEnabled");
-
-    /*
-     * Preserve entered settings while disabling the relevant
-     * controls. Disabling is an interface rule, not security.
-     */
-
-    upiId.disabled = !upiEnabled;
-
-    payee.disabled = !upiEnabled;
-
-    qrUpload.disabled = !upiEnabled;
-
-    qrDisplay.disabled = !upiEnabled;
-
-    updateInvoiceQRControls();
-  }
-
-  $("#upiPaymentEnabled").addEventListener("change", () => {
-    updatePaymentControls();
-
-    setUnsavedState("paymentSettingsForm");
-  });
-
-  // ==================================================
-  // 18. BRAND NAME PREVIEW
-  // ==================================================
-
-  function updateBrandDisplayName() {
-    const businessName = $("#businessName").value.trim();
-
-    const displayName = $("#brandDisplayName").value.trim();
-
-    const effectiveName = displayName || businessName;
-
-    /*
-     * Current pages still contain placeholder business names.
-     * A shared branding update will be implemented when pages
-     * are connected to the common settings source.
-     */
-
-    if (effectiveName) {
-      document.title = `${effectiveName} | Settings`;
-    } else {
-      document.title = "Settings | Restaurant Billing";
-    }
-  }
-
-  $("#businessName").addEventListener(
-    "input",
-    updateBrandDisplayName
-  );
-
-  $("#brandDisplayName").addEventListener(
-    "input",
-    updateBrandDisplayName
-  );
-
-  // ==================================================
-  // 19. REPORT DEFAULTS STATUS
-  // ==================================================
-
-  function updateReportDefaultsStatus() {
-    const period = $("#defaultReportPeriod").value;
-
-    const interval = $("#defaultChartInterval").value;
-
-    const message =
-      `Default report view: ${period}; chart interval: ${interval}. ` +
-      "The reports page must read these values after shared settings integration.";
-
-    setFormStatus("reportSettingsForm", message);
-  }
-
-  // ==================================================
-  // 20. EXPORT SETTINGS AS JSON
-  // ==================================================
-
-  function createExportPayload() {
-    const current = readAllCurrentSettings();
-
-    /*
-     * Only configuration fields are exported.
-     *
-     * Excluded:
-     * - Uploaded files and image contents
-     * - Authentication tokens
-     * - Passwords
-     * - Private API keys
-     * - Service-account credentials
-     */
 
     return {
-      application: APPLICATION_ID,
-      schemaVersion: SCHEMA_VERSION,
-      exportedAt: new Date().toISOString(),
-      note:
-        "Frontend demo settings only. This file is not a complete database backup.",
-      settings: {
-        forms: current.forms,
-        misc: current.misc
-      }
+      ...makeMetadata(),
+      taxEnabled: taxEnabled,
+      taxRate: taxRate,
+      discountEnabled: discountEnabled,
+      maximumDiscount: maximumDiscount
     };
   }
 
-  function downloadJSON(payload, filename) {
-    const json = JSON.stringify(payload, null, 2);
+  /* ---------------------------------------------------------
+     6. Payment and QR settings form
+     --------------------------------------------------------- */
 
-    const blob = new Blob(
-      [json],
-      { type: "application/json;charset=utf-8" }
-    );
+  function populatePaymentSettings() {
+    if (state.dirty.has("paymentSettingsForm")) return;
 
-    const url = URL.createObjectURL(blob);
+    const settings = readSections().paymentSettings;
 
-    const link = document.createElement("a");
+    assignInput("upiIdInput", getFieldValue(settings, [
+      "upiId",
+      "upiID",
+      "vpa"
+    ]));
 
-    link.href = url;
-    link.download = filename;
-
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-
-    window.setTimeout(() => {
-      URL.revokeObjectURL(url);
-    }, 1000);
+    assignInput("paymentAccountNameInput", getFieldValue(settings, [
+      "paymentAccountName",
+      "accountName",
+      "payeeName"
+    ]));
   }
 
-  function exportSettings() {
-    const payload = createExportPayload();
-
-    const date = new Date().toISOString().slice(0, 10);
-
-    downloadJSON(
-      payload,
-      `restaurant-settings-${date}.json`
+  function buildPaymentSettings() {
+    const upiId = textValue($("upiIdInput")?.value);
+    const accountName = textValue(
+      $("paymentAccountNameInput")?.value
     );
-
-    showToast(
-      "Settings configuration exported. Uploaded images and database records are not included.",
-      "success"
-    );
-
-    setDataManagementStatus(
-      `Settings export created on ${new Date().toLocaleString()}.`
-    );
-  }
-
-  exportSettingsButton.addEventListener(
-    "click",
-    exportSettings
-  );
-
-  exportBackupButton.addEventListener(
-    "click",
-    exportSettings
-  );
-
-  // ==================================================
-  // 21. VALIDATE IMPORTED SETTINGS
-  // ==================================================
-
-  function validateImportedPayload(payload) {
-    if (
-      !payload ||
-      typeof payload !== "object" ||
-      payload.application !== APPLICATION_ID ||
-      !Number.isInteger(payload.schemaVersion) ||
-      payload.schemaVersion !== SCHEMA_VERSION ||
-      !payload.settings ||
-      typeof payload.settings !== "object"
-    ) {
-      throw new Error(
-        "This file is not a supported Restaurant Billing settings export."
-      );
-    }
 
     if (
-      !payload.settings.forms ||
-      typeof payload.settings.forms !== "object" ||
-      Array.isArray(payload.settings.forms)
+      upiId &&
+      (
+        upiId.length > 100 ||
+        !/^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+$/.test(upiId)
+      )
     ) {
-      throw new Error("The settings file has an invalid forms section.");
+      $("upiIdInput")?.focus();
+      throw new Error("Enter a valid UPI ID, or leave it blank.");
     }
 
-    return true;
+    return {
+      ...makeMetadata(),
+      upiId: upiId,
+      paymentAccountName: accountName
+    };
   }
 
-  function applyImportedPayload(payload) {
-    const imported = payload.settings;
+  /* ---------------------------------------------------------
+     7. Dynamic branding
+     --------------------------------------------------------- */
 
-    for (const formId of FORM_IDS) {
-      const form = document.getElementById(formId);
+  function renderBranding() {
+    const profile = readSections().businessProfile;
 
-      const values = imported.forms?.[formId];
+    const name = textValue(getFieldValue(profile, [
+      "businessName",
+      "name"
+    ]));
 
-      if (
-        !form ||
-        !values ||
-        typeof values !== "object" ||
-        Array.isArray(values)
-      ) {
-        continue;
+    const tagline = textValue(getFieldValue(profile, [
+      "businessTagline",
+      "tagline",
+      "description"
+    ]));
+
+    document.querySelectorAll("[data-business-name]").forEach(
+      function (node) {
+        node.textContent = name;
       }
-
-      applyFormValues(form, values);
-    }
-
-    if (
-      imported.misc &&
-      typeof imported.misc.sessionTimeout === "string"
-    ) {
-      const timeout = $("#sessionTimeout");
-
-      const validOption = Array.from(timeout.options).some(
-        option => option.value === imported.misc.sessionTimeout
-      );
-
-      if (validOption) {
-        timeout.value = imported.misc.sessionTimeout;
-      }
-    }
-
-    // Uploaded image files are never imported from JSON.
-    logoInput.value = "";
-
-    logoPreview.removeAttribute("src");
-    logoPreview.style.display = "none";
-    logoPlaceholder.style.display = "block";
-
-    qrInput.value = "";
-
-    qrPreview.removeAttribute("src");
-    qrPreview.style.display = "none";
-    qrPlaceholder.style.display = "block";
-
-    const newState = createDefaultState();
-
-    newState.forms = {};
-
-    for (const formId of FORM_IDS) {
-      const form = document.getElementById(formId);
-
-      if (!form) continue;
-
-      newState.forms[formId] = readFormValues(form);
-    }
-
-    newState.misc.sessionTimeout =
-      $("#sessionTimeout").value || "10";
-
-    savedState = newState;
-
-    const persisted = writeStoredState();
-
-    for (const formId of FORM_IDS) {
-      setFormStatus(
-        formId,
-        persisted
-          ? "Imported configuration saved locally in demo mode."
-          : "Imported configuration applied for this page session only."
-      );
-    }
-
-    updatePaymentControls();
-    updateInvoiceQRControls();
-    updateBrandDisplayName();
-    updateDirtyState();
-
-    showToast(
-      persisted
-        ? "Settings imported and saved in browser-local demo storage."
-        : "Settings imported for this page session, but local persistence is unavailable.",
-      persisted ? "success" : "info"
     );
 
-    setDataManagementStatus(
-      "Settings imported. Uploaded assets were not imported."
+    document.querySelectorAll("[data-business-tagline]").forEach(
+      function (node) {
+        node.textContent = tagline;
+      }
     );
+
+    setText("sidebarBusinessName", name);
+    setText("sidebarBusinessTagline", tagline);
+    setText("businessFooterName", name);
+
+    const mark = $("brandMark");
+
+    if (mark) {
+      mark.textContent = name
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map(function (word) {
+          return word.charAt(0).toUpperCase();
+        })
+        .join("");
+    }
+
+    const access = window.restaurantAccess;
+    const displayName = textValue(
+      access?.user?.displayName ||
+      access?.user?.email ||
+      ""
+    );
+
+    setText("ownerDisplayName", displayName);
+    setText(
+      "ownerAvatar",
+      displayName ? displayName.charAt(0).toUpperCase() : ""
+    );
+    setText("ownerDisplayRole", "Owner");
   }
 
-  // ==================================================
-  // 22. IMPORT SETTINGS FILE
-  // ==================================================
+  /* ---------------------------------------------------------
+     8. Populate forms without overwriting unsaved edits
+     --------------------------------------------------------- */
 
-  importFileInput.addEventListener("change", async () => {
-    const file = importFileInput.files?.[0];
-
-    if (!file) return;
-
-    if (file.size > MAX_IMPORT_SIZE) {
-      showToast(
-        "The settings file is too large. The maximum permitted size is 2 MB.",
-        "error"
-      );
-
-      importFileInput.value = "";
-
-      return;
-    }
-
-    if (hasUnsavedChanges) {
-      const proceed = window.confirm(
-        "You have unsaved changes. Importing settings will replace the current form values. Continue?"
-      );
-
-      if (!proceed) {
-        importFileInput.value = "";
-        return;
-      }
-    }
-
-    try {
-      const text = await file.text();
-
-      const payload = JSON.parse(text);
-
-      validateImportedPayload(payload);
-
-      /*
-       * Save a snapshot so validation failures can restore
-       * the last saved configuration.
-       */
-
-      const previousState = JSON.parse(
-        JSON.stringify(savedState)
-      );
-
-      try {
-        applyImportedPayload(payload);
-
-        const invalidForm = FORM_IDS.find(formId => {
-          const form = document.getElementById(formId);
-
-          return form && !form.checkValidity();
-        });
-
-        if (invalidForm) {
-          throw new Error(
-            `Imported settings contain invalid values in ${SETTINGS_FORM_TITLES[invalidForm]}.`
-          );
-        }
-      } catch (error) {
-        savedState = previousState;
-
-        applySavedState(savedState);
-
-        throw error;
-      }
-    } catch (error) {
-      console.error("Settings import failed:", error);
-
-      showToast(
-        error instanceof Error
-          ? error.message
-          : "Unable to import settings.",
-        "error"
-      );
-    } finally {
-      importFileInput.value = "";
-    }
-  });
-
-  // ==================================================
-  // 23. SESSION PREFERENCE
-  // ==================================================
-
-  saveAccountButton.addEventListener("click", () => {
-    const timeout = $("#sessionTimeout").value;
-
-    const validTimeouts = [
-      "5",
-      "10",
-      "15",
-      "30"
-    ];
-
-    if (!validTimeouts.includes(timeout)) {
-      showToast("Select a supported session timeout.", "error");
-      return;
-    }
-
-    savedState.misc.sessionTimeout = timeout;
-
-    const persisted = writeStoredState();
-
-    $("#accountSettingsStatus").textContent = persisted
-      ? "Session timeout preference saved locally. Authentication integration is still pending."
-      : "Session timeout preference applied for this session only.";
-
-    updateDirtyState();
-
-    showToast(
-      persisted
-        ? "Session preference saved in demo mode."
-        : "Session preference applied for the current session.",
-      persisted ? "success" : "info"
-    );
-  });
-
-  $("#sessionTimeout").addEventListener("change", () => {
-    setGlobalStatus("Session timeout preference has unsaved changes.");
-  });
-
-  // ==================================================
-  // 24. RESET / REFRESH SETTINGS
-  // ==================================================
-
-  function reloadSavedSettings() {
-    const stored = readStoredState();
-
-    if (stored) {
-      savedState = stored;
-    } else {
-      /*
-       * With no saved configuration, retain the current default
-       * form values as the starting demo state.
-       */
-
-      savedState = createDefaultState();
-
-      for (const formId of FORM_IDS) {
-        const form = document.getElementById(formId);
-
-        if (form) {
-          savedState.forms[formId] = readFormValues(form);
-        }
-      }
-
-      savedState.misc.sessionTimeout =
-        $("#sessionTimeout").value || "10";
-    }
-
-    applySavedState(savedState);
-
-    releaseImageURL("logo");
-    releaseImageURL("qr");
-
-    logoInput.value = "";
-    qrInput.value = "";
-
-    removedImages.logo = false;
-    removedImages.qr = false;
-
-    logoPreview.removeAttribute("src");
-    logoPreview.style.display = "none";
-    logoPlaceholder.style.display = "block";
-
-    qrPreview.removeAttribute("src");
-    qrPreview.style.display = "none";
-    qrPlaceholder.style.display = "block";
-
-    hasUnsavedChanges = false;
-
-    for (const formId of FORM_IDS) {
-      setFormStatus(
-        formId,
-        "Current form values restored from the saved demo configuration."
-      );
-    }
-
-    updateBrandDisplayName();
-    updatePaymentControls();
-    updateInvoiceQRControls();
-
-    markAllSettingsSaved();
+  function populateCleanForms() {
+    populateBusinessProfile();
+    populateInvoiceSettings();
+    populateTaxSettings();
+    populatePaymentSettings();
+    renderBranding();
   }
 
-  refreshButton.addEventListener("click", () => {
-    if (hasUnsavedChanges) {
-      const proceed = window.confirm(
-        "Discard your unsaved changes and reload the last saved settings?"
-      );
-
-      if (!proceed) return;
+  function markFormDirty(form) {
+    if (form && form.id) {
+      state.dirty.add(form.id);
     }
+  }
 
-    reloadSavedSettings();
+  function bindDirtyTracking() {
+    [
+      "businessProfileForm",
+      "invoiceSettingsForm",
+      "taxSettingsForm",
+      "paymentSettingsForm"
+    ].forEach(function (id) {
+      const form = $(id);
 
-    showToast(
-      "Saved configuration reloaded.",
-      "success"
-    );
-  });
+      if (!form) return;
 
-  // ==================================================
-  // 25. UNSAVED-CHANGE BROWSER WARNING
-  // ==================================================
+      form.addEventListener("input", function () {
+        markFormDirty(form);
+      });
 
-  window.addEventListener("beforeunload", event => {
-    if (!hasUnsavedChanges) return;
-
-    event.preventDefault();
-
-    event.returnValue = "";
-  });
-
-  // ==================================================
-  // 26. SETTINGS NAVIGATION
-  // ==================================================
-
-  const navLinks = $$(".settings-nav a[href^='#']");
-
-  for (const link of navLinks) {
-    link.addEventListener("click", () => {
-      for (const candidate of navLinks) {
-        candidate.classList.remove("active");
-      }
-
-      link.classList.add("active");
+      form.addEventListener("change", function () {
+        markFormDirty(form);
+      });
     });
   }
 
-  if ("IntersectionObserver" in window) {
-    const sectionObserver = new IntersectionObserver(
-      entries => {
-        const visible = entries
-          .filter(entry => entry.isIntersecting)
-          .sort(
-            (a, b) =>
-              b.intersectionRatio - a.intersectionRatio
-          );
+  /* ---------------------------------------------------------
+     9. Save one settings section only
+     --------------------------------------------------------- */
 
-        if (!visible.length) return;
+  async function saveSection(formId, sectionKey, builder, messageId, buttonId) {
+    if (state.busy.has(formId)) return;
 
-        const activeSectionId = visible[0].target.id;
+    showMessage(messageId, "");
 
-        for (const link of navLinks) {
-          const isActive =
-            link.getAttribute("href") === `#${activeSectionId}`;
+    let record;
 
-          link.classList.toggle("active", isActive);
+    try {
+      requireOwner();
+
+      if (!state.ready || !state.loaded) {
+        throw new Error("Settings are still loading. Please try again.");
+      }
+
+      record = builder();
+
+    } catch (error) {
+      showMessage(
+        messageId,
+        error instanceof Error ? error.message : "Invalid settings.",
+        "error"
+      );
+
+      return;
+    }
+
+    state.busy.add(formId);
+
+    const form = $(formId);
+    const button = $(buttonId);
+
+    const originalLabel = button
+      ? button.textContent
+      : "";
+
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Saving...";
+    }
+
+    if (form) {
+      form.setAttribute("aria-busy", "true");
+    }
+
+    setStatus("Saving " + sectionKey + "...", "warning");
+
+    try {
+      requireOwner();
+
+      const targetRef = state.api.ref(
+        state.db,
+        SETTINGS_PATH + "/" + sectionKey
+      );
+
+      /*
+       * Write only to this settings section. Other sections
+       * under restaurantBilling/settings are left untouched.
+       */
+      await state.api.set(targetRef, record);
+
+      state.settings[sectionKey] = record;
+      state.dirty.delete(formId);
+
+      populateCleanForms();
+      showMessage(messageId, "Settings saved successfully.", "success");
+
+      setStatus("Settings saved and synchronized.", "connected");
+      setText("sidebarConnectionStatus", "Database connected");
+      setText("settingsFooterStatus", "Settings saved");
+
+      setText(
+        "settingsSaveStatus",
+        "Saved successfully at " +
+        new Intl.DateTimeFormat("en-IN", {
+          dateStyle: "medium",
+          timeStyle: "short"
+        }).format(new Date())
+      );
+
+      document.dispatchEvent(
+        new CustomEvent("restaurant-settings-updated", {
+          detail: {
+            section: sectionKey,
+            settings: state.settings
+          }
+        })
+      );
+
+    } catch (error) {
+      console.error("Settings save failed:", {
+        section: sectionKey,
+        code: error && error.code ? error.code : "settings-save-error"
+      });
+
+      const message =
+        error && error.code === "PERMISSION_DENIED"
+          ? "Database permission denied. Check Firebase Security Rules."
+          : error instanceof Error
+            ? error.message
+            : "Unable to save settings.";
+
+      showMessage(messageId, message, "error");
+      setStatus("Settings could not be saved.", "error");
+
+    } finally {
+      state.busy.delete(formId);
+
+      if (button) {
+        button.disabled = false;
+        button.textContent = originalLabel;
+      }
+
+      if (form) {
+        form.removeAttribute("aria-busy");
+      }
+    }
+  }
+
+  /* ---------------------------------------------------------
+     10. Live database subscription
+     --------------------------------------------------------- */
+
+  function subscribeSettings() {
+    const reference = state.api.ref(
+      state.db,
+      SETTINGS_PATH
+    );
+
+    const unsubscribe = state.api.onValue(
+      reference,
+
+      function (snapshot) {
+        if (state.disposed) return;
+
+        const data = snapshot.exists()
+          ? snapshot.val()
+          : {};
+
+        state.settings =
+          data && typeof data === "object" ? data : {};
+
+        state.loaded = true;
+        state.ready = true;
+
+        populateCleanForms();
+
+        setStatus(
+          "Settings connected. Live database updates are enabled.",
+          "connected"
+        );
+
+        setText("sidebarConnectionStatus", "Database connected");
+        setText("settingsFooterStatus", "Live settings connected");
+
+        if (!state.dirty.size) {
+          setText("settingsSaveStatus", "Settings are synchronized.");
         }
       },
-      {
-        rootMargin: "-90px 0px -60% 0px",
-        threshold: [0.05, 0.2, 0.4, 0.6]
+
+      function (error) {
+        console.error("Settings database read failed:", {
+          code: error && error.code ? error.code : "unknown"
+        });
+
+        state.loaded = false;
+        state.ready = false;
+
+        setStatus(
+          "Unable to load settings. Check connection and database permissions.",
+          "error"
+        );
+
+        setText(
+          "settingsSaveStatus",
+          "Saved settings could not be loaded."
+        );
       }
     );
 
-    for (const link of navLinks) {
-      const id = link.getAttribute("href").slice(1);
-
-      const section = document.getElementById(id);
-
-      if (section) {
-        sectionObserver.observe(section);
-      }
-    }
+    state.subscriptions.push(unsubscribe);
   }
 
-  // ==================================================
-  // 27. INITIALISE SETTINGS
-  // ==================================================
+  /* ---------------------------------------------------------
+     11. Initialize protected settings page
+     --------------------------------------------------------- */
 
-  const existingState = readStoredState();
+  async function initialize() {
+    try {
+      setStatus("Verifying owner session...", "warning");
 
-  if (existingState) {
-    savedState = existingState;
+      const access = window.restaurantAccess;
 
-    applySavedState(savedState);
+      if (!access || !access.readyPromise) {
+        throw new Error("Owner authorization is unavailable.");
+      }
 
-    for (const formId of FORM_IDS) {
-      setFormStatus(
-        formId,
-        "Saved demo configuration loaded."
+      const authorized = await access.readyPromise;
+
+      if (
+        !authorized ||
+        !access.authorized ||
+        !access.user ||
+        access.user.uid !== OWNER_UID
+      ) {
+        throw new Error("Only the authorized owner can access settings.");
+      }
+
+      const firebase = window.restaurantFirebase;
+
+      if (!firebase || !firebase.readyPromise) {
+        throw new Error("Firebase configuration loader is unavailable.");
+      }
+
+      const ready = await firebase.readyPromise;
+
+      if (!ready || !firebase.ready) {
+        throw new Error(
+          firebase.error?.message || "Firebase initialization failed."
+        );
+      }
+
+      const connected = getFirebase();
+
+      state.db = connected.db;
+      state.api = connected.api;
+
+      bindDirtyTracking();
+      subscribeSettings();
+
+    } catch (error) {
+      console.error("Settings initialization failed:", {
+        message: error instanceof Error
+          ? error.message
+          : "Unknown initialization error"
+      });
+
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : "Settings could not be initialized.",
+        "error"
       );
     }
-  } else {
-    /*
-     * Use current HTML defaults as the first configuration.
-     * Nothing is written to storage until the owner saves.
-     */
-
-    savedState = createDefaultState();
-
-    for (const formId of FORM_IDS) {
-      const form = document.getElementById(formId);
-
-      if (form) {
-        savedState.forms[formId] = readFormValues(form);
-      }
-    }
-
-    savedState.misc.sessionTimeout =
-      $("#sessionTimeout").value || "10";
   }
 
-  updatePaymentControls();
-  updateInvoiceQRControls();
-  updateBrandDisplayName();
-  updateReportDefaultsStatus();
+  /* ---------------------------------------------------------
+     12. Bind save forms
+     --------------------------------------------------------- */
 
-  markAllSettingsSaved();
+  $("businessProfileForm")?.addEventListener("submit", function (event) {
+    event.preventDefault();
 
-  console.info("Settings Control Room initialised.", {
-    demoMode: true,
-    localStorageAvailable: canUseLocalStorage,
-    configuredSections: FORM_IDS.length
+    saveSection(
+      "businessProfileForm",
+      "businessProfile",
+      buildBusinessProfile,
+      "businessProfileMessage",
+      "saveBusinessProfileBtn"
+    );
   });
+
+  $("invoiceSettingsForm")?.addEventListener("submit", function (event) {
+    event.preventDefault();
+
+    saveSection(
+      "invoiceSettingsForm",
+      "invoiceSettings",
+      buildInvoiceSettings,
+      "invoiceSettingsMessage",
+      "saveInvoiceSettingsBtn"
+    );
+  });
+
+  $("taxSettingsForm")?.addEventListener("submit", function (event) {
+    event.preventDefault();
+
+    saveSection(
+      "taxSettingsForm",
+      "taxSettings",
+      buildTaxSettings,
+      "taxSettingsMessage",
+      "saveTaxSettingsBtn"
+    );
+  });
+
+  $("paymentSettingsForm")?.addEventListener("submit", function (event) {
+    event.preventDefault();
+
+    saveSection(
+      "paymentSettingsForm",
+      "paymentSettings",
+      buildPaymentSettings,
+      "paymentSettingsMessage",
+      "savePaymentSettingsBtn"
+    );
+  });
+
+  /* ---------------------------------------------------------
+     13. Clean up live listeners
+     --------------------------------------------------------- */
+
+  window.addEventListener("pagehide", function () {
+    state.disposed = true;
+
+    state.subscriptions.forEach(function (unsubscribe) {
+      try {
+        if (typeof unsubscribe === "function") {
+          unsubscribe();
+        }
+      } catch (_) {
+        /* Listener cleanup */
+      }
+    });
+
+    state.subscriptions = [];
+  });
+
+  initialize();
+
 })();
