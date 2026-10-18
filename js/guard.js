@@ -1,6 +1,7 @@
 /* =========================================================
    RESTAURANT BILLING SOFTWARE
    Protected Page Authentication Guard
+   Owner profile display and authorization
    No secrets, demo users or database writes
    ========================================================= */
 
@@ -21,6 +22,47 @@
   window.restaurantAccess = access;
 
   let redirecting = false;
+
+  function updateOwnerProfile(user) {
+    if (!user || user.uid !== OWNER_UID) return;
+
+    const displayName =
+      typeof user.displayName === "string"
+        ? user.displayName.trim()
+        : "";
+
+    const email =
+      typeof user.email === "string"
+        ? user.email.trim()
+        : "";
+
+    const accountLabel = displayName || email || "Owner";
+
+    const nameElement = document.getElementById("ownerDisplayName");
+
+    if (nameElement) {
+      nameElement.textContent = accountLabel;
+    }
+
+    const avatarElement = document.getElementById("ownerAvatar");
+
+    if (avatarElement) {
+      const source = displayName || email || "Owner";
+      const initials = source.includes("@")
+        ? source.split("@")[0].split(/[._\-\s]+/).filter(Boolean)
+        : source.split(/\s+/).filter(Boolean);
+
+      avatarElement.textContent = initials
+        .slice(0, 2)
+        .map(function (part) {
+          return part.charAt(0).toUpperCase();
+        })
+        .join("") || "O";
+
+      avatarElement.setAttribute("aria-label", accountLabel);
+      avatarElement.setAttribute("title", accountLabel);
+    }
+  }
 
   function updatePageStatus(message, isError) {
     const statusIds = [
@@ -57,6 +99,10 @@
     access.authorized = Boolean(authorized);
     access.user = authorized ? user : null;
     access.error = error || null;
+
+    if (access.authorized) {
+      updateOwnerProfile(user);
+    }
 
     document.dispatchEvent(
       new CustomEvent("restaurant-access-ready", {
