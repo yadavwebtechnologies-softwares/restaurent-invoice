@@ -1,11 +1,13 @@
 /* =========================================================
    RESTAURANT BILLING SOFTWARE
-   Google Maps Location Redirect
+   Restaurant Location Redirect
    Firebase path:
    publicInvoiceVerification/businessLocation
 
-   No Cloudflare Worker changes.
-   No API keys or secrets in this file.
+   Priority:
+   1. Saved Google Maps URL
+   2. Saved business address
+   3. Show a safe error
    ========================================================= */
 
 (function () {
@@ -18,6 +20,7 @@
 
   function setText(id, value) {
     const element = $(id);
+
     if (element) {
       element.textContent = String(value ?? "");
     }
@@ -27,7 +30,7 @@
     setText("locationStatus", message);
   }
 
-  function showMapsLink(url) {
+  function setMapsLink(url) {
     const link = $("openGoogleMaps");
     if (!link) return;
 
@@ -35,11 +38,58 @@
     link.hidden = false;
   }
 
-  function buildMapsURL(address) {
-    const url = new URL("https://www.google.com/maps/search/");
+  function validateGoogleMapsURL(value) {
+    if (typeof value !== "string" || !value.trim()) {
+      return null;
+    }
 
+    let url;
+
+    try {
+      url = new URL(value.trim());
+    } catch (_) {
+      return null;
+    }
+
+    if (url.protocol !== "https:") {
+      return null;
+    }
+
+    const host = url.hostname.toLowerCase();
+
+    const isGoogleMapsDomain =
+      host === "google.com" ||
+      host.endsWith(".google.com");
+
+    const isMapsShortLink =
+      host === "maps.app.goo.gl" ||
+      (host === "goo.gl" && url.pathname.startsWith("/maps/"));
+
+    if (isGoogleMapsDomain) {
+      if (!url.pathname.toLowerCase().startsWith("/maps")) {
+        return null;
+      }
+
+      return url.href;
+    }
+
+    if (isMapsShortLink) {
+      return url.href;
+    }
+
+    return null;
+  }
+
+  function createMapsSearchURL(address) {
+    const value = String(address ?? "").trim();
+
+    if (!value || value.length > 500) {
+      return null;
+    }
+
+    const url = new URL("https://www.google.com/maps/search/");
     url.searchParams.set("api", "1");
-    url.searchParams.set("query", address);
+    url.searchParams.set("query", value);
 
     return url.href;
   }
@@ -90,16 +140,9 @@
         Array.isArray(record) ||
         record.recordType !== "business-location" ||
         record.verificationId !== "businessLocation" ||
-        record.recordStatus !== "configured" ||
-        typeof record.businessAddress !== "string"
+        record.recordStatus !== "configured"
       ) {
         throw new Error("Saved restaurant location is invalid.");
-      }
-
-      const address = record.businessAddress.trim();
-
-      if (!address || address.length > 500) {
-        throw new Error("A valid restaurant address was not found.");
       }
 
       const businessName =
@@ -107,35 +150,45 @@
           ? record.businessName.trim().slice(0, 150)
           : "";
 
-      const mapsURL = buildMapsURL(address);
+      const address =
+        typeof record.businessAddress === "string"
+          ? record.businessAddress.trim()
+          : "";
+
+      const savedMapsURL = validateGoogleMapsURL(
+        record.businessMapsUrl
+      );
+
+      const mapsURL =
+        savedMapsURL ||
+        createMapsSearchURL(address);
+
+      if (!mapsURL) {
+        throw new Error(
+          "No valid Google Maps URL or business address is saved."
+        );
+      }
 
       setText(
         "locationBusinessName",
         businessName || "Find Our Restaurant"
       );
 
-      setText("locationAddress", address);
-      showMapsLink(mapsURL);
+      setText("locationAddress", address || "Restaurant location selected on map.");
+
+      setMapsLink(mapsURL);
       setStatus("Opening restaurant location in Google Maps...");
 
-      /*
-       * Navigate to the Maps URL constructed from the saved address.
-       * The database value is treated as address text, not as a URL.
-       */
-      window.setTimeout(function () {
-        window.location.assign(mapsURL);
-      }, 800);
+      window.location.assign(mapsURL);
 
     } catch (error) {
       console.error(
         "Business location loading failed:",
-        error && error.message
-          ? error.message
-          : "Unknown error"
+        error instanceof Error ? error.message : "Unknown error"
       );
 
       setStatus(
-        "Unable to load the restaurant location. Please contact the business."
+        "Unable to open the restaurant location. Please contact the business."
       );
     }
   }
