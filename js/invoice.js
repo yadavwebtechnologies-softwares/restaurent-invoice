@@ -2,7 +2,8 @@
    RESTAURANT BILLING SOFTWARE
    Invoice Creation, Calculation, Saving and Preview
    Database root: restaurantBilling/
-   Verification: publicInvoiceVerification/{invoiceId}
+   Static restaurant-location QR only
+   No invoice verification records or dynamic QR generation
    ========================================================= */
 
 (function () {
@@ -15,8 +16,7 @@
     categories: "restaurantBilling/categories",
     settings: "restaurantBilling/settings",
     invoices: "restaurantBilling/invoices",
-    counters: "restaurantBilling/invoiceCounters",
-    verification: "publicInvoiceVerification"
+    counters: "restaurantBilling/invoiceCounters"
   });
 
   const $ = (id) => document.getElementById(id);
@@ -1053,7 +1053,6 @@
   function renderInvoiceBusinessDetails() {
     const sections = settingsSections();
     const business = sections.business;
-
     const name = getBusinessName();
 
     const tagline = textValue(firstValue(business, [
@@ -1205,82 +1204,43 @@
 
   function getInvoiceFormDetails() {
     return {
-      customerName: textValue($("customerName")?.value) || "Walk-in Customer",
+      customerName:
+        textValue($("customerName")?.value) || "Walk-in Customer",
+
       customerPhone: textValue($("customerPhone")?.value),
       tableNumber: textValue($("tableNumber")?.value),
+
       paymentMethod: normalizePaymentMethod(
         $("paymentMethod")?.value || "Cash"
       ),
+
       paymentStatus: textValue($("paymentStatus")?.value || "Paid"),
       notes: textValue($("invoiceNotes")?.value)
     };
   }
 
   /* ---------------------------------------------------------
-     9. Dynamic verification QR
+     9. Static restaurant-location QR visibility
      --------------------------------------------------------- */
 
   function updatePaymentQRVisibility() {
     const section = $("printQrSection");
     if (!section) return;
 
+    /*
+     * The QR image is static:
+     * business-location-qr.png
+     *
+     * It opens business-location.html.
+     * That page reads the saved restaurant address from Firebase.
+     *
+     * No QR generation and no invoice verification.
+     */
     section.hidden = !settingFlag([
-      "showVerificationQR",
+      "showBusinessLocationQR",
       "showQR",
       "showQRCode"
     ], true);
-
-    const oldImage = $("invoiceQrImage");
-
-    if (oldImage) {
-      oldImage.hidden = true;
-      oldImage.removeAttribute("src");
-    }
-  }
-
-  async function renderInvoiceVerificationQR(invoice) {
-    const section = $("printQrSection");
-    const container = section?.querySelector(".inv-qr");
-    const caption = $("invoiceQrCaption");
-
-    if (!container || section.hidden) return;
-
-    container.replaceChildren();
-
-    const verificationId = textValue(
-      invoice.verificationId || invoice._recordKey
-    );
-
-    if (!verificationId) {
-      if (caption) caption.textContent = "Verification ID Unavailable";
-      return;
-    }
-
-    const url = new URL("QRVerification.html", window.location.href);
-    url.searchParams.set("invoice", verificationId);
-
-    const qr = window.restaurantQR;
-
-    if (!qr || typeof qr.generate !== "function") {
-      if (caption) caption.textContent = "QR Generator Unavailable";
-      return;
-    }
-
-    if (caption) caption.textContent = "Generating Verification QR...";
-
-    try {
-      await qr.generate(container, url.href, {
-        width: 108,
-        height: 108,
-        margin: 1
-      });
-
-      if (caption) caption.textContent = "Scan to Verify Invoice";
-
-    } catch (error) {
-      console.error("Invoice verification QR generation failed:", error);
-      if (caption) caption.textContent = "QR Generation Failed";
-    }
   }
 
   /* ---------------------------------------------------------
@@ -1402,8 +1362,16 @@
     preview.hidden = false;
     updatePaymentQRVisibility();
 
-    setMessage("Invoice Recorded Successfully. Preview Is Ready.", "success");
-    setPageStatus("Invoice Saved To The Business Database.", "connected");
+    setMessage(
+      "Invoice Recorded Successfully. Preview Is Ready.",
+      "success"
+    );
+
+    setPageStatus(
+      "Invoice Saved To The Business Database.",
+      "connected"
+    );
+
     setText("invoiceFooterStatus", "Invoice Recorded");
 
     preview.scrollIntoView({
@@ -1412,17 +1380,17 @@
       ).matches ? "auto" : "smooth",
       block: "start"
     });
-
-    renderInvoiceVerificationQR(invoice);
   }
 
   /* ---------------------------------------------------------
-     11. Validation and atomic Firebase saving
+     11. Validation and Firebase invoice saving
      --------------------------------------------------------- */
 
   function validateCart() {
     if (!state.cart.length) {
-      throw new Error("Add at least one item before recording the invoice.");
+      throw new Error(
+        "Add at least one item before recording the invoice."
+      );
     }
 
     for (const item of state.cart) {
@@ -1440,23 +1408,6 @@
     }
   }
 
-  function buildPublicVerificationRecord(invoice, verificationId) {
-    /*
-     * Public record allowlist:
-     * Do not add customer details, phone, notes or item lists here.
-     */
-    return {
-      verificationId: verificationId,
-      ownerUid: OWNER_UID,
-      recordStatus: "valid",
-      businessName: getBusinessName(),
-      invoiceNumber: invoice.invoiceNumber,
-      invoiceDate: invoice.invoiceDate,
-      grandTotal: invoice.grandTotal,
-      paymentStatus: invoice.paymentStatus
-    };
-  }
-
   async function saveInvoice(event) {
     event.preventDefault();
 
@@ -1464,17 +1415,13 @@
 
     try {
       if (!state.ready) {
-        throw new Error("Invoice data is still loading. Try again shortly.");
+        throw new Error(
+          "Invoice data is still loading. Try again shortly."
+        );
       }
 
       ensureOwnerAuthorized();
       validateCart();
-
-      if (typeof state.api.update !== "function") {
-        throw new Error(
-          "Firebase multi-location update is unavailable. No invoice was saved."
-        );
-      }
 
       const tax = getTaxSettings();
 
@@ -1482,7 +1429,9 @@
         tax.enabled &&
         (!Number.isFinite(tax.rate) || tax.rate < 0 || tax.rate > 100)
       ) {
-        throw new Error("Check the tax rate in Settings before recording an invoice.");
+        throw new Error(
+          "Check the tax rate in Settings before recording an invoice."
+        );
       }
 
       const details = getInvoiceFormDetails();
@@ -1502,7 +1451,9 @@
       setEditingDisabled(true);
 
       const submitLabel = $("invoiceSubmitLabel");
-      if (submitLabel) submitLabel.textContent = "Recording Invoice...";
+      if (submitLabel) {
+        submitLabel.textContent = "Recording Invoice...";
+      }
 
       const createdAt = new Date();
       const totals = calculateTotals();
@@ -1551,6 +1502,10 @@
         recordStatus: "valid"
       };
 
+      /*
+       * Save only the private invoice record.
+       * No public invoice verification record is created.
+       */
       const invoiceListRef = state.api.ref(
         state.db,
         PATHS.invoices
@@ -1559,38 +1514,16 @@
       const newInvoiceRef = state.api.push(invoiceListRef);
 
       if (!newInvoiceRef || !newInvoiceRef.key) {
-        throw new Error("Unable to create a database invoice reference.");
+        throw new Error(
+          "Unable to create a database invoice reference."
+        );
       }
-
-      const verificationId = newInvoiceRef.key;
-
-      /*
-       * Both records use the same unique ID.
-       * update(rootRef, updates) is an atomic multi-location write.
-       */
-      invoiceRecord.verificationId = verificationId;
-
-      const verificationRecord = buildPublicVerificationRecord(
-        invoiceRecord,
-        verificationId
-      );
-
-      const updates = {};
-
-      updates[PATHS.invoices + "/" + verificationId] = invoiceRecord;
-      updates[PATHS.verification + "/" + verificationId] = verificationRecord;
 
       ensureOwnerAuthorized();
 
-      await state.api.update(
-        state.api.ref(state.db),
-        updates
-      );
+      await state.api.set(newInvoiceRef, invoiceRecord);
 
-      /*
-       * Only render success after Firebase confirms the update.
-       */
-      invoiceRecord._recordKey = verificationId;
+      invoiceRecord._recordKey = newInvoiceRef.key;
 
       renderSavedInvoice(invoiceRecord);
 
@@ -1623,14 +1556,19 @@
         "error"
       );
 
-      setPageStatus("Invoice Was Not Confirmed As Saved.", "error");
+      setPageStatus(
+        "Invoice Was Not Confirmed As Saved.",
+        "error"
+      );
 
     } finally {
       state.saving = false;
       setEditingDisabled(false);
 
       const submitLabel = $("invoiceSubmitLabel");
-      if (submitLabel) submitLabel.textContent = "Record / Save Invoice";
+      if (submitLabel) {
+        submitLabel.textContent = "Record / Save Invoice";
+      }
 
       renderCart();
     }
@@ -1658,6 +1596,7 @@
     );
 
     state.loaded.products = true;
+
     populateProductSelect();
     renderCart();
     checkReady();
@@ -1669,6 +1608,7 @@
     );
 
     state.loaded.categories = true;
+
     populateProductSelect();
     renderCart();
     checkReady();
@@ -1680,6 +1620,7 @@
       : {};
 
     state.loaded.settings = true;
+
     renderInvoiceBusinessDetails();
     renderCart();
     checkReady();
@@ -1730,10 +1671,21 @@
 
     $("invoiceForm")?.reset();
 
-    if ($("customerName")) $("customerName").value = "Walk-in Customer";
-    if ($("paymentMethod")) $("paymentMethod").value = "Cash";
-    if ($("paymentStatus")) $("paymentStatus").value = "Paid";
-    if ($("invoiceDiscountAmount")) $("invoiceDiscountAmount").value = "";
+    if ($("customerName")) {
+      $("customerName").value = "Walk-in Customer";
+    }
+
+    if ($("paymentMethod")) {
+      $("paymentMethod").value = "Cash";
+    }
+
+    if ($("paymentStatus")) {
+      $("paymentStatus").value = "Paid";
+    }
+
+    if ($("invoiceDiscountAmount")) {
+      $("invoiceDiscountAmount").value = "";
+    }
 
     applyFormFieldVisibility();
     setMessage("");
@@ -1780,7 +1732,9 @@
         !access.user ||
         access.user.uid !== OWNER_UID
       ) {
-        throw new Error("Only The Authorized Owner May Create Invoices.");
+        throw new Error(
+          "Only The Authorized Owner May Create Invoices."
+        );
       }
 
       const firebase = window.restaurantFirebase;
@@ -1807,11 +1761,10 @@
         typeof state.api.onValue !== "function" ||
         typeof state.api.push !== "function" ||
         typeof state.api.set !== "function" ||
-        typeof state.api.update !== "function" ||
         typeof state.api.runTransaction !== "function"
       ) {
         throw new Error(
-          "Required Realtime Database methods are unavailable. Invoice creation is disabled."
+          "Required Realtime Database methods are unavailable."
         );
       }
 
