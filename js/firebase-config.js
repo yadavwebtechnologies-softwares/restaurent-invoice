@@ -1,152 +1,202 @@
+/* =========================================================
+   RESTAURANT BILLING SOFTWARE
+   Firebase Configuration and Initialization
+   Configuration source: Cloudflare Worker
+   No hardcoded credentials or secrets
+   ========================================================= */
 
-"use strict";
+(function () {
+  "use strict";
 
-/**
- * Restaurant Billing Software
- * Shared Firebase configuration and services.
- *
- * Loads public Firebase configuration from Cloudflare Worker.
- * Initializes one shared Firebase App, Authentication and Realtime Database.
- * Makes the Firebase SDK modules available to page-specific scripts.
- */
-
-(() => {
-  // Reuse the shared service if this file has already executed.
-  if (window.restaurantFirebase?.ready) {
-    return;
-  }
-
-  const CONFIG_URL =
+  const WORKER_CONFIG_URL =
     "https://restaurant-billing-config.yadavsubba2003.workers.dev/api/firebase-config";
 
-  const SDK_VERSION = "12.19.0";
+  const FIREBASE_SDK_VERSION = "12.19.0";
 
-  const SDK_BASE =
-    `https://www.gstatic.com/firebasejs/${SDK_VERSION}`;
-
-  const firebaseServices = {
+  const state = {
     app: null,
     auth: null,
     db: null,
-    config: null,
     sdk: null,
     error: null,
-    ready: null
+    ready: false,
+    initialized: false
   };
 
-  window.restaurantFirebase = firebaseServices;
+  /*
+   * Publish the shared state before initialization,
+   * so other scripts can wait for state.readyPromise.
+   */
+  window.restaurantFirebase = state;
 
-  firebaseServices.ready = (async () => {
-    try {
-      // Load Firebase configuration from the Cloudflare Worker.
-      const response = await fetch(CONFIG_URL, {
-        method: "GET",
-        headers: {
-          Accept: "application/json"
-        },
-        cache: "no-store"
-      });
+  function getConfigFromResponse(payload) {
+    if (!payload || typeof payload !== "object") {
+      throw new Error("Worker returned an invalid configuration response.");
+    }
 
-      if (!response.ok) {
-        throw new Error(
-          `Firebase configuration request failed: HTTP ${response.status}`
-        );
-      }
+    const candidates = [
+      payload.firebaseConfig,
+      payload.config,
+      payload.data?.firebaseConfig,
+      payload.data?.config,
+      payload.data,
+      payload
+    ];
 
-      const firebaseConfig = await response.json();
-
-      const requiredFields = [
-        "apiKey",
-        "authDomain",
-        "databaseURL",
-        "projectId",
-        "appId"
-      ];
-
-      const missingFields = requiredFields.filter(
-        field =>
-          typeof firebaseConfig[field] !== "string" ||
-          !firebaseConfig[field].trim()
+    const config = candidates.find(function (candidate) {
+      return (
+        candidate &&
+        typeof candidate === "object" &&
+        typeof candidate.apiKey === "string" &&
+        typeof candidate.authDomain === "string" &&
+        typeof candidate.projectId === "string" &&
+        typeof candidate.databaseURL === "string" &&
+        typeof candidate.appId === "string"
       );
+    });
 
-      if (missingFields.length > 0) {
-        throw new Error(
-          `Missing Firebase configuration fields: ${missingFields.join(", ")}`
-        );
+    if (!config) {
+      throw new Error(
+        "Worker response is missing required Firebase Web Configuration fields."
+      );
+    }
+
+    return {
+      apiKey: config.apiKey,
+      authDomain: config.authDomain,
+      databaseURL: config.databaseURL,
+      projectId: config.projectId,
+      appId: config.appId,
+      ...(config.storageBucket
+        ? { storageBucket: config.storageBucket }
+        : {}),
+      ...(config.messagingSenderId
+        ? { messagingSenderId: config.messagingSenderId }
+        : {})
+    };
+  }
+
+  async function fetchFirebaseConfig() {
+    const response = await fetch(WORKER_CONFIG_URL, {
+      method: "GET",
+      mode: "cors",
+      credentials: "omit",
+      cache: "no-store",
+      headers: {
+        Accept: "application/json"
       }
+    });
 
-      // Load all Firebase modules from the same SDK version.
-      const [
-        appSDK,
-        authSDK,
-        databaseSDK
-      ] = await Promise.all([
-        import(`${SDK_BASE}/firebase-app.js`),
-        import(`${SDK_BASE}/firebase-auth.js`),
-        import(`${SDK_BASE}/firebase-database.js`)
-      ]);
+    if (!response.ok) {
+      throw new Error(
+        "Cloudflare Worker configuration request failed with HTTP " +
+        response.status + "."
+      );
+    }
 
-      // Reuse the default app if it was already initialized.
-      const existingApps = appSDK.getApps();
+    let payload;
 
-      const app = existingApps.find(
-        existingApp => existingApp.name === "[DEFAULT]"
-      ) || appSDK.initializeApp(firebaseConfig);
+    try {
+      payload = await response.json();
+    } catch {
+      throw new Error(
+        "Cloudflare Worker did not return valid JSON."
+      );
+    }
 
-      // Initialize shared Auth and Realtime Database services.
-      const auth = authSDK.getAuth(app);
-      const db = databaseSDK.getDatabase(app);
+    return getConfigFromResponse(payload);
+  }
 
-      // Expose the shared instances.
-      firebaseServices.app = app;
-      firebaseServices.auth = auth;
-      firebaseServices.db = db;
-      firebaseServices.config = firebaseConfig;
+  async function loadFirebaseSDK() {
+    const base =
+      "https://www.gstatic.com/firebasejs/" +
+      FIREBASE_SDK_VERSION + "/";
 
-      // Share the SDK functions so page-specific files do not
-      // need to initialize a separate Firebase App.
-      firebaseServices.sdk = {
-        app: appSDK,
-        auth: authSDK,
-        database: databaseSDK
+    const [appSDK, authSDK, databaseSDK] = await Promise.all([
+      import(base + "firebase-app.js"),
+      import(base + "firebase-auth.js"),
+      import(base + "firebase-database.js")
+    ]);
+
+    return {
+      app: appSDK,
+      auth: authSDK,
+      database: databaseSDK
+    };
+  }
+
+  async function initializeFirebase() {
+    try {
+      state.error = null;
+      state.ready = false;
+
+      /*
+       * Load configuration through the existing Worker.
+       * Firebase client configuration is not an Admin secret.
+       */
+      const firebaseConfig = await fetchFirebaseConfig();
+
+      const sdk = await loadFirebaseSDK();
+
+      const existingApps = sdk.app.getApps();
+
+      state.app = existingApps.length
+        ? sdk.app.getApp()
+        : sdk.app.initializeApp(firebaseConfig);
+
+      state.auth = sdk.auth.getAuth(state.app);
+      state.db = sdk.database.getDatabase(state.app);
+
+      /*
+       * Shared SDK interface for page-specific scripts.
+       * Use the same Firebase app, auth instance and database
+       * throughout this website.
+       */
+      state.sdk = {
+        app: sdk.app,
+        auth: {
+          ...sdk.auth
+        },
+        database: {
+          ...sdk.database
+        }
       };
 
-      console.info(
-        "Restaurant Billing: shared Firebase services initialized.",
-        {
-          projectId: firebaseConfig.projectId,
-          sdkVersion: SDK_VERSION
-        }
+      state.initialized = true;
+      state.ready = true;
+
+      document.dispatchEvent(
+        new CustomEvent("restaurant-firebase-ready")
       );
 
-      window.dispatchEvent(
-        new CustomEvent("restaurant-firebase-ready", {
+      return true;
+
+    } catch (error) {
+      state.error = {
+        message: error instanceof Error
+          ? error.message
+          : "Firebase initialization failed."
+      };
+
+      state.initialized = false;
+      state.ready = false;
+
+      document.dispatchEvent(
+        new CustomEvent("restaurant-firebase-error", {
           detail: {
-            app,
-            auth,
-            db,
-            config: firebaseConfig,
-            sdk: firebaseServices.sdk
+            message: state.error.message
           }
         })
       );
 
-      return firebaseServices;
-    } catch (error) {
-      firebaseServices.error = error;
-
-      console.error(
-        "Restaurant Billing: Firebase initialization failed.",
-        error
-      );
-
-      window.dispatchEvent(
-        new CustomEvent("restaurant-firebase-error", {
-          detail: { error }
-        })
-      );
-
-      return null;
+      return false;
     }
-  })();
+  }
+
+  /*
+   * A single initialization promise avoids multiple
+   * Firebase initialization attempts from page scripts.
+   */
+  state.readyPromise = initializeFirebase();
+
 })();
