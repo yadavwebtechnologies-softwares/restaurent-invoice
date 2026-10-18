@@ -2,7 +2,8 @@
    RESTAURANT BILLING SOFTWARE
    Business Settings — Live Firebase Integration
    Database root: restaurantBilling/settings/
-   Public location record: publicInvoiceVerification/businessLocation
+   Public location: publicInvoiceVerification/businessLocation
+   Interactive map picker with automatic Google Maps URL
    No demo data, localStorage persistence or secrets
    ========================================================= */
 
@@ -14,9 +15,7 @@
   const PUBLIC_LOCATION_PATH =
     "publicInvoiceVerification/businessLocation";
 
-  const $ = function (id) {
-    return document.getElementById(id);
-  };
+  const $ = (id) => document.getElementById(id);
 
   const state = {
     db: null,
@@ -27,7 +26,13 @@
     busy: new Set(),
     dirty: new Set(),
     subscriptions: [],
-    disposed: false
+    disposed: false,
+
+    map: null,
+    marker: null,
+    mapInitialized: false,
+    selectedMapLocation: null,
+    suppressMapURLInput: false
   };
 
   const ui = window.restaurantUI;
@@ -51,12 +56,7 @@
     if (!node) return;
 
     node.textContent = message || "";
-
-    node.classList.remove(
-      "is-success",
-      "is-error",
-      "is-warning"
-    );
+    node.classList.remove("is-success", "is-error", "is-warning");
 
     if (type) node.classList.add("is-" + type);
   }
@@ -66,12 +66,7 @@
     if (!node) return;
 
     node.textContent = message || "";
-
-    node.classList.remove(
-      "is-connected",
-      "is-error",
-      "is-warning"
-    );
+    node.classList.remove("is-connected", "is-error", "is-warning");
 
     if (type) node.classList.add("is-" + type);
   }
@@ -101,9 +96,6 @@
     return null;
   }
 
-  /*
-   * Respect intentionally empty saved fields.
-   */
   function storedValue(object, keys) {
     for (const key of keys) {
       if (
@@ -160,6 +152,35 @@
     return url.href;
   }
 
+  function validateGoogleMapsURL(value) {
+    if (!value) return "";
+
+    const normalized = validateURL(value, "Google Maps URL");
+    const url = new URL(normalized);
+    const hostname = url.hostname.toLowerCase();
+
+    const validHost =
+      hostname === "google.com" ||
+      hostname.endsWith(".google.com") ||
+      hostname === "maps.app.goo.gl" ||
+      hostname === "goo.gl";
+
+    if (!validHost) {
+      throw new Error(
+        "Use a Google Maps link or select a location on the map."
+      );
+    }
+
+    if (
+      (hostname === "google.com" || hostname.endsWith(".google.com")) &&
+      !url.pathname.toLowerCase().startsWith("/maps")
+    ) {
+      throw new Error("Enter a valid Google Maps link.");
+    }
+
+    return url.href;
+  }
+
   function getFirebase() {
     const firebase = window.restaurantFirebase;
 
@@ -185,10 +206,7 @@
       throw new Error("Required Firebase database methods are unavailable.");
     }
 
-    return {
-      db: firebase.db,
-      api: api
-    };
+    return { db: firebase.db, api: api };
   }
 
   function makeMetadata() {
@@ -197,6 +215,47 @@
       updatedAt: new Date().toISOString(),
       updatedAtMs: Date.now()
     };
+  }
+
+  function validCoordinates(latitude, longitude) {
+    return (
+      Number.isFinite(latitude) &&
+      Number.isFinite(longitude) &&
+      latitude >= -90 &&
+      latitude <= 90 &&
+      longitude >= -180 &&
+      longitude <= 180
+    );
+  }
+
+  function readCoordinates(object) {
+    const latitude = numberValue(object?.businessLatitude);
+    const longitude = numberValue(object?.businessLongitude);
+
+    if (
+      latitude === null ||
+      longitude === null ||
+      !validCoordinates(latitude, longitude)
+    ) {
+      return null;
+    }
+
+    return { latitude, longitude };
+  }
+
+  function mapsURLFromCoordinates(latitude, longitude) {
+    if (!validCoordinates(latitude, longitude)) {
+      throw new Error("Selected map coordinates are invalid.");
+    }
+
+    const url = new URL("https://www.google.com/maps/search/");
+    url.searchParams.set("api", "1");
+    url.searchParams.set(
+      "query",
+      latitude.toFixed(7) + "," + longitude.toFixed(7)
+    );
+
+    return url.href;
   }
 
   /* ---------------------------------------------------------
@@ -255,8 +314,45 @@
   }
 
   /* ---------------------------------------------------------
-     3. Business profile
+     3. Business profile form
      --------------------------------------------------------- */
+
+  function updateMapsPreviewLink(value) {
+    const link = $("previewBusinessMapsLink");
+    if (!link) return;
+
+    let validURL = "";
+
+    try {
+      validURL = validateGoogleMapsURL(textValue(value));
+    } catch (_) {
+      validURL = "";
+    }
+
+    if (!validURL) {
+      link.hidden = true;
+      link.removeAttribute("href");
+      return;
+    }
+
+    link.href = validURL;
+    link.hidden = false;
+  }
+
+  function updateCoordinateDisplay(location) {
+    const display = $("businessLocationCoordinates");
+    if (!display) return;
+
+    if (!location) {
+      display.textContent = "No map pin selected.";
+      return;
+    }
+
+    display.textContent =
+      "Selected coordinates: " +
+      location.latitude.toFixed(6) + ", " +
+      location.longitude.toFixed(6);
+  }
 
   function populateBusinessProfile() {
     if (state.dirty.has("businessProfileForm")) return;
@@ -296,6 +392,26 @@
       "logoImageUrl",
       "logo"
     ]));
+
+    const mapsURL = textValue(firstValue(profile, [
+      "businessMapsUrl",
+      "googleMapsUrl",
+      "mapsUrl"
+    ]) || "");
+
+    assignInput("businessMapsUrlInput", mapsURL);
+    updateMapsPreviewLink(mapsURL);
+
+    state.selectedMapLocation = readCoordinates(profile);
+    updateCoordinateDisplay(state.selectedMapLocation);
+
+    if (state.mapInitialized && state.selectedMapLocation) {
+      setMapMarker(
+        state.selectedMapLocation.latitude,
+        state.selectedMapLocation.longitude,
+        false
+      );
+    }
   }
 
   function buildBusinessProfile() {
@@ -324,6 +440,12 @@
       "Logo URL"
     );
 
+    const mapsURL = validateGoogleMapsURL(
+      textValue($("businessMapsUrlInput")?.value)
+    );
+
+    const coordinates = state.selectedMapLocation;
+
     return {
       ...makeMetadata(),
       businessName: name,
@@ -331,12 +453,289 @@
       businessAddress: textValue($("businessAddressInput")?.value),
       businessPhone: phone,
       businessEmail: email,
-      businessLogoUrl: logo
+      businessLogoUrl: logo,
+      businessMapsUrl: mapsURL,
+      businessLatitude: coordinates ? coordinates.latitude : null,
+      businessLongitude: coordinates ? coordinates.longitude : null
     };
   }
 
   /* ---------------------------------------------------------
-     4. Invoice preferences
+     4. Interactive map picker
+     --------------------------------------------------------- */
+
+  function setMapPickerVisibility(visible) {
+    const panel = $("businessMapPickerPanel");
+    const button = $("pickBusinessLocationBtn");
+
+    if (!panel || !button) return;
+
+    panel.hidden = !visible;
+    button.setAttribute("aria-expanded", String(visible));
+    button.textContent = visible
+      ? "Hide Location Map"
+      : "Pick Location on Map";
+
+    if (visible) {
+      initializeMap();
+    }
+  }
+
+  function setMapPickerStatus(message, type) {
+    const node = $("businessMapPickerStatus");
+    if (!node) return;
+
+    node.textContent = message;
+    node.classList.remove("is-success", "is-error", "is-warning");
+
+    if (type) node.classList.add("is-" + type);
+  }
+
+  function syncMapSelection(latitude, longitude, updateURL) {
+    if (!validCoordinates(latitude, longitude)) {
+      setMapPickerStatus("Invalid map coordinates.", "error");
+      return;
+    }
+
+    state.selectedMapLocation = {
+      latitude: Number(latitude),
+      longitude: Number(longitude)
+    };
+
+    updateCoordinateDisplay(state.selectedMapLocation);
+
+    if (updateURL) {
+      const input = $("businessMapsUrlInput");
+
+      if (input) {
+        state.suppressMapURLInput = true;
+        input.value = mapsURLFromCoordinates(latitude, longitude);
+        state.suppressMapURLInput = false;
+      }
+
+      updateMapsPreviewLink(input?.value || "");
+      state.dirty.add("businessProfileForm");
+    }
+
+    const useButton = $("useSelectedBusinessLocationBtn");
+    if (useButton) useButton.disabled = false;
+
+    setMapPickerStatus(
+      "Pin selected. Google Maps URL generated automatically. Save Business Profile to store it.",
+      "success"
+    );
+  }
+
+  function setMapMarker(latitude, longitude, updateURL) {
+    if (!state.map || !window.L) return;
+
+    const point = [latitude, longitude];
+
+    if (!state.marker) {
+      state.marker = window.L.marker(point, {
+        draggable: true
+      }).addTo(state.map);
+
+      state.marker.on("dragend", function (event) {
+        const position = event.target.getLatLng();
+
+        syncMapSelection(
+          position.lat,
+          position.lng,
+          true
+        );
+      });
+    } else {
+      state.marker.setLatLng(point);
+    }
+
+    if (updateURL) {
+      state.map.panTo(point);
+    }
+
+    syncMapSelection(latitude, longitude, updateURL);
+  }
+
+  function initializeMap() {
+    const container = $("businessLocationMap");
+    if (!container) return;
+
+    if (state.mapInitialized && state.map) {
+      window.setTimeout(function () {
+        state.map.invalidateSize();
+      }, 100);
+
+      return;
+    }
+
+    if (!window.L || typeof window.L.map !== "function") {
+      setMapPickerStatus(
+        "Map library could not load. Check your internet connection and reload Settings.",
+        "error"
+      );
+
+      const useButton = $("useSelectedBusinessLocationBtn");
+      if (useButton) useButton.disabled = true;
+
+      return;
+    }
+
+    const saved = state.selectedMapLocation;
+
+    const initialCenter = saved
+      ? [saved.latitude, saved.longitude]
+      : [26.2, 92.9];
+
+    const initialZoom = saved ? 16 : 6;
+
+    try {
+      state.map = window.L.map(container, {
+        zoomControl: true,
+        scrollWheelZoom: true
+      }).setView(initialCenter, initialZoom);
+
+      window.L.tileLayer(
+        "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        {
+          maxZoom: 19,
+          attribution:
+            '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors'
+        }
+      ).addTo(state.map);
+
+      state.map.on("click", function (event) {
+        setMapMarker(
+          event.latlng.lat,
+          event.latlng.lng,
+          true
+        );
+      });
+
+      state.map.on("locationerror", function () {
+        setMapPickerStatus(
+          "Map location is unavailable. You can still select a pin manually.",
+          "warning"
+        );
+      });
+
+      state.mapInitialized = true;
+
+      if (saved) {
+        setMapMarker(saved.latitude, saved.longitude, false);
+
+        setMapPickerStatus(
+          "Saved pin loaded. Click another point or drag the marker to change it.",
+          "connected"
+        );
+      } else {
+        setMapPickerStatus(
+          "Move or zoom the map, then click the restaurant's exact location to place a pin."
+        );
+
+        const useButton = $("useSelectedBusinessLocationBtn");
+        if (useButton) useButton.disabled = true;
+      }
+
+      window.setTimeout(function () {
+        if (state.map) state.map.invalidateSize();
+      }, 150);
+
+    } catch (error) {
+      console.error("Map initialization failed:", error);
+
+      setMapPickerStatus(
+        "Unable to initialize the map. Reload Settings and try again.",
+        "error"
+      );
+    }
+  }
+
+  function useSelectedLocation() {
+    const location = state.selectedMapLocation;
+
+    if (!location || !validCoordinates(
+      location.latitude,
+      location.longitude
+    )) {
+      setMapPickerStatus(
+        "Click the map and select a location first.",
+        "warning"
+      );
+      return;
+    }
+
+    const mapsInput = $("businessMapsUrlInput");
+
+    if (mapsInput) {
+      mapsInput.value = mapsURLFromCoordinates(
+        location.latitude,
+        location.longitude
+      );
+    }
+
+    updateMapsPreviewLink(mapsInput?.value || "");
+    state.dirty.add("businessProfileForm");
+
+    showMessage(
+      "businessProfileMessage",
+      "Map location selected. Click Save Business Profile to store the address and Google Maps link.",
+      "success"
+    );
+
+    setMapPickerVisibility(false);
+  }
+
+  function bindMapPicker() {
+    $("pickBusinessLocationBtn")?.addEventListener(
+      "click",
+      function () {
+        const panel = $("businessMapPickerPanel");
+
+        setMapPickerVisibility(Boolean(panel?.hidden));
+      }
+    );
+
+    $("closeBusinessMapPickerBtn")?.addEventListener(
+      "click",
+      function () {
+        setMapPickerVisibility(false);
+      }
+    );
+
+    $("useSelectedBusinessLocationBtn")?.addEventListener(
+      "click",
+      useSelectedLocation
+    );
+
+    $("businessMapsUrlInput")?.addEventListener(
+      "input",
+      function () {
+        if (state.suppressMapURLInput) return;
+
+        /*
+         * Manual edits clear the selected coordinates because
+         * the typed link may not match the previously selected pin.
+         */
+        state.selectedMapLocation = null;
+        updateCoordinateDisplay(null);
+        updateMapsPreviewLink(this.value);
+        state.dirty.add("businessProfileForm");
+
+        const useButton = $("useSelectedBusinessLocationBtn");
+        if (useButton) useButton.disabled = true;
+      }
+    );
+
+    $("businessMapsUrlInput")?.addEventListener(
+      "change",
+      function () {
+        updateMapsPreviewLink(this.value);
+      }
+    );
+  }
+
+  /* ---------------------------------------------------------
+     5. Invoice preferences
      --------------------------------------------------------- */
 
   function getExistingInvoiceSettings() {
@@ -398,25 +797,14 @@
     const prefix = textValue($("invoicePrefixInput")?.value);
     const footer = textValue($("invoiceFooterInput")?.value);
 
-    const thankYouMessage = textValue(
-      $("thankYouMessageInput")?.value
-    );
-
-    const termsLine1 = textValue(
-      $("termsLine1Input")?.value
-    );
-
-    const termsLine2 = textValue(
-      $("termsLine2Input")?.value
-    );
-
+    const thankYouMessage = textValue($("thankYouMessageInput")?.value);
+    const termsLine1 = textValue($("termsLine1Input")?.value);
+    const termsLine2 = textValue($("termsLine2Input")?.value);
     const authorisedSignatory = textValue(
       $("authorisedSignatoryInput")?.value
     );
 
-    const targetText = textValue(
-      $("dailySalesTargetInput")?.value
-    );
+    const targetText = textValue($("dailySalesTargetInput")?.value);
 
     if (!prefix || !/^[A-Za-z0-9-]+$/.test(prefix)) {
       $("invoicePrefixInput")?.focus();
@@ -444,10 +832,8 @@
       }
     }
 
-    const existing = getExistingInvoiceSettings();
-
     const result = {
-      ...existing,
+      ...getExistingInvoiceSettings(),
       ...makeMetadata(),
 
       invoicePrefix: prefix,
@@ -475,7 +861,7 @@
   }
 
   /* ---------------------------------------------------------
-     5. Tax and discount
+     6. Tax and discount
      --------------------------------------------------------- */
 
   function populateTaxSettings() {
@@ -511,13 +897,8 @@
     const taxEnabled = Boolean($("taxEnabledInput")?.checked);
     const taxText = textValue($("taxRateInput")?.value);
 
-    const discountEnabled = Boolean(
-      $("discountEnabledInput")?.checked
-    );
-
-    const discountText = textValue(
-      $("maximumDiscountInput")?.value
-    );
+    const discountEnabled = Boolean($("discountEnabledInput")?.checked);
+    const discountText = textValue($("maximumDiscountInput")?.value);
 
     let taxRate = numberValue(taxText);
 
@@ -563,7 +944,7 @@
   }
 
   /* ---------------------------------------------------------
-     6. Payment settings
+     7. Payment settings
      --------------------------------------------------------- */
 
   function populatePaymentSettings() {
@@ -586,10 +967,7 @@
 
   function buildPaymentSettings() {
     const upiId = textValue($("upiIdInput")?.value);
-
-    const accountName = textValue(
-      $("paymentAccountNameInput")?.value
-    );
+    const accountName = textValue($("paymentAccountNameInput")?.value);
 
     if (
       upiId &&
@@ -610,7 +988,7 @@
   }
 
   /* ---------------------------------------------------------
-     7. Dynamic branding
+     8. Dynamic branding
      --------------------------------------------------------- */
 
   function renderBranding() {
@@ -627,17 +1005,13 @@
       "description"
     ]));
 
-    document.querySelectorAll("[data-business-name]").forEach(
-      function (node) {
-        node.textContent = name;
-      }
-    );
+    document.querySelectorAll("[data-business-name]").forEach((node) => {
+      node.textContent = name;
+    });
 
-    document.querySelectorAll("[data-business-tagline]").forEach(
-      function (node) {
-        node.textContent = tagline;
-      }
-    );
+    document.querySelectorAll("[data-business-tagline]").forEach((node) => {
+      node.textContent = tagline;
+    });
 
     setText("sidebarBusinessName", name);
     setText("sidebarBusinessTagline", tagline);
@@ -650,9 +1024,7 @@
         .split(/\s+/)
         .filter(Boolean)
         .slice(0, 2)
-        .map(function (word) {
-          return word.charAt(0).toUpperCase();
-        })
+        .map((word) => word.charAt(0).toUpperCase())
         .join("");
     }
 
@@ -665,17 +1037,15 @@
     );
 
     setText("ownerDisplayName", displayName);
-
     setText(
       "ownerAvatar",
       displayName ? displayName.charAt(0).toUpperCase() : ""
     );
-
     setText("ownerDisplayRole", "Owner");
   }
 
   /* ---------------------------------------------------------
-     8. Form state tracking
+     9. Populate clean forms and dirty tracking
      --------------------------------------------------------- */
 
   function populateCleanForms() {
@@ -698,23 +1068,17 @@
       "invoiceSettingsForm",
       "taxSettingsForm",
       "paymentSettingsForm"
-    ].forEach(function (id) {
+    ].forEach((id) => {
       const form = $(id);
-
       if (!form) return;
 
-      form.addEventListener("input", function () {
-        markFormDirty(form);
-      });
-
-      form.addEventListener("change", function () {
-        markFormDirty(form);
-      });
+      form.addEventListener("input", () => markFormDirty(form));
+      form.addEventListener("change", () => markFormDirty(form));
     });
   }
 
   /* ---------------------------------------------------------
-     9. Save settings section
+     10. Save settings section
      --------------------------------------------------------- */
 
   async function saveSection(
@@ -744,9 +1108,7 @@
     } catch (error) {
       showMessage(
         messageId,
-        error instanceof Error
-          ? error.message
-          : "Invalid settings.",
+        error instanceof Error ? error.message : "Invalid settings.",
         "error"
       );
 
@@ -757,19 +1119,14 @@
 
     const form = $(formId);
     const button = $(buttonId);
-
-    const originalLabel = button
-      ? button.textContent
-      : "";
+    const originalLabel = button ? button.textContent : "";
 
     if (button) {
       button.disabled = true;
       button.textContent = "Saving...";
     }
 
-    if (form) {
-      form.setAttribute("aria-busy", "true");
-    }
+    if (form) form.setAttribute("aria-busy", "true");
 
     setStatus("Saving " + sectionKey + "...", "warning");
 
@@ -782,18 +1139,27 @@
       );
 
       if (sectionKey === "businessProfile") {
-        /*
-         * The fixed QR page reads this limited public record.
-         * Only business name and address are exposed here.
-         */
         const address = textValue(record.businessAddress);
+        const mapsURL = textValue(record.businessMapsUrl);
+        const coordinates = readCoordinates(record);
+
+        const locationConfigured = Boolean(address || mapsURL);
 
         const locationRecord = {
           recordType: "business-location",
-          recordStatus: address ? "configured" : "not-configured",
+          recordStatus: locationConfigured
+            ? "configured"
+            : "not-configured",
           verificationId: "businessLocation",
           businessName: textValue(record.businessName),
           businessAddress: address,
+          businessMapsUrl: mapsURL,
+          businessLatitude: coordinates
+            ? coordinates.latitude
+            : null,
+          businessLongitude: coordinates
+            ? coordinates.longitude
+            : null,
           updatedAt: new Date().toISOString(),
           updatedAtMs: Date.now()
         };
@@ -804,9 +1170,8 @@
         updates[PUBLIC_LOCATION_PATH] = locationRecord;
 
         /*
-         * Atomic multi-location update:
-         * business profile and location record succeed together
-         * or neither path is changed by this update.
+         * Save Business Profile and location together.
+         * Both paths must pass the current Firebase Rules.
          */
         await state.api.update(
           state.api.ref(state.db),
@@ -828,10 +1193,7 @@
         "success"
       );
 
-      setStatus(
-        "Settings saved and synchronized.",
-        "connected"
-      );
+      setStatus("Settings saved and synchronized.", "connected");
 
       setText("sidebarConnectionStatus", "Database connected");
       setText("settingsFooterStatus", "Settings saved");
@@ -880,14 +1242,12 @@
         button.textContent = originalLabel;
       }
 
-      if (form) {
-        form.removeAttribute("aria-busy");
-      }
+      if (form) form.removeAttribute("aria-busy");
     }
   }
 
   /* ---------------------------------------------------------
-     10. Live database subscription
+     11. Live database subscription
      --------------------------------------------------------- */
 
   function subscribeSettings() {
@@ -902,9 +1262,7 @@
       function (snapshot) {
         if (state.disposed) return;
 
-        const data = snapshot.exists()
-          ? snapshot.val()
-          : {};
+        const data = snapshot.exists() ? snapshot.val() : {};
 
         state.settings =
           data && typeof data === "object"
@@ -925,10 +1283,7 @@
         setText("settingsFooterStatus", "Live settings connected");
 
         if (!state.dirty.size) {
-          setText(
-            "settingsSaveStatus",
-            "Settings are synchronized."
-          );
+          setText("settingsSaveStatus", "Settings are synchronized.");
         }
       },
 
@@ -958,7 +1313,7 @@
   }
 
   /* ---------------------------------------------------------
-     11. Initialize protected settings page
+     12. Initialize protected Settings page
      --------------------------------------------------------- */
 
   async function initialize() {
@@ -1007,6 +1362,7 @@
       state.api = connected.api;
 
       bindDirtyTracking();
+      bindMapPicker();
       subscribeSettings();
 
     } catch (error) {
@@ -1026,7 +1382,7 @@
   }
 
   /* ---------------------------------------------------------
-     12. Bind save forms
+     13. Bind save forms
      --------------------------------------------------------- */
 
   $("businessProfileForm")?.addEventListener(
@@ -1090,13 +1446,13 @@
   );
 
   /* ---------------------------------------------------------
-     13. Clean up live listeners
+     14. Cleanup
      --------------------------------------------------------- */
 
   window.addEventListener("pagehide", function () {
     state.disposed = true;
 
-    state.subscriptions.forEach(function (unsubscribe) {
+    state.subscriptions.forEach((unsubscribe) => {
       try {
         if (typeof unsubscribe === "function") {
           unsubscribe();
@@ -1107,6 +1463,13 @@
     });
 
     state.subscriptions = [];
+
+    if (state.map) {
+      state.map.remove();
+      state.map = null;
+      state.marker = null;
+      state.mapInitialized = false;
+    }
   });
 
   initialize();
