@@ -1,32 +1,43 @@
 /* =========================================================
    RESTAURANT BILLING SOFTWARE
-   Public Invoice Verification
-   Verification must be confirmed by the Cloudflare API.
-   Never trust the QR URL alone.
+   Direct Firebase Invoice Verification
+   Database: publicInvoiceVerification/{verificationId}
+
+   No Cloudflare Worker call.
+   No secret key.
+   Verification fails closed.
    ========================================================= */
 
 (function () {
   "use strict";
 
-  const API_URL =
-    "https://restaurant-billing-config.yadavsubba2003.workers.dev/api/verify-invoice";
+  const OWNER_UID = "20wif9y7LQhBZgFPDsAlrQpFjnI2";
+
+  const VERIFICATION_PATH = "publicInvoiceVerification";
 
   const $ = (id) => document.getElementById(id);
 
-  let requestController = null;
+  /* ---------------------------------------------------------
+     1. Safe UI helpers
+     --------------------------------------------------------- */
 
   function setText(id, value) {
     const element = $(id);
+
     if (element) {
-      element.textContent = value === null || value === undefined
-        ? ""
-        : String(value);
+      element.textContent =
+        value === null || value === undefined
+          ? ""
+          : String(value);
     }
   }
 
   function showSection(id, visible) {
     const element = $(id);
-    if (element) element.hidden = !visible;
+
+    if (element) {
+      element.hidden = !visible;
+    }
   }
 
   function setStatus(type, title, message) {
@@ -52,10 +63,16 @@
     showSection("verificationHelp", true);
   }
 
-  function formatMoney(value) {
-    const amount = Number(value);
+  /* ---------------------------------------------------------
+     2. Display formatting
+     --------------------------------------------------------- */
 
-    if (!Number.isFinite(amount) || amount < 0) {
+  function formatMoney(value) {
+    if (
+      typeof value !== "number" ||
+      !Number.isFinite(value) ||
+      value < 0
+    ) {
       return "Not Available";
     }
 
@@ -64,79 +81,234 @@
       currency: "INR",
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
-    }).format(amount);
+    }).format(value);
   }
 
   function formatDate(value) {
-    if (!value) return "Not Available";
-
-    const raw = String(value);
-
-    // Invoice dates are stored as YYYY-MM-DD.
-    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
-
-    if (match) {
-      const year = Number(match[1]);
-      const month = Number(match[2]);
-      const day = Number(match[3]);
-
-      const date = new Date(year, month - 1, day);
-
-      if (
-        date.getFullYear() === year &&
-        date.getMonth() === month - 1 &&
-        date.getDate() === day
-      ) {
-        return new Intl.DateTimeFormat("en-IN", {
-          day: "2-digit",
-          month: "short",
-          year: "numeric"
-        }).format(date);
-      }
-
+    if (typeof value !== "string") {
       return "Not Available";
     }
 
-    const date = new Date(raw);
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
 
-    if (Number.isNaN(date.getTime())) {
+    if (!match) {
+      return "Not Available";
+    }
+
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+
+    const date = new Date(Date.UTC(year, month - 1, day));
+
+    if (
+      date.getUTCFullYear() !== year ||
+      date.getUTCMonth() !== month - 1 ||
+      date.getUTCDate() !== day
+    ) {
       return "Not Available";
     }
 
     return new Intl.DateTimeFormat("en-IN", {
       day: "2-digit",
       month: "short",
-      year: "numeric"
+      year: "numeric",
+      timeZone: "UTC"
     }).format(date);
   }
 
-  function renderVerifiedInvoice(invoice) {
+  /* ---------------------------------------------------------
+     3. Validate QR invoice ID
+     --------------------------------------------------------- */
+
+  function getVerificationId() {
+    const params = new URLSearchParams(window.location.search);
+    const invoiceId = (params.get("invoice") || "").trim();
+
+    if (
+      !invoiceId ||
+      invoiceId.length > 128 ||
+      !/^[A-Za-z0-9_-]+$/.test(invoiceId)
+    ) {
+      return null;
+    }
+
+    return invoiceId;
+  }
+
+  /* ---------------------------------------------------------
+     4. Firebase initialization
+     --------------------------------------------------------- */
+
+  async function getFirebaseDatabase() {
+    const firebase = window.restaurantFirebase;
+
+    if (!firebase || !firebase.readyPromise) {
+      throw new Error("firebase-not-initialized");
+    }
+
+    const initialized = await firebase.readyPromise;
+
+    if (
+      !initialized ||
+      !firebase.ready ||
+      !firebase.db ||
+      !firebase.sdk ||
+      !firebase.sdk.database
+    ) {
+      throw new Error("firebase-unavailable");
+    }
+
+    const api = firebase.sdk.database;
+
+    if (
+      typeof api.ref !== "function" ||
+      typeof api.get !== "function"
+    ) {
+      throw new Error("firebase-read-api-unavailable");
+    }
+
+    return {
+      db: firebase.db,
+      api: api
+    };
+  }
+
+  /* ---------------------------------------------------------
+     5. Read one verification record
+     --------------------------------------------------------- */
+
+  async function readVerificationRecord(invoiceId) {
+    const firebase = await getFirebaseDatabase();
+
+    const path =
+      VERIFICATION_PATH + "/" + invoiceId;
+
+    const reference = firebase.api.ref(
+      firebase.db,
+      path
+    );
+
+    const snapshot = await firebase.api.get(reference);
+
+    if (!snapshot.exists()) {
+      return null;
+    }
+
+    const record = snapshot.val();
+
+    if (
+      !record ||
+      typeof record !== "object" ||
+      Array.isArray(record)
+    ) {
+      return null;
+    }
+
+    return record;
+  }
+
+  /* ---------------------------------------------------------
+     6. Validate the saved record
+     --------------------------------------------------------- */
+
+  function isValidVerificationRecord(record, invoiceId) {
+    if (!record || typeof record !== "object") {
+      return false;
+    }
+
+    /*
+     * The verification ID must match the requested database key.
+     */
+    if (record.verificationId !== invoiceId) {
+      return false;
+    }
+
+    /*
+     * This must belong to the authorized restaurant software owner.
+     */
+    if (record.ownerUid !== OWNER_UID) {
+      return false;
+    }
+
+    /*
+     * Reject void, cancelled, missing or unknown record states.
+     */
+    if (record.recordStatus !== "valid") {
+      return false;
+    }
+
+    if (
+      typeof record.businessName !== "string" ||
+      !record.businessName.trim()
+    ) {
+      return false;
+    }
+
+    if (
+      typeof record.invoiceNumber !== "string" ||
+      !record.invoiceNumber.trim()
+    ) {
+      return false;
+    }
+
+    if (!formatDate(record.invoiceDate) ||
+        formatDate(record.invoiceDate) === "Not Available") {
+      return false;
+    }
+
+    if (
+      typeof record.grandTotal !== "number" ||
+      !Number.isFinite(record.grandTotal) ||
+      record.grandTotal < 0
+    ) {
+      return false;
+    }
+
+    if (
+      typeof record.paymentStatus !== "string" ||
+      !record.paymentStatus.trim()
+    ) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /* ---------------------------------------------------------
+     7. Display the verified fields only
+     --------------------------------------------------------- */
+
+  function renderVerifiedRecord(record) {
     setText(
       "verifiedBusinessName",
-      invoice.businessName || "Not Available"
+      record.businessName
     );
 
     setText(
       "verifiedInvoiceNumber",
-      invoice.invoiceNumber || "Not Available"
+      record.invoiceNumber
     );
 
     setText(
       "verifiedInvoiceDate",
-      formatDate(invoice.invoiceDate)
+      formatDate(record.invoiceDate)
     );
 
     setText(
       "verifiedGrandTotal",
-      formatMoney(invoice.grandTotal)
+      formatMoney(record.grandTotal)
     );
 
     setText(
       "verifiedPaymentStatus",
-      invoice.paymentStatus || "Not Available"
+      record.paymentStatus
     );
 
-    setText("verifiedRecordStatus", "Valid");
+    setText(
+      "verifiedRecordStatus",
+      "Valid"
+    );
 
     showSection("verificationDetails", true);
     showSection("verificationHelp", false);
@@ -144,24 +316,45 @@
     setStatus(
       "success",
       "Invoice Verified",
-      "The verification service confirmed this invoice record."
+      "A matching invoice verification record was found in Firebase."
     );
   }
 
-  function showNotVerified(message) {
+  /* ---------------------------------------------------------
+     8. Not-found and error states
+     --------------------------------------------------------- */
+
+  function showNotVerified() {
     showSection("verificationDetails", false);
 
     setStatus(
       "error",
       "Invoice Not Verified",
-      message || "The service could not confirm this invoice."
+      "No matching valid verification record was found."
     );
 
     showHelp(
-      "Check that the QR code is complete, or contact the business " +
-      "that issued the invoice."
+      "Check the QR code or contact the business that issued the invoice."
     );
   }
+
+  function showServiceError() {
+    showSection("verificationDetails", false);
+
+    setStatus(
+      "warning",
+      "Verification Unavailable",
+      "Firebase could not confirm this invoice. No verification success is claimed."
+    );
+
+    showHelp(
+      "Check your internet connection and try again later."
+    );
+  }
+
+  /* ---------------------------------------------------------
+     9. Main verification
+     --------------------------------------------------------- */
 
   async function verifyInvoice() {
     showSection("verificationDetails", false);
@@ -170,127 +363,50 @@
     setStatus(
       "checking",
       "Checking Invoice",
-      "Contacting the verification service..."
+      "Connecting to Firebase..."
     );
 
-    const params = new URLSearchParams(window.location.search);
-    const invoiceId = (params.get("invoice") || "").trim();
+    const invoiceId = getVerificationId();
 
-    /*
-     * Firebase-generated keys normally use letters, digits,
-     * hyphens and underscores. Reject unexpected query values.
-     */
-    if (
-      !invoiceId ||
-      invoiceId.length > 128 ||
-      !/^[A-Za-z0-9_-]+$/.test(invoiceId)
-    ) {
-      showNotVerified(
-        "The verification link is missing or contains an invalid invoice ID."
-      );
+    if (!invoiceId) {
+      showNotVerified();
       return;
     }
-
-    if (!window.fetch || !window.AbortController) {
-      setStatus(
-        "error",
-        "Verification Unavailable",
-        "This browser does not support the required verification request."
-      );
-
-      showHelp("Open the invoice link in an updated browser.");
-      return;
-    }
-
-    if (requestController) {
-      requestController.abort();
-    }
-
-    requestController = new AbortController();
-
-    const timeoutId = window.setTimeout(() => {
-      requestController?.abort();
-    }, 15000);
 
     try {
-      const endpoint = new URL(API_URL);
-      endpoint.searchParams.set("invoice", invoiceId);
+      const record = await readVerificationRecord(invoiceId);
 
-      const response = await window.fetch(endpoint.href, {
-        method: "GET",
-        headers: {
-          Accept: "application/json"
-        },
-        cache: "no-store",
-        credentials: "omit",
-        redirect: "error",
-        signal: requestController.signal
-      });
-
-      if (!response.ok) {
-        throw new Error("verification-service-unavailable");
-      }
-
-      const result = await response.json();
-
-      /*
-       * A successful HTTP response alone is not enough.
-       * The API must explicitly confirm the invoice.
-       */
-      if (result?.verified !== true || !result.invoice) {
-        showNotVerified(
-          "No verified invoice record was returned for this QR code."
-        );
+      if (!record) {
+        showNotVerified();
         return;
       }
 
-      const invoice = result.invoice;
-
-      /*
-       * Display only the fields used by this public page.
-       * The service should return a minimal, safe response.
-       */
-      if (
-        typeof invoice.invoiceNumber !== "string" ||
-        invoice.recordStatus !== "valid" ||
-        !Number.isFinite(Number(invoice.grandTotal)) ||
-        Number(invoice.grandTotal) < 0
-      ) {
-        showNotVerified(
-          "The returned record did not meet verification requirements."
-        );
+      if (!isValidVerificationRecord(record, invoiceId)) {
+        showNotVerified();
         return;
       }
 
-      renderVerifiedInvoice(invoice);
+      renderVerifiedRecord(record);
 
     } catch (error) {
+      /*
+       * Do not expose database configuration or internal errors
+       * to public visitors.
+       */
       console.error(
-        "Invoice verification request failed:",
-        error && error.name === "AbortError"
-          ? "Request timed out or was cancelled."
-          : "Verification service request failed."
+        "Invoice verification failed:",
+        error && error.message
+          ? error.message
+          : "Unknown error"
       );
 
-      showSection("verificationDetails", false);
-
-      setStatus(
-        "warning",
-        "Verification Service Unavailable",
-        "The invoice could not be verified right now. No authenticity " +
-        "confirmation has been given."
-      );
-
-      showHelp(
-        "Try again later. If the problem continues, contact the business " +
-        "that issued the invoice."
-      );
-
-    } finally {
-      window.clearTimeout(timeoutId);
-      requestController = null;
+      showServiceError();
     }
   }
+
+  /* ---------------------------------------------------------
+     10. Start
+     --------------------------------------------------------- */
 
   verifyInvoice();
 
