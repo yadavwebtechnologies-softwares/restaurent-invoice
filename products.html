@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,447 +5,512 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#ffffff">
   <meta name="robots" content="noindex, nofollow">
+
+  <title>Products &amp; Categories | Restaurant Billing</title>
   <meta
     name="description"
-    content="Manage restaurant products, prices, availability and inventory."
-  >
-
-  <title>Products | Restaurant Billing</title>
-
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
-    rel="stylesheet"
+    content="Manage saved business products, item prices and categories."
   >
 
   <link rel="stylesheet" href="style.css">
 </head>
 
-<body>
-  <div class="app">
+<body class="products-page">
 
-    <!-- SIDEBAR -->
+  <div class="app" id="app">
+
+    <!-- Sidebar -->
     <aside class="sidebar" id="sidebar">
-      <div class="brand">
-        <div class="brand-mark">B</div>
 
-        <div class="brand-text">
-          <h1 id="sidebarBusinessName">Your Business</h1>
-          <span>Restaurant Billing</span>
-        </div>
+      <div class="brand">
+        <a class="brand-link" href="dashboard.html" aria-label="Dashboard">
+          <span class="brand-mark" id="brandMark" aria-hidden="true">B</span>
+
+          <span class="brand-text">
+            <span class="brand-name" id="sidebarBusinessName"
+                  data-business-name>Business profile</span>
+            <span class="brand-description" id="sidebarBusinessTagline"
+                  data-business-tagline>Billing and management</span>
+          </span>
+        </a>
       </div>
 
-      <div class="nav-section">Main</div>
+      <nav class="sidebar-navigation" aria-label="Main navigation">
 
-      <a class="nav-item" href="index.html">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-          aria-hidden="true">
-          <rect x="3" y="3" width="7" height="9" rx="1.5"/>
-          <rect x="14" y="3" width="7" height="5" rx="1.5"/>
-          <rect x="14" y="12" width="7" height="9" rx="1.5"/>
-          <rect x="3" y="16" width="7" height="5" rx="1.5"/>
-        </svg>
-        Dashboard
-      </a>
+        <p class="nav-section">Main</p>
 
-      <a class="nav-item" href="new-invoice.html">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-          aria-hidden="true">
-          <path d="M12 5v14M5 12h14"/>
-        </svg>
-        New Invoice
-      </a>
+        <a class="nav-item" href="dashboard.html">
+          <span>Dashboard</span>
+        </a>
 
-      <a class="nav-item" href="invoices.html">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-          aria-hidden="true">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-          <path d="M14 2v6h6M8 13h8M8 17h5"/>
-        </svg>
-        Invoices
-      </a>
+        <a class="nav-item" href="invoice.html">
+          <span>New Invoice</span>
+        </a>
 
-      <a class="nav-item" href="reports.html">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-          aria-hidden="true">
-          <path d="M3 3v18h18"/>
-          <path d="M7 14l4-4 3 3 5-6"/>
-        </svg>
-        Reports
-      </a>
+        <p class="nav-section">Management</p>
 
-      <div class="nav-section">Manage</div>
+        <a class="nav-item active" href="products.html" aria-current="page">
+          <span>Products &amp; Categories</span>
+        </a>
 
-      <a class="nav-item active" href="products.html" aria-current="page">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-          aria-hidden="true">
-          <path d="M20 7l-8-4-8 4 8 4 8-4z"/>
-          <path d="M4 7v10l8 4 8-4V7"/>
-          <path d="M12 11v10"/>
-        </svg>
-        Products
-      </a>
+        <a class="nav-item" href="settings.html">
+          <span>Settings</span>
+        </a>
 
-      <a class="nav-item" href="categories.html">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-          aria-hidden="true">
-          <path d="M3 7h18M3 12h18M3 17h12"/>
-        </svg>
-        Categories
-      </a>
-
-      <a class="nav-item" href="settings.html">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-          aria-hidden="true">
-          <circle cx="12" cy="12" r="3"/>
-          <path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
-          <path d="m4.93 4.93 2.12 2.12m9.9 9.9 2.12 2.12m0-14.14-2.12 2.12m-9.9 9.9-2.12 2.12"/>
-        </svg>
-        Settings
-      </a>
+      </nav>
 
       <div class="sidebar-footer">
-        <div class="target-card">
-          <div class="label">Product Management</div>
-          <div class="value">Inventory Control</div>
 
-          <div class="target-track">
-            <div class="target-fill"></div>
-          </div>
-
-          <div class="target-meta">
-            <span>Products</span>
-            <span>Firebase</span>
-          </div>
+        <div class="sidebar-business-status">
+          <span class="status-indicator" aria-hidden="true"></span>
+          <span id="sidebarConnectionStatus">Connecting to database</span>
         </div>
-      </div>
-    </aside>
 
-    <div class="overlay" id="overlay"></div>
-
-    <!-- MAIN AREA -->
-    <div class="main">
-
-      <!-- TOPBAR -->
-      <header class="topbar">
         <button
-          class="menu-btn"
-          id="menuBtn"
           type="button"
-          aria-label="Open navigation menu"
-          aria-controls="sidebar"
+          class="nav-item logout-button"
+          id="logoutBtn"
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            stroke-width="2" stroke-linecap="round" aria-hidden="true">
-            <path d="M3 6h18M3 12h18M3 18h18"/>
-          </svg>
+          <span>Sign Out</span>
         </button>
 
-        <div class="crumbs">
-          <span>Manage</span>
-          <span class="sep">/</span>
-          <span class="current">Products</span>
-        </div>
+      </div>
 
-        <div class="topbar-right">
+    </aside>
+
+    <!-- Mobile navigation backdrop -->
+    <button
+      type="button"
+      class="overlay"
+      id="overlay"
+      aria-label="Close navigation"
+      hidden
+    ></button>
+
+    <!-- Main column -->
+    <div class="main">
+
+      <header class="topbar">
+
+        <div class="topbar-left">
+
           <button
-            class="btn-icon"
             type="button"
-            aria-label="Notifications"
-            title="Notifications"
+            class="menu-btn"
+            id="menuBtn"
+            aria-label="Open navigation"
+            aria-controls="sidebar"
+            aria-expanded="false"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-              aria-hidden="true">
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-              <path d="M13.7 21a2 2 0 0 1-3.4 0"/>
+                 stroke-width="2" stroke-linecap="round"
+                 aria-hidden="true">
+              <path d="M3 6h18M3 12h18M3 18h18"/>
             </svg>
           </button>
 
-          <button class="profile" type="button" aria-label="Administrator profile">
-            <div>
-              <div class="name">Administrator</div>
-              <div class="role">Owner</div>
-            </div>
-            <div class="avatar">A</div>
-          </button>
+          <div class="topbar-heading">
+            <p class="breadcrumb">Management / Products</p>
+            <h1>Products &amp; Categories</h1>
+          </div>
+
         </div>
+
+        <div class="topbar-right">
+          <div class="owner-profile">
+            <span class="owner-avatar" id="ownerAvatar" aria-hidden="true">—</span>
+
+            <span class="owner-profile-text">
+              <span class="owner-name" id="ownerDisplayName">Loading account</span>
+              <span class="owner-role" id="ownerDisplayRole">Owner</span>
+            </span>
+          </div>
+        </div>
+
       </header>
 
-      <!-- CONTENT -->
-      <main class="content">
+      <main class="content" id="productsContent">
 
-        <!-- PAGE HEADING -->
-        <section class="page-head">
+        <!-- Page introduction -->
+        <section class="page-heading">
+
           <div>
-            <h2>Product Management</h2>
-            <p>
-              Manage product names, categories, prices, availability and stock.
+            <p class="section-eyebrow">BUSINESS MANAGEMENT</p>
+            <h2>Saved Products</h2>
+            <p class="muted-text">
+              Manage the items and prices used when creating invoices.
             </p>
           </div>
 
-          <div class="page-actions">
-            <button
-              class="btn btn-soft"
-              id="exportProductsBtn"
-              type="button"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                aria-hidden="true">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                <path d="M7 10l5 5 5-5M12 15V3"/>
-              </svg>
-              Export CSV
-            </button>
-
-            <button
-              class="btn btn-primary"
-              id="addProductBtn"
-              type="button"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                aria-hidden="true">
-                <path d="M12 5v14M5 12h14"/>
-              </svg>
-              Add Product
-            </button>
-          </div>
-        </section>
-
-        <!-- OPERATION STATUS -->
-        <section class="card" aria-label="Product database status">
-          <div class="card-body">
-            <p id="productsFeedback" role="status" aria-live="polite">
-              Connecting to Firebase...
-            </p>
-          </div>
-        </section>
-
-        <!-- PRODUCT SUMMARY -->
-        <section class="kpis" aria-label="Product summary">
-
-          <div class="kpi">
-            <div class="kpi-top">
-              <div class="kpi-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                  aria-hidden="true">
-                  <path d="M20 7l-8-4-8 4 8 4 8-4z"/>
-                  <path d="M4 7v10l8 4 8-4V7"/>
-                </svg>
-              </div>
-            </div>
-            <div class="kpi-label">Total Products</div>
-            <div class="kpi-value">0</div>
-            <div class="kpi-sub">All registered products</div>
-          </div>
-
-          <div class="kpi">
-            <div class="kpi-top">
-              <div class="kpi-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                  aria-hidden="true">
-                  <circle cx="12" cy="12" r="9"/>
-                  <path d="M8 12l3 3 5-6"/>
-                </svg>
-              </div>
-            </div>
-            <div class="kpi-label">Active Products</div>
-            <div class="kpi-value">0</div>
-            <div class="kpi-sub">Available for billing</div>
-          </div>
-
-          <div class="kpi">
-            <div class="kpi-top">
-              <div class="kpi-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                  aria-hidden="true">
-                  <path d="M12 3v10"/>
-                  <path d="M8 9l4 4 4-4"/>
-                  <path d="M5 17h14M5 21h14"/>
-                </svg>
-              </div>
-            </div>
-            <div class="kpi-label">Low Stock</div>
-            <div class="kpi-value">0</div>
-            <div class="kpi-sub">Active products requiring attention</div>
-          </div>
-
-          <div class="kpi">
-            <div class="kpi-top">
-              <div class="kpi-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                  aria-hidden="true">
-                  <path d="M3 7h18M3 12h18M3 17h18"/>
-                </svg>
-              </div>
-            </div>
-            <div class="kpi-label">Categories</div>
-            <div class="kpi-value">0</div>
-            <div class="kpi-sub">Categories in registered products</div>
-          </div>
+          <a class="btn btn-primary" href="invoice.html">
+            Create Invoice
+          </a>
 
         </section>
 
-        <!-- PRODUCTS TABLE -->
-        <section class="card" aria-labelledby="productsHeading">
+        <!-- Database status -->
+        <div
+          class="dashboard-status"
+          id="productsPageStatus"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          Loading saved products and categories.
+        </div>
 
-          <div class="card-head">
+        <!-- Overview -->
+        <section class="dashboard-section" aria-labelledby="productOverviewHeading">
+
+          <div class="section-heading">
             <div>
-              <h3 id="productsHeading">All Products</h3>
-              <p>Search, filter and manage your saved product records.</p>
+              <h2 id="productOverviewHeading">Overview</h2>
+              <p class="muted-text">
+                Counts are calculated from saved database records.
+              </p>
             </div>
-
-            <a class="btn btn-outline btn-sm" href="categories.html">
-              Manage Categories
-            </a>
           </div>
 
-          <div class="card-body">
+          <div class="stats-grid">
 
-            <!-- SEARCH AND FILTERS -->
-            <form id="productFilters" role="search">
-              <div class="page-actions">
+            <article class="stat-card">
+              <p class="stat-label">Total Products</p>
+              <p class="stat-value" id="totalProductCount">—</p>
+              <p class="stat-description">Saved product records</p>
+            </article>
+
+            <article class="stat-card">
+              <p class="stat-label">Total Categories</p>
+              <p class="stat-value" id="totalCategoryCount">—</p>
+              <p class="stat-description">Saved product categories</p>
+            </article>
+
+          </div>
+
+        </section>
+
+        <!-- Add Product -->
+        <section class="dashboard-section" aria-labelledby="addProductHeading">
+
+          <div class="section-heading">
+            <div>
+              <h2 id="addProductHeading">Add Product</h2>
+              <p class="muted-text">
+                Save an item once so it can be selected during billing.
+              </p>
+            </div>
+          </div>
+
+          <div class="panel">
+
+            <form id="productForm" class="management-form">
+
+              <input type="hidden" id="productId" name="productId">
+
+              <div class="form-field">
+                <label for="productName">Product name</label>
 
                 <input
-                  class="btn btn-outline"
-                  type="search"
-                  id="productSearch"
-                  name="search"
-                  placeholder="Search products..."
-                  aria-label="Search products"
+                  type="text"
+                  id="productName"
+                  name="productName"
+                  maxlength="120"
+                  placeholder="Enter product name"
                   autocomplete="off"
+                  required
                 >
+              </div>
+
+              <div class="form-field">
+                <label for="productPrice">Price per item (₹)</label>
+
+                <input
+                  type="number"
+                  id="productPrice"
+                  name="productPrice"
+                  min="0.01"
+                  max="99999999"
+                  step="0.01"
+                  inputmode="decimal"
+                  placeholder="Enter price"
+                  required
+                >
+              </div>
+
+              <div class="form-field">
+                <label for="productCategory">Category</label>
 
                 <select
-                  class="btn btn-outline"
-                  id="categoryFilter"
-                  name="category"
-                  aria-label="Filter products by category"
+                  id="productCategory"
+                  name="productCategory"
+                  required
                 >
-                  <option value="">All Categories</option>
+                  <option value="">Loading saved categories...</option>
                 </select>
+              </div>
 
-                <select
-                  class="btn btn-outline"
-                  id="availabilityFilter"
-                  name="availability"
-                  aria-label="Filter products by availability"
-                >
-                  <option value="">All Statuses</option>
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                </select>
+              <div class="form-actions">
 
                 <button
-                  class="btn btn-soft"
-                  type="reset"
-                  id="resetProductFilters"
+                  type="submit"
+                  class="btn btn-primary"
+                  id="saveProductBtn"
                 >
-                  Reset Filters
+                  Save Product
+                </button>
+
+                <button
+                  type="button"
+                  class="btn btn-secondary"
+                  id="cancelProductEditBtn"
+                  hidden
+                >
+                  Cancel Edit
+                </button>
+
+                <button
+                  type="reset"
+                  class="btn btn-secondary"
+                  id="resetProductFormBtn"
+                >
+                  Clear Form
                 </button>
 
               </div>
+
+              <div
+                class="form-message"
+                id="productFormMessage"
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+              ></div>
+
             </form>
 
           </div>
 
-          <!-- TABLE TOOLBAR -->
-          <div class="card-head">
+        </section>
+
+        <!-- Product List -->
+        <section class="dashboard-section" aria-labelledby="productListHeading">
+
+          <div class="section-heading">
             <div>
-              <h3>Product List</h3>
-              <p>Records are loaded from Firebase Realtime Database.</p>
-            </div>
-
-            <div class="page-actions">
-              <select
-                class="btn btn-outline btn-sm"
-                id="bulkAction"
-                aria-label="Choose bulk action"
-              >
-                <option value="">Bulk Actions</option>
-                <option value="activate">Mark Active</option>
-                <option value="deactivate">Mark Inactive</option>
-                <option value="delete">Delete Selected</option>
-              </select>
-
-              <button
-                class="btn btn-soft btn-sm"
-                id="applyBulkAction"
-                type="button"
-              >
-                Apply
-              </button>
+              <h2 id="productListHeading">Saved Products</h2>
+              <p class="muted-text">
+                Search, edit or remove a saved product.
+              </p>
             </div>
           </div>
 
-          <!-- DATABASE TABLE -->
-          <div class="table-wrap">
-            <table class="inv-table" id="productsTable">
-              <thead>
-                <tr>
-                  <th>
-                    <input
-                      type="checkbox"
-                      id="selectAllProducts"
-                      aria-label="Select all visible products"
-                    >
-                  </th>
-                  <th>Product</th>
-                  <th>Category</th>
-                  <th>SKU</th>
-                  <th>Price</th>
-                  <th>Stock</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
+          <div class="panel">
 
-              <!-- Firebase populates real records here. -->
-              <tbody></tbody>
-            </table>
-          </div>
+            <div class="table-toolbar">
 
-          <div class="card-head">
-            <p>Product list is synchronised with Firebase.</p>
-            <a class="btn btn-outline btn-sm" href="categories.html">
-              View Categories
-            </a>
+              <div class="form-field">
+                <label for="productSearch">Search products</label>
+
+                <input
+                  type="search"
+                  id="productSearch"
+                  name="productSearch"
+                  placeholder="Search by product name"
+                  autocomplete="off"
+                >
+              </div>
+
+              <div class="form-field">
+                <label for="productCategoryFilter">Filter category</label>
+
+                <select
+                  id="productCategoryFilter"
+                  name="productCategoryFilter"
+                >
+                  <option value="">All categories</option>
+                </select>
+              </div>
+
+            </div>
+
+            <div class="table-container">
+              <div class="table-scroll">
+
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Product</th>
+                      <th scope="col">Category</th>
+                      <th scope="col">Price</th>
+                      <th scope="col">Actions</th>
+                    </tr>
+                  </thead>
+
+                  <tbody id="productsTableBody">
+                    <tr>
+                      <td colspan="4" class="table-empty">
+                        Loading saved products.
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+
+              </div>
+            </div>
+
+            <div class="table-footer">
+              <span id="productListSummary">
+                Loading product records.
+              </span>
+            </div>
+
           </div>
 
         </section>
 
-        <!-- FOOTER -->
-        <footer class="page-footer">
-          <span>Your Business · Product Management</span>
-          <span>
-            <a href="settings.html">Settings</a>
-          </span>
+        <!-- Add Category -->
+        <section class="dashboard-section" aria-labelledby="addCategoryHeading">
+
+          <div class="section-heading">
+            <div>
+              <h2 id="addCategoryHeading">Categories</h2>
+              <p class="muted-text">
+                Create categories to organize saved products.
+              </p>
+            </div>
+          </div>
+
+          <div class="panel">
+
+            <form id="categoryForm" class="management-form">
+
+              <input type="hidden" id="categoryId" name="categoryId">
+
+              <div class="form-field">
+                <label for="categoryName">Category name</label>
+
+                <input
+                  type="text"
+                  id="categoryName"
+                  name="categoryName"
+                  maxlength="100"
+                  placeholder="Enter category name"
+                  autocomplete="off"
+                  required
+                >
+              </div>
+
+              <div class="form-actions">
+
+                <button
+                  type="submit"
+                  class="btn btn-primary"
+                  id="saveCategoryBtn"
+                >
+                  Add Category
+                </button>
+
+                <button
+                  type="button"
+                  class="btn btn-secondary"
+                  id="cancelCategoryEditBtn"
+                  hidden
+                >
+                  Cancel Edit
+                </button>
+
+                <button
+                  type="reset"
+                  class="btn btn-secondary"
+                  id="resetCategoryFormBtn"
+                >
+                  Clear Form
+                </button>
+
+              </div>
+
+              <div
+                class="form-message"
+                id="categoryFormMessage"
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+              ></div>
+
+            </form>
+
+          </div>
+
+        </section>
+
+        <!-- Category List -->
+        <section class="dashboard-section" aria-labelledby="categoryListHeading">
+
+          <div class="section-heading">
+            <div>
+              <h2 id="categoryListHeading">Saved Categories</h2>
+              <p class="muted-text">
+                Review or edit existing categories.
+              </p>
+            </div>
+          </div>
+
+          <div class="panel">
+
+            <div class="table-container">
+              <div class="table-scroll">
+
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Category</th>
+                      <th scope="col">Products</th>
+                      <th scope="col">Actions</th>
+                    </tr>
+                  </thead>
+
+                  <tbody id="categoriesTableBody">
+                    <tr>
+                      <td colspan="3" class="table-empty">
+                        Loading saved categories.
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+
+              </div>
+            </div>
+
+            <div class="table-footer">
+              <span id="categoryListSummary">
+                Loading category records.
+              </span>
+            </div>
+
+          </div>
+
+        </section>
+
+        <footer class="app-footer">
+          <span data-business-name id="businessFooterName">Business management</span>
+          <span id="productsFooterStatus">Products and categories</span>
         </footer>
 
       </main>
+
     </div>
+
   </div>
 
-  <!-- Scripts: Firebase must load before authentication and page logic. -->
+  <!-- Shared application scripts -->
+  <script src="js/script.js" defer></script>
   <script src="js/firebase-config.js" defer></script>
   <script src="js/auth.js" defer></script>
   <script src="js/guard.js" defer></script>
-  <script src="script.js" defer></script>
-  <script src="js/products.js" defer></script>
   <script src="js/logout.js" defer></script>
+
+  <!-- Products and categories functionality -->
+  <script src="js/products.js" defer></script>
+
 </body>
 </html>
