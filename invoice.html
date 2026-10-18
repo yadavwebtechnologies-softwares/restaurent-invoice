@@ -24,14 +24,9 @@
       </div>
 
       <nav class="sidebar-navigation" aria-label="Main navigation">
-
         <p class="nav-section">Main</p>
 
-        <a
-          class="nav-item active"
-          href="dashboard.html"
-          aria-current="page"
-        >
+        <a class="nav-item active" href="dashboard.html" aria-current="page">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
                stroke-width="1.8" stroke-linecap="round"
                stroke-linejoin="round" aria-hidden="true">
@@ -95,7 +90,6 @@
           </svg>
           <span>Settings</span>
         </a>
-
       </nav>
 
       <div class="sidebar-footer">
@@ -103,6 +97,7 @@
           <span class="status-indicator" aria-hidden="true"></span>
           <span id="sidebarConnectionStatus">Connecting to database</span>
         </div>
+
         <button type="button" class="nav-item logout-button" id="logoutBtn">
           <span>Sign Out</span>
         </button>
@@ -129,7 +124,7 @@
             aria-expanded="false"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                 stroke-width="2" stroke-linecap="round" aria-hidden="true">
               <path d="M3 6h18M3 12h18M3 18h18"/>
             </svg>
           </button>
@@ -152,7 +147,6 @@
       </header>
 
       <main class="content" id="invoiceContent">
-
         <section class="page-heading">
           <div>
             <p class="section-eyebrow">BILLING</p>
@@ -164,7 +158,7 @@
         </section>
 
         <div class="dashboard-status" id="invoicePageStatus"
-          role="status" aria-live="polite">
+             role="status" aria-live="polite">
           Loading saved products and billing settings.
         </div>
 
@@ -188,7 +182,7 @@
               <div class="form-field">
                 <label for="itemQuantity">Quantity</label>
                 <input type="number" id="itemQuantity" name="quantity"
-                  min="1" step="1" value="1" inputmode="numeric" required>
+                       min="1" step="1" value="1" inputmode="numeric" required>
               </div>
 
               <button type="submit" class="btn btn-primary" id="addItemBtn">
@@ -198,8 +192,8 @@
 
             <div class="custom-item-actions">
               <button type="button" class="btn btn-secondary"
-                id="toggleCustomItemBtn" aria-expanded="false"
-                aria-controls="customItemPanel">
+                      id="toggleCustomItemBtn" aria-expanded="false"
+                      aria-controls="customItemPanel">
                 Add Custom Item
               </button>
             </div>
@@ -211,20 +205,20 @@
                 <div class="form-field">
                   <label for="customItemName">Item Name</label>
                   <input type="text" id="customItemName" name="customItemName"
-                    maxlength="120" autocomplete="off">
+                         maxlength="120" autocomplete="off">
                 </div>
 
                 <div class="form-field">
                   <label for="customItemPrice">Unit Price (₹)</label>
                   <input type="number" id="customItemPrice" name="customItemPrice"
-                    min="0.01" step="0.01" inputmode="decimal">
+                         min="0.01" step="0.01" inputmode="decimal">
                 </div>
 
                 <div class="form-field">
                   <label for="customItemQuantity">Quantity</label>
                   <input type="number" id="customItemQuantity"
-                    name="customItemQuantity" min="1" step="1"
-                    value="1" inputmode="numeric">
+                         name="customItemQuantity" min="1" step="1"
+                         value="1" inputmode="numeric">
                 </div>
 
                 <button type="submit" class="btn btn-primary" id="addCustomItemBtn">
@@ -241,6 +235,7 @@
               <h2 id="invoiceItemsHeading">Invoice Items</h2>
               <p class="muted-text" id="itemCount">No items added</p>
             </div>
+
             <button type="button" class="btn btn-secondary" id="clearItemsBtn">
               Clear Items
             </button>
@@ -282,14 +277,17 @@
                 <dt>Subtotal</dt>
                 <dd id="invoiceSubtotal">—</dd>
               </div>
+
               <div class="invoice-total-row" id="discountTotalRow" hidden>
                 <dt>Discount</dt>
                 <dd id="invoiceDiscount">—</dd>
               </div>
+
               <div class="invoice-total-row" id="taxTotalRow" hidden>
                 <dt id="invoiceTaxLabel">Tax</dt>
                 <dd id="invoiceTax">—</dd>
               </div>
+
               <div class="invoice-total-row invoice-grand-total">
                 <dt>Grand Total</dt>
                 <dd id="invoiceGrandTotal">—</dd>
@@ -297,7 +295,6 @@
             </dl>
 
             <form id="invoiceForm">
-
               <section class="invoice-customer-fields" aria-labelledby="customerHeading">
                 <h3 id="customerHeading">Customer &amp; Payment Details</h3>
 
@@ -359,16 +356,17 @@
               <div class="form-field">
                 <label for="invoiceNotes">Notes (Optional)</label>
                 <textarea id="invoiceNotes" name="notes" rows="2"
-                  maxlength="500" placeholder="Add a note if required"></textarea>
+                          maxlength="500" placeholder="Add a note if required"></textarea>
               </div>
 
               <div class="form-message" id="invoiceMessage"
-                role="status" aria-live="polite" aria-atomic="true"></div>
+                   role="status" aria-live="polite" aria-atomic="true"></div>
 
               <div class="invoice-actions">
                 <button type="button" class="btn btn-secondary" id="resetInvoiceBtn">
                   Reset
                 </button>
+
                 <button type="submit" class="btn btn-primary" id="generateInvoiceBtn">
                   <span id="invoiceSubmitLabel">Record / Save Invoice</span>
                 </button>
@@ -378,8 +376,8 @@
         </section>
 
         <section class="dashboard-section invoice-preview-section"
-          id="invoicePreviewSection" aria-labelledby="invoicePreviewHeading" hidden>
-
+                 id="invoicePreviewSection"
+                 aria-labelledby="invoicePreviewHeading" hidden>
           <div class="section-heading">
             <div>
               <h2 id="invoicePreviewHeading">Invoice Preview</h2>
@@ -390,6 +388,7 @@
               <button type="button" class="btn btn-secondary" id="closeInvoicePreviewBtn">
                 Close Preview
               </button>
+
               <button type="button" class="btn btn-primary" id="printInvoiceBtn">
                 Print Invoice
               </button>
@@ -397,7 +396,6 @@
           </div>
 
           <article class="invoice-print-sheet" id="invoicePrintSheet">
-
             <header class="inv-header">
               <img class="inv-logo" id="printBusinessLogo" alt="Business Logo" hidden>
 
@@ -465,6 +463,7 @@
                   <span>Payment Method</span>
                   <strong id="printPaymentMethod">Cash</strong>
                 </div>
+
                 <div class="inv-payment-row" id="printPaymentStatusRow">
                   <span>Payment Status</span>
                   <strong id="printPaymentStatus">Paid</strong>
@@ -500,11 +499,22 @@
                 </div>
               </dl>
 
+              <!-- Static restaurant location QR; no dynamic invoice QR -->
               <div class="inv-qr-block" id="printQrSection">
-                <div class="inv-qr">
-                  <img src="QR.jpg" id="invoiceQrImage" alt="Invoice verification QR code">
+                <div class="inv-qr-static">
+                  <a href="business-location.html"
+                     target="_blank"
+                     rel="noopener noreferrer"
+                     aria-label="Open restaurant location">
+                    <img
+                      src="business-location-qr.png"
+                      alt="Scan to find our restaurant on Google Maps"
+                      width="108"
+                      height="108"
+                    >
+                  </a>
                 </div>
-                <p id="invoiceQrCaption">Scan for Verification</p>
+                <p id="invoiceQrCaption">Scan to Find Our Restaurant</p>
               </div>
             </section>
 
@@ -515,6 +525,7 @@
 
             <footer class="inv-footer">
               <div class="inv-footer-divider"></div>
+
               <div class="inv-footer-grid">
                 <div>
                   <p class="inv-thanks" id="printThankYouMessage" hidden></p>
@@ -527,7 +538,6 @@
                 </div>
               </div>
             </footer>
-
           </article>
         </section>
 
@@ -544,7 +554,6 @@
   <script src="js/auth.js" defer></script>
   <script src="js/guard.js" defer></script>
   <script src="js/logout.js" defer></script>
-  <script src="js/qr.js" defer></script>
   <script src="js/invoice.js" defer></script>
 </body>
 </html>
