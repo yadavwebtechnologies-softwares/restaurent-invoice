@@ -1,8 +1,10 @@
+
 /* =========================================================
    RESTAURANT BILLING SOFTWARE
    Invoice Creation, Calculation, Saving and Preview
    Database root: restaurantBilling/
    Static restaurant-location QR only
+   Safe manual refresh preserves the current invoice draft
    No invoice verification records or dynamic QR generation
    ========================================================= */
 
@@ -35,9 +37,11 @@
       settings: false
     },
     subscriptions: [],
+    unregisterPageRefresh: null,
     ready: false,
     saving: false,
-    nextItemId: 1
+    nextItemId: 1,
+    disposed: false
   };
 
   /* ---------------------------------------------------------
@@ -436,6 +440,7 @@
     const select = $("productSelect");
     if (!select) return;
 
+    const previouslySelected = select.value;
     select.replaceChildren();
 
     const firstOption = document.createElement("option");
@@ -472,7 +477,7 @@
     firstOption.textContent = "Select a product";
     select.appendChild(firstOption);
 
-    products.sort((a, b) =>
+    products.slice().sort((a, b) =>
       productName(a).localeCompare(productName(b))
     ).forEach((product) => {
       const option = document.createElement("option");
@@ -483,6 +488,19 @@
     });
 
     select.disabled = false;
+
+    /*
+     * Keep the user's current selection when the list still
+     * contains that product after a live update or manual refresh.
+     */
+    if (
+      previouslySelected &&
+      products.some((product) =>
+        product._recordKey === previouslySelected
+      )
+    ) {
+      select.value = previouslySelected;
+    }
   }
 
   function getSelectedProduct() {
@@ -1228,12 +1246,8 @@
     if (!section) return;
 
     /*
-     * The QR image is static:
-     * business-location-qr.png
-     *
-     * It opens business-location.html.
-     * That page reads the saved restaurant address from Firebase.
-     *
+     * Static location QR only:
+     * business-location-qr.png -> business-location.html
      * No QR generation and no invoice verification.
      */
     section.hidden = !settingFlag([
@@ -1658,7 +1672,91 @@
   }
 
   /* ---------------------------------------------------------
-     13. Reset, close and print
+     13. Manual refresh
+     --------------------------------------------------------- */
+
+  async function refreshInvoicePage() {
+    if (state.disposed || !state.db || !state.api) {
+      throw new Error("Invoice page is not ready to refresh.");
+    }
+
+    if (state.saving) {
+      throw new Error(
+        "An invoice is being saved. Refresh after the save completes."
+      );
+    }
+
+    ensureOwnerAuthorized();
+
+    if (typeof state.api.get !== "function") {
+      throw new Error("Firebase data refresh is unavailable.");
+    }
+
+    setPageStatus("Refreshing billing data...", "warning");
+
+    /*
+     * Fetch first, then update state only after all reads succeed.
+     * Existing live subscriptions are not duplicated.
+     */
+    const sources = [
+      PATHS.products,
+      PATHS.categories,
+      PATHS.settings
+    ];
+
+    const snapshots = await Promise.all(
+      sources.map(function (path) {
+        return state.api.get(
+          state.api.ref(state.db, path)
+        );
+      })
+    );
+
+    if (state.disposed) return;
+
+    /*
+     * Preserve the currently selected product where possible.
+     * Cart items and customer/payment form values are untouched.
+     */
+    const selectedProductId = $("productSelect")?.value || "";
+
+    state.products = recordEntries(
+      snapshots[0].exists() ? snapshots[0].val() : null
+    );
+
+    state.categories = recordEntries(
+      snapshots[1].exists() ? snapshots[1].val() : null
+    );
+
+    state.settings = snapshots[2].exists()
+      ? snapshots[2].val() || {}
+      : {};
+
+    state.loaded.products = true;
+    state.loaded.categories = true;
+    state.loaded.settings = true;
+
+    populateProductSelect();
+
+    if (
+      selectedProductId &&
+      state.products.some(function (product) {
+        return product._recordKey === selectedProductId &&
+          recordIsActive(product);
+      })
+    ) {
+      $("productSelect").value = selectedProductId;
+    }
+
+    renderInvoiceBusinessDetails();
+    checkReady();
+
+    setPageStatus("Billing data refreshed successfully.", "connected");
+    setText("invoiceFooterStatus", "Billing Data Refreshed");
+  }
+
+  /* ---------------------------------------------------------
+     14. Reset, close and print
      --------------------------------------------------------- */
 
   function resetInvoice() {
@@ -1711,7 +1809,7 @@
   }
 
   /* ---------------------------------------------------------
-     14. Initialize
+     15. Initialize
      --------------------------------------------------------- */
 
   async function initialize() {
@@ -1759,6 +1857,7 @@
       if (
         typeof state.api.ref !== "function" ||
         typeof state.api.onValue !== "function" ||
+        typeof state.api.get !== "function" ||
         typeof state.api.push !== "function" ||
         typeof state.api.set !== "function" ||
         typeof state.api.runTransaction !== "function"
@@ -1766,6 +1865,14 @@
         throw new Error(
           "Required Realtime Database methods are unavailable."
         );
+      }
+
+      if (
+        ui &&
+        typeof ui.registerPageRefresh === "function"
+      ) {
+        state.unregisterPageRefresh =
+          ui.registerPageRefresh(refreshInvoicePage);
       }
 
       subscribe(PATHS.products, onProducts, (error) =>
@@ -1800,7 +1907,7 @@
   }
 
   /* ---------------------------------------------------------
-     15. Event handlers
+     16. Event handlers
      --------------------------------------------------------- */
 
   $("addInvoiceItemForm")?.addEventListener("submit", addSavedProduct);
@@ -1831,6 +1938,8 @@
   initialize();
 
   window.addEventListener("pagehide", function () {
+    state.disposed = true;
+
     state.subscriptions.forEach((unsubscribe) => {
       try {
         if (typeof unsubscribe === "function") unsubscribe();
@@ -1840,6 +1949,11 @@
     });
 
     state.subscriptions = [];
+
+    if (typeof state.unregisterPageRefresh === "function") {
+      state.unregisterPageRefresh();
+      state.unregisterPageRefresh = null;
+    }
   });
 
 })();
