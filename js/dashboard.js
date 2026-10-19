@@ -4,7 +4,7 @@
    Live Dashboard
    Database root: restaurantBilling/
    Live connection monitoring and safe manual refresh
-   No demo data, no hardcoded business secrets
+   Lightweight initial loading and reveal animation
    ========================================================= */
 
 (function () {
@@ -32,6 +32,10 @@
   let stopped = false;
   let databaseConnected = false;
 
+  /* Loading animation state: runs only on initial page load. */
+  let loadingPhase = "loading";
+  let revealTimer = null;
+
   const state = {
     invoices: [],
     products: [],
@@ -45,6 +49,18 @@
     },
     errors: []
   };
+
+  /*
+   * Apply loading state immediately, before Firebase initialization.
+   * Summary cards also receive the shared blur surface attribute.
+   */
+  if (document.body) {
+    document.body.classList.add("is-dashboard-loading");
+
+    document.querySelectorAll(".stat-card").forEach(function (card) {
+      card.setAttribute("data-loading-surface", "");
+    });
+  }
 
   /* ---------------------------------------------------------
      1. General helpers
@@ -229,7 +245,73 @@
   }
 
   /* ---------------------------------------------------------
-     2. Invoice normalization
+     2. Lightweight initial loading and reveal
+     --------------------------------------------------------- */
+
+  function isSourceResolved(key) {
+    if (state.loaded[key]) {
+      return true;
+    }
+
+    const path = PATHS[key];
+
+    return state.errors.some(function (error) {
+      return error.path === path;
+    });
+  }
+
+  function allInitialSourcesResolved() {
+    return Object.keys(PATHS).every(isSourceResolved);
+  }
+
+  function finishDashboardLoadingImmediately() {
+    if (revealTimer !== null) {
+      window.clearTimeout(revealTimer);
+      revealTimer = null;
+    }
+
+    document.body.classList.remove(
+      "is-dashboard-loading",
+      "is-dashboard-revealing"
+    );
+
+    loadingPhase = "complete";
+  }
+
+  function revealDashboardWhenReady() {
+    if (
+      stopped ||
+      loadingPhase !== "loading" ||
+      !allInitialSourcesResolved()
+    ) {
+      return;
+    }
+
+    /*
+     * Real values have already been rendered by renderDashboard().
+     * The CSS keeps them visually hidden during this short exit.
+     */
+    loadingPhase = "revealing";
+
+    document.body.classList.remove("is-dashboard-loading");
+    document.body.classList.add("is-dashboard-revealing");
+
+    /*
+     * Matches the 240ms CSS swipe and blur transition.
+     * One timer runs once per page load; no polling or intervals.
+     */
+    revealTimer = window.setTimeout(function () {
+      revealTimer = null;
+
+      if (stopped) return;
+
+      document.body.classList.remove("is-dashboard-revealing");
+      loadingPhase = "complete";
+    }, 270);
+  }
+
+  /* ---------------------------------------------------------
+     3. Invoice normalization
      --------------------------------------------------------- */
 
   function invoiceAmount(invoice) {
@@ -366,7 +448,7 @@
   }
 
   /* ---------------------------------------------------------
-     3. Settings and business profile
+     4. Settings and business profile
      --------------------------------------------------------- */
 
   function getSettingsObject() {
@@ -509,7 +591,7 @@
   }
 
   /* ---------------------------------------------------------
-     4. Today's revenue and invoice count
+     5. Today's revenue and invoice count
      --------------------------------------------------------- */
 
   function isToday(invoice) {
@@ -547,7 +629,7 @@
   }
 
   /* ---------------------------------------------------------
-     5. Products and categories summary
+     6. Products and categories summary
      --------------------------------------------------------- */
 
   function isActiveRecord(record) {
@@ -578,7 +660,7 @@
   }
 
   /* ---------------------------------------------------------
-     6. Daily target progress
+     7. Daily target progress
      --------------------------------------------------------- */
 
   function renderDailyTarget() {
@@ -648,7 +730,7 @@
   }
 
   /* ---------------------------------------------------------
-     7. Recent invoices table
+     8. Recent invoices table
      --------------------------------------------------------- */
 
   function appendCell(row, value) {
@@ -719,7 +801,7 @@
   }
 
   /* ---------------------------------------------------------
-     8. Top-selling products
+     9. Top-selling products
      --------------------------------------------------------- */
 
   function getInvoiceItems(invoice) {
@@ -826,7 +908,7 @@
   }
 
   /* ---------------------------------------------------------
-     9. Connection state and rendering
+     10. Connection state and rendering
      --------------------------------------------------------- */
 
   function renderDashboard() {
@@ -856,6 +938,8 @@
 
       setSidebarStatus("Some data unavailable", "error");
       setText("dashboardFooterStatus", "Some data unavailable");
+
+      revealDashboardWhenReady();
       return;
     }
 
@@ -873,6 +957,7 @@
         "Checking database connection"
       );
 
+      revealDashboardWhenReady();
       return;
     }
 
@@ -893,10 +978,12 @@
 
       setText("dashboardFooterStatus", "Loading business records");
     }
+
+    revealDashboardWhenReady();
   }
 
   /* ---------------------------------------------------------
-     10. Realtime Database subscriptions
+     11. Realtime Database subscriptions
      --------------------------------------------------------- */
 
   function removePathError(path) {
@@ -952,8 +1039,7 @@
   }
 
   /*
-   * Realtime Database connection monitoring is separate from
-   * whether all four data sources have finished their first load.
+   * Connection state is distinct from initial data loading.
    */
   function subscribeConnectionStatus() {
     const reference = databaseAPI.ref(database, ".info/connected");
@@ -986,7 +1072,7 @@
   }
 
   /* ---------------------------------------------------------
-     11. Manual refresh
+     12. Manual refresh
      --------------------------------------------------------- */
 
   function normalizeSettings(value) {
@@ -1069,7 +1155,7 @@
   }
 
   /* ---------------------------------------------------------
-     12. Initialize
+     13. Initialize
      --------------------------------------------------------- */
 
   async function initialize() {
@@ -1087,6 +1173,7 @@
 
       if (!authorized || !access.authorized || !access.user) {
         stopped = true;
+        finishDashboardLoadingImmediately();
         return;
       }
 
@@ -1120,9 +1207,8 @@
       }
 
       /*
-       * Register one page-specific refresh handler.
-       * Existing subscriptions continue to provide live updates;
-       * manual refresh does not add any new subscriptions.
+       * Register the existing page-specific manual refresh.
+       * Initial loading animation does not alter Firebase subscriptions.
        */
       if (
         ui &&
@@ -1133,9 +1219,7 @@
         );
       }
 
-      /*
-       * Start connection monitoring and data subscriptions together.
-       */
+      /* Start connection and data listeners together. */
       subscribeConnectionStatus();
 
       subscribeTo(
@@ -1167,6 +1251,8 @@
     } catch (error) {
       console.error("Dashboard initialization failed:", error);
 
+      finishDashboardLoadingImmediately();
+
       setStatus(
         error instanceof Error
           ? error.message
@@ -1179,8 +1265,14 @@
     }
   }
 
+  /* ---------------------------------------------------------
+     14. Cleanup
+     --------------------------------------------------------- */
+
   window.addEventListener("pagehide", function () {
     stopped = true;
+
+    finishDashboardLoadingImmediately();
 
     subscriptions.forEach(function (unsubscribe) {
       try {
