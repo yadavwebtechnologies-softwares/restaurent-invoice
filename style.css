@@ -2621,3 +2621,93 @@ input[type="radio"] {
     width: 100%;
   }
 }
+
+
+/* =========================================================
+   DASHBOARD LOADING — lightweight spinner and reveal
+   Scoped to dashboard only
+   ========================================================= */
+
+.dashboard-page [data-loading-value] {
+  position: relative;
+  transition:
+    color 180ms ease,
+    filter 220ms ease,
+    opacity 220ms ease;
+}
+
+/* Keep real values hidden only while loading */
+.dashboard-page.is-dashboard-loading [data-loading-value],
+.dashboard-page.is-dashboard-revealing [data-loading-value] {
+  color: transparent !important;
+  user-select: none;
+}
+
+/* Compact spinner */
+.dashboard-page.is-dashboard-loading [data-loading-value]::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 15px;
+  height: 15px;
+  border: 3px solid #dedede;
+  border-top-color: #111111;
+  border-radius: 50%;
+  transform: translateY(-50%);
+  animation: dashboard-spinner-rotate 650ms linear infinite;
+}
+
+/* Swipe spinner out after Firebase values are ready */
+.dashboard-page.is-dashboard-revealing [data-loading-value]::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 15px;
+  height: 15px;
+  border: 3px solid #dedede;
+  border-top-color: #111111;
+  border-radius: 50%;
+  transform: translateY(-50%);
+  animation: dashboard-spinner-exit 240ms ease-in forwards;
+  pointer-events: none;
+}
+
+.dashboard-page [data-loading-surface] {
+  transition: filter 240ms ease;
+}
+
+.dashboard-page.is-dashboard-loading [data-loading-surface],
+.dashboard-page.is-dashboard-revealing [data-loading-surface] {
+  filter: blur(1px);
+}
+
+@keyframes dashboard-spinner-rotate {
+  to {
+    transform: translateY(-50%) rotate(360deg);
+  }
+}
+
+@keyframes dashboard-spinner-exit {
+  to {
+    opacity: 0;
+    transform: translate(22px, -50%);
+  }
+}
+
+/* Reduce animation for users who prefer less motion */
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-page.is-dashboard-loading [data-loading-value]::after {
+    animation-duration: 1.5s;
+  }
+
+  .dashboard-page.is-dashboard-revealing [data-loading-value]::after {
+    animation-duration: 100ms;
+  }
+
+  .dashboard-page [data-loading-value],
+  .dashboard-page [data-loading-surface] {
+    transition-duration: 100ms;
+  }
+}
