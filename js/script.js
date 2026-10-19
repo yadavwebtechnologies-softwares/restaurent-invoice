@@ -1,6 +1,7 @@
 /* =========================================================
    RESTAURANT BILLING SOFTWARE
    Shared UI and Navigation
+   Common page-refresh infrastructure
    No demo data, no secrets, no database writes
    ========================================================= */
 
@@ -15,6 +16,9 @@
   const overlay = document.getElementById("overlay");
 
   let menuOpen = false;
+  let pageRefreshHandler = null;
+  let pageRefreshButton = null;
+  let refreshInProgress = false;
 
   /* ---------------------------------------------------------
      1. Shared safe DOM helpers
@@ -88,7 +92,11 @@
 
     element.textContent = String(message ?? "");
 
-    element.classList.remove("is-connected", "is-error", "is-warning");
+    element.classList.remove(
+      "is-connected",
+      "is-error",
+      "is-warning"
+    );
 
     if (state === "connected") {
       element.classList.add("is-connected");
@@ -126,7 +134,133 @@
   }
 
   /* ---------------------------------------------------------
-     4. Mobile navigation
+     4. Consistent page-refresh infrastructure
+     --------------------------------------------------------- */
+
+  function getPageStatusElement() {
+    const candidates = [
+      "dashboardStatus",
+      "invoicePageStatus",
+      "invoicesPageStatus",
+      "productsPageStatus",
+      "reportsPageStatus",
+      "settingsPageStatus"
+    ];
+
+    for (const id of candidates) {
+      const element = document.getElementById(id);
+
+      if (element) return element;
+    }
+
+    return null;
+  }
+
+  function reportRefreshError(error) {
+    console.error("Page data refresh failed:", error);
+
+    const statusElement = getPageStatusElement();
+
+    if (statusElement) {
+      setStatus(
+        statusElement,
+        "Refresh failed. Check your connection and try again.",
+        "error"
+      );
+    }
+  }
+
+  function createRefreshButton() {
+    if (pageRefreshButton && pageRefreshButton.isConnected) {
+      return pageRefreshButton;
+    }
+
+    const topbarRight = document.querySelector(".topbar-right");
+
+    if (!topbarRight) {
+      return null;
+    }
+
+    const button = document.createElement("button");
+
+    button.type = "button";
+    button.id = "pageRefreshBtn";
+    button.className = "btn btn-secondary btn-small page-refresh-button";
+    button.textContent = "Refresh";
+    button.setAttribute("aria-label", "Refresh current page data");
+    button.title = "Load the latest data for this page";
+
+    button.addEventListener("click", async function () {
+      if (
+        refreshInProgress ||
+        button.disabled ||
+        typeof pageRefreshHandler !== "function"
+      ) {
+        return;
+      }
+
+      refreshInProgress = true;
+      button.disabled = true;
+      button.setAttribute("aria-busy", "true");
+      button.textContent = "Refreshing...";
+
+      try {
+        await pageRefreshHandler();
+      } catch (error) {
+        reportRefreshError(error);
+      } finally {
+        refreshInProgress = false;
+        button.disabled = false;
+        button.removeAttribute("aria-busy");
+        button.textContent = "Refresh";
+      }
+    });
+
+    topbarRight.insertBefore(button, topbarRight.firstChild);
+
+    pageRefreshButton = button;
+
+    return button;
+  }
+
+  /*
+   * Each page registers its own safe data-refresh function.
+   * No automatic page reload is performed.
+   * The page-specific handler must preserve current form/filter state.
+   */
+  function registerPageRefresh(handler) {
+    if (typeof handler !== "function") {
+      throw new TypeError(
+        "Page refresh handler must be a function."
+      );
+    }
+
+    pageRefreshHandler = handler;
+
+    const button = createRefreshButton();
+
+    if (!button) {
+      pageRefreshHandler = null;
+      return function () {};
+    }
+
+    /*
+     * Return an unregister function for page-specific cleanup.
+     */
+    return function unregisterPageRefresh() {
+      if (pageRefreshHandler === handler) {
+        pageRefreshHandler = null;
+      }
+
+      if (pageRefreshButton) {
+        pageRefreshButton.remove();
+        pageRefreshButton = null;
+      }
+    };
+  }
+
+  /* ---------------------------------------------------------
+     5. Mobile navigation
      Uses existing HTML IDs and shared CSS classes.
      Does not intercept normal anchor navigation.
      --------------------------------------------------------- */
@@ -182,10 +316,6 @@
       const link = event.target.closest("a[href]");
 
       if (link && isMobileViewport()) {
-        /*
-         * Let the browser follow the normal href.
-         * Only close the mobile menu here.
-         */
         closeMenu();
       }
     });
@@ -203,13 +333,11 @@
       }
     });
 
-    /* Start with the mobile menu closed. */
     closeMenu();
   }
 
   /* ---------------------------------------------------------
-     5. Active navigation link
-     Based on the actual page URL, not JS redirection.
+     6. Active navigation link
      --------------------------------------------------------- */
 
   function updateActiveNavigation() {
@@ -241,7 +369,7 @@
   updateActiveNavigation();
 
   /* ---------------------------------------------------------
-     6. Shared public helpers for other page scripts
+     7. Shared public helpers for other page scripts
      --------------------------------------------------------- */
 
   const sharedUI = Object.freeze({
@@ -252,7 +380,8 @@
     setStatus: setStatus,
     showMessage: showMessage,
     openMenu: openMenu,
-    closeMenu: closeMenu
+    closeMenu: closeMenu,
+    registerPageRefresh: registerPageRefresh
   });
 
   window.restaurantUI = sharedUI;
