@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -15,7 +16,7 @@
   <link rel="stylesheet" href="style.css">
 </head>
 
-<body class="products-page">
+<body class="products-page is-dashboard-loading">
 
   <div class="app" id="app">
 
@@ -27,17 +28,8 @@
           <span class="brand-mark" id="brandMark" aria-hidden="true">B</span>
 
           <span class="brand-text">
-            <span
-              class="brand-name"
-              id="sidebarBusinessName"
-              data-business-name
-            >Business profile</span>
-
-            <span
-              class="brand-description"
-              id="sidebarBusinessTagline"
-              data-business-tagline
-            >Billing and management</span>
+            <span class="brand-name" id="sidebarBusinessName" data-business-name>Business profile</span>
+            <span class="brand-description" id="sidebarBusinessTagline" data-business-tagline>Billing and management</span>
           </span>
         </a>
       </div>
@@ -47,9 +39,7 @@
         <p class="nav-section">Main</p>
 
         <a class="nav-item" href="dashboard.html">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.8" stroke-linecap="round"
-               stroke-linejoin="round" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <rect x="3" y="3" width="7" height="9" rx="1.5"/>
             <rect x="14" y="3" width="7" height="5" rx="1.5"/>
             <rect x="14" y="12" width="7" height="9" rx="1.5"/>
@@ -59,9 +49,7 @@
         </a>
 
         <a class="nav-item" href="invoice.html">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.8" stroke-linecap="round"
-               stroke-linejoin="round" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M12 5v14M5 12h14"/>
             <rect x="3" y="3" width="18" height="18" rx="3"/>
           </svg>
@@ -69,9 +57,7 @@
         </a>
 
         <a class="nav-item" href="invoices.html">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.8" stroke-linecap="round"
-               stroke-linejoin="round" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
             <path d="M14 2v6h6M8 13h8M8 17h5"/>
           </svg>
@@ -79,9 +65,7 @@
         </a>
 
         <a class="nav-item" href="reports.html">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.8" stroke-linecap="round"
-               stroke-linejoin="round" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M3 3v18h18"/>
             <path d="M7 14l4-4 3 3 5-6"/>
           </svg>
@@ -90,14 +74,8 @@
 
         <p class="nav-section">Management</p>
 
-        <a
-          class="nav-item active"
-          href="products.html"
-          aria-current="page"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.8" stroke-linecap="round"
-               stroke-linejoin="round" aria-hidden="true">
+        <a class="nav-item active" href="products.html" aria-current="page">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="m12 3 9 5-9 5-9-5 9-5Z"/>
             <path d="M3 8v9l9 5 9-5V8"/>
             <path d="M12 13v9"/>
@@ -106,9 +84,7 @@
         </a>
 
         <a class="nav-item" href="settings.html">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.8" stroke-linecap="round"
-               stroke-linejoin="round" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="12" cy="12" r="3"/>
             <path d="M19.4 15a2 2 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a2 2 0 0 0-1.8-.3 2 2 0 0 0-1 1.5v.2a2 2 0 1 1-4 0v-.2a2 2 0 0 0-1-1.5 2 2 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a2 2 0 0 0 .3-1.8 2 2 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.2a2 2 0 0 0 1.5-1 2 2 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a2 2 0 0 0 1.8.3 2 2 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.2a2 2 0 0 0 1 1.5 2 2 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a2 2 0 0 0-.3 1.8 2 2 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.2a2 2 0 0 0-1.5 1Z"/>
           </svg>
@@ -124,14 +100,8 @@
           <span id="sidebarConnectionStatus">Connecting to database</span>
         </div>
 
-        <button
-          type="button"
-          class="nav-item logout-button"
-          id="logoutBtn"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.8" stroke-linecap="round"
-               stroke-linejoin="round" aria-hidden="true">
+        <button type="button" class="nav-item logout-button" id="logoutBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M10 17l5-5-5-5M15 12H3"/>
             <path d="M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7"/>
           </svg>
@@ -166,9 +136,7 @@
             aria-controls="sidebar"
             aria-expanded="false"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2" stroke-linecap="round"
-                 aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
               <path d="M3 6h18M3 12h18M3 18h18"/>
             </svg>
           </button>
@@ -228,23 +196,21 @@
           <div class="section-heading">
             <div>
               <h2 id="productOverviewHeading">Overview</h2>
-              <p class="muted-text">
-                Counts reflect saved records.
-              </p>
+              <p class="muted-text">Counts reflect saved records.</p>
             </div>
           </div>
 
-          <div class="stats-grid">
+          <div class="stats-grid" data-loading-surface>
 
-            <article class="stat-card">
+            <article class="stat-card" data-loading-surface>
               <p class="stat-label">Total Products</p>
-              <p class="stat-value" id="totalProductCount">—</p>
+              <p class="stat-value" id="totalProductCount" data-loading-value>—</p>
               <p class="stat-description">Saved products</p>
             </article>
 
-            <article class="stat-card">
+            <article class="stat-card" data-loading-surface>
               <p class="stat-label">Total Categories</p>
-              <p class="stat-value" id="totalCategoryCount">—</p>
+              <p class="stat-value" id="totalCategoryCount" data-loading-value>—</p>
               <p class="stat-description">Saved categories</p>
             </article>
 
@@ -304,11 +270,7 @@
 
               <div class="form-actions">
 
-                <button
-                  type="submit"
-                  class="btn btn-primary"
-                  id="saveProductBtn"
-                >
+                <button type="submit" class="btn btn-primary" id="saveProductBtn">
                   Save Product
                 </button>
 
@@ -378,7 +340,7 @@
 
             </div>
 
-            <div class="table-container">
+            <div class="table-container" data-loading-surface>
               <div class="table-scroll">
 
                 <table class="data-table">
@@ -404,7 +366,7 @@
             </div>
 
             <div class="table-footer">
-              <span id="productListSummary">Waiting for product records</span>
+              <span id="productListSummary" data-loading-value>Waiting for product records</span>
             </div>
 
           </div>
@@ -495,7 +457,7 @@
 
           <div class="panel">
 
-            <div class="table-container">
+            <div class="table-container" data-loading-surface>
               <div class="table-scroll">
 
                 <table class="data-table">
@@ -520,7 +482,7 @@
             </div>
 
             <div class="table-footer">
-              <span id="categoryListSummary">Waiting for category records</span>
+              <span id="categoryListSummary" data-loading-value>Waiting for category records</span>
             </div>
 
           </div>
@@ -529,9 +491,7 @@
 
         <!-- Shared Footer -->
         <footer class="app-footer">
-          <span id="businessFooterName" data-business-name>
-            Business management
-          </span>
+          <span id="businessFooterName" data-business-name>Business management</span>
           <span id="productsFooterStatus">Products and categories</span>
         </footer>
 
