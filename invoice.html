@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -26,7 +27,7 @@
       <nav class="sidebar-navigation" aria-label="Main navigation">
         <p class="nav-section">Main</p>
 
-        <a class="nav-item active" href="dashboard.html" aria-current="page">
+        <a class="nav-item" href="dashboard.html">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <rect x="3" y="3" width="7" height="9" rx="1.5"/>
             <rect x="14" y="3" width="7" height="5" rx="1.5"/>
@@ -36,7 +37,7 @@
           <span>Dashboard</span>
         </a>
 
-        <a class="nav-item" href="invoice.html">
+        <a class="nav-item active" href="invoice.html" aria-current="page">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M12 5v14M5 12h14"/>
             <rect x="3" y="3" width="18" height="18" rx="3"/>
@@ -474,17 +475,17 @@
     </div>
   </div>
 
-  <!-- Shared scripts -->
+  <!-- Shared UI utilities -->
   <script src="js/script.js" defer></script>
+
+  <!-- Firebase and authorization -->
   <script src="js/firebase-config.js" defer></script>
   <script src="js/auth.js" defer></script>
   <script src="js/guard.js" defer></script>
   <script src="js/logout.js" defer></script>
 
-  <!-- Invoice logic -->
+  <!-- Invoice logic must load before the export module -->
   <script src="js/invoice.js" defer></script>
-
-  <!-- Settings reflected in invoice + print/PDF -->
   <script src="js/print-export.js" defer></script>
 </body>
 </html>
