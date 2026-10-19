@@ -1,10 +1,10 @@
-
 /* =========================================================
    RESTAURANT BILLING SOFTWARE
    Invoice History, Filtering, Details and Printing
    Database root: restaurantBilling/
    Safe manual refresh preserves filters and current page
    No demo invoices, fake products or embedded secrets
+   Shared dashboard loading animation
    ========================================================= */
 
 (() => {
@@ -14,6 +14,7 @@
   const INVOICES_PATH = "restaurantBilling/invoices";
   const SETTINGS_PATH = "restaurantBilling/settings/businessProfile";
   const PAGE_SIZE = 10;
+  const LOADING_REVEAL_MS = 270;
 
   const state = {
     api: null,
@@ -28,10 +29,54 @@
     loading: true,
     error: "",
     businessProfile: {},
-    disposed: false
+    disposed: false,
+
+    // Initial loading animation state
+    loadingPhase: "loading",
+    revealTimer: null
   };
 
   const $ = (id) => document.getElementById(id);
+
+  /* ---------------------------------------------------------
+     Shared loading animation
+     Reuses existing style.css dashboard selectors.
+     --------------------------------------------------------- */
+
+  function revealInvoicesPage() {
+    if (
+      state.disposed ||
+      state.loadingPhase !== "loading"
+    ) {
+      return;
+    }
+
+    state.loadingPhase = "revealing";
+
+    document.body.classList.remove("is-dashboard-loading");
+    document.body.classList.add("is-dashboard-revealing");
+
+    clearTimeout(state.revealTimer);
+
+    state.revealTimer = window.setTimeout(() => {
+      document.body.classList.remove("is-dashboard-revealing");
+
+      state.loadingPhase = "complete";
+      state.revealTimer = null;
+    }, LOADING_REVEAL_MS);
+  }
+
+  function finishInvoicesLoadingImmediately() {
+    clearTimeout(state.revealTimer);
+    state.revealTimer = null;
+
+    document.body.classList.remove(
+      "is-dashboard-loading",
+      "is-dashboard-revealing"
+    );
+
+    state.loadingPhase = "complete";
+  }
 
   function escapeHTML(value) {
     if (window.restaurantUI?.escapeHTML) {
@@ -889,8 +934,10 @@
     if (!shared?.readyPromise) {
       state.loading = false;
       state.error = "Firebase configuration is unavailable.";
+
       renderTable();
       setConnectionStatus("Configuration error", true);
+      finishInvoicesLoadingImmediately();
       return;
     }
 
@@ -946,11 +993,14 @@
       watchBusinessProfile();
 
     } catch (error) {
+      if (state.disposed) return;
+
       state.loading = false;
       state.error = error?.message || "Could not connect to invoice history.";
 
       setConnectionStatus("Connection error", true);
       renderTable();
+      finishInvoicesLoadingImmediately();
     }
   }
 
@@ -972,6 +1022,9 @@
         renderSummary();
         applyFilters(true);
         setConnectionStatus("Database connected");
+
+        // Show the real invoice data, then animate the spinner away.
+        revealInvoicesPage();
       },
 
       (error) => {
@@ -987,6 +1040,9 @@
 
         setConnectionStatus("Database error", true);
         renderTable();
+
+        // Do not leave the spinner running when the initial read fails.
+        revealInvoicesPage();
       }
     );
   }
@@ -1081,6 +1137,9 @@
 
     window.addEventListener("pagehide", () => {
       state.disposed = true;
+
+      clearTimeout(state.revealTimer);
+      state.revealTimer = null;
 
       state.unsubscribeInvoices?.();
       state.unsubscribeBusiness?.();
