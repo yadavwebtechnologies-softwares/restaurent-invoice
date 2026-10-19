@@ -1,4 +1,3 @@
-
 /* =========================================================
    RESTAURANT BILLING SOFTWARE
    Business Settings — Live Firebase Integration
@@ -6,6 +5,7 @@
    Public location: publicInvoiceVerification/businessLocation
    Interactive map picker with automatic Google Maps URL
    Safe manual refresh; preserves dirty forms
+   Shared dashboard loading animation
    No demo data, localStorage persistence or secrets
    ========================================================= */
 
@@ -16,6 +16,7 @@
   const SETTINGS_PATH = "restaurantBilling/settings";
   const PUBLIC_LOCATION_PATH =
     "publicInvoiceVerification/businessLocation";
+  const LOADING_REVEAL_MS = 270;
 
   const $ = (id) => document.getElementById(id);
 
@@ -35,13 +36,57 @@
     marker: null,
     mapInitialized: false,
     selectedMapLocation: null,
-    suppressMapURLInput: false
+    suppressMapURLInput: false,
+
+    // Shared loading animation state
+    loadingPhase: "loading",
+    revealTimer: null
   };
 
   const ui = window.restaurantUI;
 
   /* ---------------------------------------------------------
-     1. Common helpers
+     1. Shared loading animation
+     Reuses the existing dashboard CSS. No new CSS required.
+     --------------------------------------------------------- */
+
+  function revealSettingsPage() {
+    if (
+      state.disposed ||
+      state.loadingPhase !== "loading"
+    ) {
+      return;
+    }
+
+    state.loadingPhase = "revealing";
+
+    document.body.classList.remove("is-dashboard-loading");
+    document.body.classList.add("is-dashboard-revealing");
+
+    clearTimeout(state.revealTimer);
+
+    state.revealTimer = window.setTimeout(function () {
+      document.body.classList.remove("is-dashboard-revealing");
+
+      state.loadingPhase = "complete";
+      state.revealTimer = null;
+    }, LOADING_REVEAL_MS);
+  }
+
+  function finishSettingsLoadingImmediately() {
+    clearTimeout(state.revealTimer);
+    state.revealTimer = null;
+
+    document.body.classList.remove(
+      "is-dashboard-loading",
+      "is-dashboard-revealing"
+    );
+
+    state.loadingPhase = "complete";
+  }
+
+  /* ---------------------------------------------------------
+     2. Common helpers
      --------------------------------------------------------- */
 
   function setText(id, value) {
@@ -262,7 +307,7 @@
   }
 
   /* ---------------------------------------------------------
-     2. Read saved settings
+     3. Read saved settings
      --------------------------------------------------------- */
 
   function readSections() {
@@ -317,7 +362,7 @@
   }
 
   /* ---------------------------------------------------------
-     3. Business profile form
+     4. Business profile form
      --------------------------------------------------------- */
 
   function updateMapsPreviewLink(value) {
@@ -464,7 +509,7 @@
   }
 
   /* ---------------------------------------------------------
-     4. Interactive map picker
+     5. Interactive map picker
      --------------------------------------------------------- */
 
   function setMapPickerVisibility(visible) {
@@ -738,7 +783,7 @@
   }
 
   /* ---------------------------------------------------------
-     5. Invoice preferences
+     6. Invoice preferences
      --------------------------------------------------------- */
 
   function getExistingInvoiceSettings() {
@@ -864,7 +909,7 @@
   }
 
   /* ---------------------------------------------------------
-     6. Tax and discount
+     7. Tax and discount
      --------------------------------------------------------- */
 
   function populateTaxSettings() {
@@ -947,7 +992,7 @@
   }
 
   /* ---------------------------------------------------------
-     7. Payment settings
+     8. Payment settings
      --------------------------------------------------------- */
 
   function populatePaymentSettings() {
@@ -991,7 +1036,7 @@
   }
 
   /* ---------------------------------------------------------
-     8. Dynamic branding
+     9. Dynamic branding
      --------------------------------------------------------- */
 
   function renderBranding() {
@@ -1048,7 +1093,7 @@
   }
 
   /* ---------------------------------------------------------
-     9. Populate clean forms and dirty tracking
+     10. Populate clean forms and dirty tracking
      --------------------------------------------------------- */
 
   function populateCleanForms() {
@@ -1081,7 +1126,7 @@
   }
 
   /* ---------------------------------------------------------
-     10. Save settings section
+     11. Save settings section
      --------------------------------------------------------- */
 
   async function saveSection(
@@ -1253,7 +1298,7 @@
   }
 
   /* ---------------------------------------------------------
-     11. Manual refresh
+     12. Manual refresh
      --------------------------------------------------------- */
 
   async function refreshSettingsPage() {
@@ -1332,7 +1377,7 @@
   }
 
   /* ---------------------------------------------------------
-     12. Live database subscription
+     13. Live database subscription
      --------------------------------------------------------- */
 
   function subscribeSettings() {
@@ -1370,6 +1415,9 @@
         if (!state.dirty.size) {
           setText("settingsSaveStatus", "Settings are synchronized.");
         }
+
+        // Reveal the populated forms after the initial data arrives.
+        revealSettingsPage();
       },
 
       function (error) {
@@ -1393,14 +1441,19 @@
           "settingsSaveStatus",
           "Saved settings could not be loaded."
         );
+
+        // Do not keep the loading animation running after an error.
+        revealSettingsPage();
       }
     );
 
-    state.subscriptions.push(unsubscribe);
+    if (typeof unsubscribe === "function") {
+      state.subscriptions.push(unsubscribe);
+    }
   }
 
   /* ---------------------------------------------------------
-     13. Initialize protected Settings page
+     14. Initialize protected Settings page
      --------------------------------------------------------- */
 
   async function initialize() {
@@ -1465,6 +1518,8 @@
       subscribeSettings();
 
     } catch (error) {
+      if (state.disposed) return;
+
       console.error("Settings initialization failed:", {
         message: error instanceof Error
           ? error.message
@@ -1477,11 +1532,21 @@
           : "Settings could not be initialized.",
         "error"
       );
+
+      setText(
+        "settingsSaveStatus",
+        "Settings could not be initialized."
+      );
+
+      setText("sidebarConnectionStatus", "Connection error");
+
+      // Authentication/Firebase errors must not leave a spinner behind.
+      finishSettingsLoadingImmediately();
     }
   }
 
   /* ---------------------------------------------------------
-     14. Bind save forms
+     15. Bind save forms
      --------------------------------------------------------- */
 
   $("businessProfileForm")?.addEventListener(
@@ -1545,11 +1610,14 @@
   );
 
   /* ---------------------------------------------------------
-     15. Cleanup
+     16. Cleanup
      --------------------------------------------------------- */
 
   window.addEventListener("pagehide", function () {
     state.disposed = true;
+
+    clearTimeout(state.revealTimer);
+    state.revealTimer = null;
 
     state.subscriptions.forEach((unsubscribe) => {
       try {
