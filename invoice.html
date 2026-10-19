@@ -9,6 +9,7 @@
   <title>New Invoice | Restaurant Billing</title>
   <meta name="description" content="Create and record business invoices.">
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="invoice-layout.css">
 </head>
 <body class="dashboard-page invoice-page is-dashboard-loading">
 
@@ -317,7 +318,7 @@
           <div class="section-heading">
             <div>
               <h2 id="invoicePreviewHeading">Invoice Preview</h2>
-              <p class="muted-text">Preview of the successfully recorded invoice.</p>
+              <p class="muted-text">Review the recorded invoice. Use Print to print it or save it as PDF.</p>
             </div>
 
             <div class="invoice-actions">
@@ -326,144 +327,143 @@
             </div>
           </div>
 
-          <article class="invoice-print-sheet" id="invoicePrintSheet">
-            <header class="inv-header">
-              <img class="inv-logo" id="printBusinessLogo" alt="Business Logo" hidden>
-
-              <h2 class="inv-biz-name" id="printBusinessName" data-business-name>Business Profile</h2>
-
-              <p class="inv-biz-tag" id="printBusinessTagline" data-business-tagline hidden></p>
-
-              <div class="inv-biz-meta">
-                <p id="printBusinessAddress" data-business-address></p>
-                <p id="printBusinessContact" data-business-contact></p>
-                <p id="printBusinessWebsite" hidden></p>
-              </div>
-            </header>
-
-            <section class="inv-doc-bar" aria-label="Invoice details">
-              <div class="inv-doc-side left">
-                <div class="inv-doc-side-label">Invoice No</div>
-                <div class="inv-doc-side-value" id="printInvoiceNumber">—</div>
-              </div>
-
-              <div class="inv-doc-title-wrap">
-                <div class="inv-doc-title">INVOICE</div>
-              </div>
-
-              <div class="inv-doc-side right">
-                <div class="inv-doc-side-label">Date</div>
-                <div class="inv-doc-side-value" id="printInvoiceDate">—</div>
-                <div class="inv-doc-side-sub" id="printInvoiceTime">—</div>
-              </div>
-            </section>
-
-            <section class="inv-parties" aria-label="Customer and business details">
-              <div>
-                <div class="inv-label">Bill To</div>
-                <div class="inv-value" id="printCustomerName">Walk-in Customer</div>
-                <div class="inv-value-sub" id="printCustomerPhone" hidden></div>
-              </div>
-
-              <div class="inv-parties-right">
-                <div class="inv-label">Table</div>
-                <div class="inv-value" id="printTableNumber">—</div>
-                <div class="inv-value-sub" id="printBusinessTaxIds" hidden></div>
-              </div>
-            </section>
-
-            <section class="inv-items" aria-label="Invoice line items">
-              <div class="inv-items-head">
-                <span>#</span>
-                <span>Item</span>
-                <span>Qty</span>
-                <span>Rate</span>
-                <span>Amount</span>
-              </div>
-
-              <div id="printInvoiceItemsBody">
-                <p class="inv-empty-items">Invoice items will appear here.</p>
-              </div>
-            </section>
-
-            <section class="inv-bottom">
-              <div class="inv-payment-block">
-                <div class="inv-payment-row" id="printPaymentMethodRow">
-                  <span>Payment Method</span>
-                  <strong id="printPaymentMethod">Cash</strong>
+          <article class="invoice-print-sheet" id="invoicePrintSheet" aria-label="Invoice document">
+            <div class="invoice-inner" id="invoiceInner">
+              <header class="header">
+                <div class="business">
+                  <img class="inv-logo" id="printBusinessLogo" alt="Business Logo" hidden>
+                  <h1 id="printBusinessName" data-business-name>Business Profile</h1>
+                  <p id="printBusinessTagline" data-business-tagline hidden></p>
+                  <p id="printBusinessAddress" data-business-address hidden></p>
+                  <p id="printBusinessContact" data-business-contact hidden></p>
+                  <p id="printBusinessWebsite" hidden></p>
+                  <p class="business-tax-ids" id="printBusinessTaxIds" hidden></p>
                 </div>
 
-                <div class="inv-payment-row" id="printPaymentStatusRow">
-                  <span>Payment Status</span>
-                  <strong id="printPaymentStatus">Paid</strong>
+                <div class="invoice-heading">
+                  <h2>Invoice</h2>
+                  <strong id="printInvoiceCopyTitle">RESTAURANT COPY</strong>
+                  <p id="printInvoiceCopySubtitle">Original Bill</p>
                 </div>
-              </div>
+              </header>
 
-              <dl class="inv-totals">
-                <div class="inv-total-row">
-                  <dt>Subtotal</dt>
-                  <dd id="printInvoiceSubtotal">—</dd>
+              <section class="section customer-invoice-section" aria-labelledby="printCustomerInvoiceHeading">
+                <h3 class="section-title" id="printCustomerInvoiceHeading">Customer &amp; Invoice Details</h3>
+
+                <div class="details-grid">
+                  <div class="detail">
+                    <p id="printCustomerNameRow"><strong>Customer:</strong> <span id="printCustomerName">Walk-in Customer</span></p>
+                    <p id="printCustomerPhoneRow" hidden><strong>Phone:</strong> <span id="printCustomerPhone"></span></p>
+                    <p id="printTableNumberRow" hidden><strong>Table:</strong> <span id="printTableNumber">—</span></p>
+                  </div>
+
+                  <div class="detail">
+                    <p><strong>Invoice No:</strong> <span id="printInvoiceNumber">—</span></p>
+                    <p><strong>Invoice Date:</strong> <span id="printInvoiceDate">—</span></p>
+                    <p><strong>Invoice Time:</strong> <span id="printInvoiceTime">—</span></p>
+                  </div>
+                </div>
+              </section>
+
+              <section class="section order-section" aria-labelledby="printOrderDetailsHeading">
+                <h3 class="section-title" id="printOrderDetailsHeading">Order Details</h3>
+
+                <table class="inv-item-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Item Description</th>
+                      <th scope="col">Qty</th>
+                      <th scope="col">Rate (₹)</th>
+                      <th scope="col">Amount (₹)</th>
+                    </tr>
+                  </thead>
+
+                  <tbody id="printInvoiceItemsBody">
+                    <tr><td colspan="4" class="inv-empty-items">Invoice items will appear here.</td></tr>
+                  </tbody>
+                </table>
+              </section>
+
+              <section class="bottom-section" aria-label="Payment and totals">
+                <div class="payment inv-payment-block">
+                  <h3 class="section-title">Payment Information</h3>
+
+                  <p class="inv-payment-row" id="printPaymentMethodRow">
+                    <strong>Payment Method:</strong>
+                    <span id="printPaymentMethod">Cash</span>
+                  </p>
+
+                  <p class="inv-payment-row" id="printPaymentStatusRow">
+                    <strong>Payment Status:</strong>
+                    <span id="printPaymentStatus">Paid</span>
+                  </p>
+
+                  <div class="qr-placeholder inv-qr-block" id="printQrSection">
+                    <a href="business-location.html" target="_blank" rel="noopener noreferrer" aria-label="Open restaurant location">
+                      <img src="business-location-qr.png" alt="Scan to find our restaurant on Google Maps" width="108" height="108">
+                    </a>
+                    <p id="invoiceQrCaption">Scan to Find Our Restaurant</p>
+                  </div>
                 </div>
 
-                <div class="inv-total-row" id="printDiscountRow" hidden>
-                  <dt>Discount</dt>
-                  <dd id="printInvoiceDiscount">—</dd>
+                <div class="totals inv-totals">
+                  <div class="total-row inv-total-row">
+                    <span>Subtotal</span>
+                    <span id="printInvoiceSubtotal">—</span>
+                  </div>
+
+                  <div class="total-row inv-total-row" id="printDiscountRow" hidden>
+                    <span>Discount</span>
+                    <span id="printInvoiceDiscount">—</span>
+                  </div>
+
+                  <div class="total-row inv-total-row" id="printTaxRow" hidden>
+                    <span id="printInvoiceTaxLabel">Tax</span>
+                    <span id="printInvoiceTax">—</span>
+                  </div>
+
+                  <div class="total-row inv-total-row" id="printRoundOffRow" hidden>
+                    <span>Round Off</span>
+                    <span id="printInvoiceRoundOff">—</span>
+                  </div>
+
+                  <div class="total-row grand-total inv-grand">
+                    <span>Grand Total</span>
+                    <span id="printInvoiceGrandTotal">—</span>
+                  </div>
+
+                  <div class="amount-words" id="printAmountWordsSection">
+                    <strong>Amount in words:</strong><br>
+                    <span id="printInvoiceAmountWords">—</span>
+                  </div>
+                </div>
+              </section>
+
+              <section class="section print-invoice-notes" id="printInvoiceNotesSection" hidden>
+                <h3 class="section-title">Notes</h3>
+                <p id="printInvoiceNotes"></p>
+              </section>
+
+              <footer class="footer inv-footer">
+                <div class="footer-note" id="printComputerGeneratedNote">
+                  This is a computer-generated invoice. Thank you for your business!
                 </div>
 
-                <div class="inv-total-row" id="printTaxRow" hidden>
-                  <dt id="printInvoiceTaxLabel">GST</dt>
-                  <dd id="printInvoiceTax">—</dd>
-                </div>
-
-                <div class="inv-total-row" id="printRoundOffRow" hidden>
-                  <dt>Round Off</dt>
-                  <dd id="printInvoiceRoundOff">—</dd>
-                </div>
-
-                <div class="inv-total-divider"></div>
-
-                <div class="inv-grand">
-                  <span>Grand Total</span>
-                  <span id="printInvoiceGrandTotal">—</span>
-                </div>
-              </dl>
-
-              <!-- Static restaurant location QR; no dynamic invoice QR -->
-              <div class="inv-qr-block" id="printQrSection">
-                <div class="inv-qr-static">
-                  <a href="business-location.html" target="_blank" rel="noopener noreferrer" aria-label="Open restaurant location">
-                    <img
-                      src="business-location-qr.png"
-                      alt="Scan to find our restaurant on Google Maps"
-                      width="108"
-                      height="108"
-                    >
-                  </a>
-                </div>
-                <p id="invoiceQrCaption">Scan to Find Our Restaurant</p>
-              </div>
-            </section>
-
-            <section class="print-invoice-notes" id="printInvoiceNotesSection" hidden>
-              <h3>Notes</h3>
-              <p id="printInvoiceNotes"></p>
-            </section>
-
-            <footer class="inv-footer">
-              <div class="inv-footer-divider"></div>
-
-              <div class="inv-footer-grid">
-                <div>
+                <div class="invoice-settings-footer">
                   <p class="inv-thanks" id="printThankYouMessage" hidden></p>
-                  <div class="inv-terms" id="printInvoiceFooterText" data-invoice-footer></div>
+                  <div class="inv-terms" id="printInvoiceFooterText" data-invoice-footer hidden></div>
                 </div>
 
-                <div class="inv-signature" id="printSignatureSection" hidden>
-                  <div class="inv-signature-line"></div>
-                  <div class="inv-signature-label" id="printSignatureLabel"></div>
+                <div class="signature-row">
+                  <div class="signature" id="printCustomerSignatureSection">Customer Signature</div>
+
+                  <div class="signature inv-signature" id="printSignatureSection" hidden>
+                    <div class="inv-signature-line"></div>
+                    <div class="inv-signature-label" id="printSignatureLabel"></div>
+                  </div>
                 </div>
-              </div>
-            </footer>
+              </footer>
+            </div>
           </article>
         </section>
 
@@ -475,17 +475,11 @@
     </div>
   </div>
 
-  <!-- Shared UI utilities -->
   <script src="js/script.js" defer></script>
-
-  <!-- Firebase and authorization -->
   <script src="js/firebase-config.js" defer></script>
   <script src="js/auth.js" defer></script>
   <script src="js/guard.js" defer></script>
   <script src="js/logout.js" defer></script>
-
-  <!-- Invoice logic must load before the export module -->
   <script src="js/invoice.js" defer></script>
-  <script src="js/print-export.js" defer></script>
 </body>
 </html>
