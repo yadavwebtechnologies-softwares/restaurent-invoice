@@ -7,7 +7,7 @@
      restaurantBilling/categories
      restaurantBilling/settings
    Safe manual refresh + existing realtime subscriptions
-   No demo data, secrets or localStorage persistence
+   Shared initial loading and reveal animation
    ========================================================= */
 
 (function () {
@@ -44,11 +44,81 @@
     subscriptions: [],
     unregisterPageRefresh: null,
     editingProductId: null,
-    editingCategoryId: null
+    editingCategoryId: null,
+
+    /* Tracks completion of each first database read. */
+    initialResolved: {
+      products: false,
+      categories: false,
+      settings: false
+    }
   };
 
   /* ---------------------------------------------------------
-     1. Common helpers
+     1. Shared loading animation
+     --------------------------------------------------------- */
+
+  let loadingPhase = "loading";
+  let revealTimer = null;
+
+  function resolveInitialSource(path) {
+    const key = Object.keys(PATHS).find(function (name) {
+      return PATHS[name] === path;
+    });
+
+    if (key) {
+      state.initialResolved[key] = true;
+    }
+  }
+
+  function allInitialSourcesResolved() {
+    return Object.values(state.initialResolved).every(Boolean);
+  }
+
+  function finishLoadingImmediately() {
+    if (revealTimer !== null) {
+      window.clearTimeout(revealTimer);
+      revealTimer = null;
+    }
+
+    document.body.classList.remove(
+      "is-dashboard-loading",
+      "is-dashboard-revealing"
+    );
+
+    loadingPhase = "complete";
+  }
+
+  function revealProductsPage() {
+    if (
+      state.disposed ||
+      loadingPhase !== "loading" ||
+      !allInitialSourcesResolved()
+    ) {
+      return;
+    }
+
+    /*
+     * Database values have already been rendered.
+     * Run the same shared CSS reveal used by the dashboard.
+     */
+    loadingPhase = "revealing";
+
+    document.body.classList.remove("is-dashboard-loading");
+    document.body.classList.add("is-dashboard-revealing");
+
+    revealTimer = window.setTimeout(function () {
+      revealTimer = null;
+
+      if (state.disposed) return;
+
+      document.body.classList.remove("is-dashboard-revealing");
+      loadingPhase = "complete";
+    }, 270);
+  }
+
+  /* ---------------------------------------------------------
+     2. Common helpers
      --------------------------------------------------------- */
 
   function setText(id, value) {
@@ -338,7 +408,7 @@
   }
 
   /* ---------------------------------------------------------
-     2. Settings and branding
+     3. Settings and branding
      --------------------------------------------------------- */
 
   function getBusinessSettings() {
@@ -421,7 +491,7 @@
   }
 
   /* ---------------------------------------------------------
-     3. Product and category select controls
+     4. Product and category select controls
      --------------------------------------------------------- */
 
   function populateCategorySelects() {
@@ -507,7 +577,7 @@
   }
 
   /* ---------------------------------------------------------
-     4. Safe table rendering
+     5. Safe table rendering
      --------------------------------------------------------- */
 
   function addTextCell(row, value) {
@@ -561,7 +631,7 @@
   }
 
   /* ---------------------------------------------------------
-     5. Products table and filtering
+     6. Products table and filtering
      --------------------------------------------------------- */
 
   function renderProductsTable() {
@@ -662,7 +732,7 @@
   }
 
   /* ---------------------------------------------------------
-     6. Categories table
+     7. Categories table
      --------------------------------------------------------- */
 
   function renderCategoriesTable() {
@@ -747,6 +817,12 @@
     renderOverview();
     renderBranding();
 
+    /*
+     * End loading only once each source's initial read has either
+     * succeeded or failed. A failed read must not leave spinners forever.
+     */
+    revealProductsPage();
+
     if (state.loadingError) {
       setPageStatus(
         "One or more data sources could not be loaded. Check database permissions and connection.",
@@ -773,7 +849,7 @@
   }
 
   /* ---------------------------------------------------------
-     7. Form state management
+     8. Form state management
      --------------------------------------------------------- */
 
   function setOperationState(busy) {
@@ -837,7 +913,7 @@
   }
 
   /* ---------------------------------------------------------
-     8. Product add and edit
+     9. Product add and edit
      --------------------------------------------------------- */
 
   function productDuplicate(name, categoryId, excludeId) {
@@ -1054,7 +1130,7 @@
   }
 
   /* ---------------------------------------------------------
-     9. Category add and edit
+     10. Category add and edit
      --------------------------------------------------------- */
 
   function categoryDuplicate(name, excludeId) {
@@ -1230,8 +1306,7 @@
       setOperationState(true);
 
       /*
-       * Recheck the linked-product constraint against Firebase
-       * immediately before deletion to reduce stale-data risk.
+       * Recheck linked products before deleting a category.
        */
       const productsSnapshot = await state.api.get(
         state.api.ref(state.db, PATHS.products)
@@ -1289,7 +1364,7 @@
   }
 
   /* ---------------------------------------------------------
-     10. Live database subscriptions
+     11. Live database subscriptions
      --------------------------------------------------------- */
 
   function subscribe(path, onSuccess, onError) {
@@ -1302,6 +1377,7 @@
         if (state.disposed) return;
 
         onSuccess(snapshot);
+        resolveInitialSource(path);
         renderAll();
       },
 
@@ -1324,6 +1400,11 @@
           onError(error);
         }
 
+        /*
+         * The read has completed with an error, so initial loading
+         * can finish and the visible error status can be read.
+         */
+        resolveInitialSource(path);
         renderAll();
       }
     );
@@ -1332,7 +1413,7 @@
   }
 
   /* ---------------------------------------------------------
-     11. Manual refresh
+     12. Manual refresh
      --------------------------------------------------------- */
 
   async function refreshProductsPage() {
@@ -1346,7 +1427,10 @@
       throw new Error("Firebase data refresh is unavailable.");
     }
 
-    setPageStatus("Refreshing products, categories and settings...", "warning");
+    setPageStatus(
+      "Refreshing products, categories and settings...",
+      "warning"
+    );
 
     const sources = [
       {
@@ -1363,11 +1447,6 @@
       }
     ];
 
-    /*
-     * Fetch all current page data concurrently.
-     * Existing onValue subscriptions remain in place.
-     * This refresh does not create additional subscriptions.
-     */
     const results = await Promise.allSettled(
       sources.map(function (source) {
         return state.api.get(
@@ -1430,11 +1509,10 @@
   }
 
   /* ---------------------------------------------------------
-     12. Event binding
+     13. Event binding
      --------------------------------------------------------- */
 
   $("productForm")?.addEventListener("submit", saveProduct);
-
   $("categoryForm")?.addEventListener("submit", saveCategory);
 
   $("productSearch")?.addEventListener("input", renderProductsTable);
@@ -1465,7 +1543,7 @@
   );
 
   /* ---------------------------------------------------------
-     13. Initialization
+     14. Initialization
      --------------------------------------------------------- */
 
   async function initialize() {
@@ -1508,10 +1586,6 @@
       state.db = connected.db;
       state.api = connected.api;
 
-      /*
-       * Register the page-specific refresh handler only after
-       * Firebase and owner authorization are ready.
-       */
       if (
         window.restaurantUI &&
         typeof window.restaurantUI.registerPageRefresh === "function"
@@ -1559,6 +1633,9 @@
     } catch (error) {
       state.loadingError = true;
 
+      /* Do not leave spinners running on authorization/configuration errors. */
+      finishLoadingImmediately();
+
       console.error("Products page initialization failed:", {
         message: error instanceof Error
           ? error.message
@@ -1569,15 +1646,19 @@
         safeErrorMessage(error, "initialize the products page"),
         "error"
       );
+
+      setText("sidebarConnectionStatus", "Database unavailable");
+      setText("productsFooterStatus", "Initialization failed");
     }
   }
 
   /* ---------------------------------------------------------
-     14. Cleanup
+     15. Cleanup
      --------------------------------------------------------- */
 
   window.addEventListener("pagehide", function () {
     state.disposed = true;
+    finishLoadingImmediately();
 
     state.subscriptions.forEach(function (unsubscribe) {
       try {
