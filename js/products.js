@@ -1,3 +1,4 @@
+
 /* =========================================================
    RESTAURANT BILLING SOFTWARE
    Products and Categories Management
@@ -5,6 +6,7 @@
      restaurantBilling/products
      restaurantBilling/categories
      restaurantBilling/settings
+   Safe manual refresh + existing realtime subscriptions
    No demo data, secrets or localStorage persistence
    ========================================================= */
 
@@ -40,6 +42,7 @@
     disposed: false,
 
     subscriptions: [],
+    unregisterPageRefresh: null,
     editingProductId: null,
     editingCategoryId: null
   };
@@ -1329,7 +1332,105 @@
   }
 
   /* ---------------------------------------------------------
-     11. Event binding
+     11. Manual refresh
+     --------------------------------------------------------- */
+
+  async function refreshProductsPage() {
+    if (state.disposed || !state.db || !state.api) {
+      throw new Error("Products page is not ready to refresh.");
+    }
+
+    requireAuthorizedOwner();
+
+    if (typeof state.api.get !== "function") {
+      throw new Error("Firebase data refresh is unavailable.");
+    }
+
+    setPageStatus("Refreshing products, categories and settings...", "warning");
+
+    const sources = [
+      {
+        path: PATHS.products,
+        key: "products"
+      },
+      {
+        path: PATHS.categories,
+        key: "categories"
+      },
+      {
+        path: PATHS.settings,
+        key: "settings"
+      }
+    ];
+
+    /*
+     * Fetch all current page data concurrently.
+     * Existing onValue subscriptions remain in place.
+     * This refresh does not create additional subscriptions.
+     */
+    const results = await Promise.allSettled(
+      sources.map(function (source) {
+        return state.api.get(
+          state.api.ref(state.db, source.path)
+        );
+      })
+    );
+
+    if (state.disposed) return;
+
+    let failureCount = 0;
+
+    results.forEach(function (result, index) {
+      const source = sources[index];
+
+      if (result.status === "fulfilled") {
+        const snapshot = result.value;
+        const data = snapshot.exists() ? snapshot.val() : null;
+
+        if (source.key === "products") {
+          state.products = getEntries(data);
+          state.productsLoaded = true;
+        } else if (source.key === "categories") {
+          state.categories = getEntries(data);
+          state.categoriesLoaded = true;
+        } else {
+          state.settings = data && typeof data === "object"
+            ? data
+            : {};
+          state.settingsLoaded = true;
+        }
+      } else {
+        failureCount++;
+
+        console.error("Products page refresh failed:", {
+          path: source.path,
+          code: result.reason && result.reason.code
+            ? result.reason.code
+            : "unknown"
+        });
+      }
+    });
+
+    state.loadingError = failureCount > 0;
+
+    renderAll();
+
+    if (failureCount > 0) {
+      throw new Error(
+        failureCount === 1
+          ? "One data source could not be refreshed. Try again."
+          : failureCount + " data sources could not be refreshed. Try again."
+      );
+    }
+
+    setPageStatus(
+      "Products, categories and settings refreshed successfully.",
+      "connected"
+    );
+  }
+
+  /* ---------------------------------------------------------
+     12. Event binding
      --------------------------------------------------------- */
 
   $("productForm")?.addEventListener("submit", saveProduct);
@@ -1364,7 +1465,7 @@
   );
 
   /* ---------------------------------------------------------
-     12. Initialization
+     13. Initialization
      --------------------------------------------------------- */
 
   async function initialize() {
@@ -1406,6 +1507,18 @@
 
       state.db = connected.db;
       state.api = connected.api;
+
+      /*
+       * Register the page-specific refresh handler only after
+       * Firebase and owner authorization are ready.
+       */
+      if (
+        window.restaurantUI &&
+        typeof window.restaurantUI.registerPageRefresh === "function"
+      ) {
+        state.unregisterPageRefresh =
+          window.restaurantUI.registerPageRefresh(refreshProductsPage);
+      }
 
       subscribe(
         PATHS.products,
@@ -1459,6 +1572,10 @@
     }
   }
 
+  /* ---------------------------------------------------------
+     14. Cleanup
+     --------------------------------------------------------- */
+
   window.addEventListener("pagehide", function () {
     state.disposed = true;
 
@@ -1473,6 +1590,11 @@
     });
 
     state.subscriptions = [];
+
+    if (typeof state.unregisterPageRefresh === "function") {
+      state.unregisterPageRefresh();
+      state.unregisterPageRefresh = null;
+    }
   });
 
   renderAll();
