@@ -1,9 +1,11 @@
+
 /* =========================================================
    RESTAURANT BILLING SOFTWARE
    Business Settings — Live Firebase Integration
    Database root: restaurantBilling/settings/
    Public location: publicInvoiceVerification/businessLocation
    Interactive map picker with automatic Google Maps URL
+   Safe manual refresh; preserves dirty forms
    No demo data, localStorage persistence or secrets
    ========================================================= */
 
@@ -26,6 +28,7 @@
     busy: new Set(),
     dirty: new Set(),
     subscriptions: [],
+    unregisterPageRefresh: null,
     disposed: false,
 
     map: null,
@@ -1170,8 +1173,8 @@
         updates[PUBLIC_LOCATION_PATH] = locationRecord;
 
         /*
-         * Save Business Profile and location together.
-         * Both paths must pass the current Firebase Rules.
+         * Keep the existing atomic save:
+         * Business Profile and public location record save together.
          */
         await state.api.update(
           state.api.ref(state.db),
@@ -1225,7 +1228,10 @@
       });
 
       const message =
-        error && error.code === "PERMISSION_DENIED"
+        error && (
+          error.code === "PERMISSION_DENIED" ||
+          error.code === "permission-denied"
+        )
           ? "Database permission denied. Check Firebase Security Rules."
           : error instanceof Error
             ? error.message
@@ -1247,7 +1253,86 @@
   }
 
   /* ---------------------------------------------------------
-     11. Live database subscription
+     11. Manual refresh
+     --------------------------------------------------------- */
+
+  async function refreshSettingsPage() {
+    if (state.disposed || !state.db || !state.api) {
+      throw new Error("Settings page is not ready to refresh.");
+    }
+
+    requireOwner();
+
+    if (state.busy.size > 0) {
+      throw new Error(
+        "A settings save is in progress. Refresh after it finishes."
+      );
+    }
+
+    if (typeof state.api.get !== "function") {
+      throw new Error("Firebase settings refresh is unavailable.");
+    }
+
+    setStatus("Refreshing saved settings...", "warning");
+
+    /*
+     * Read the existing settings root only.
+     * No extra realtime listener is created.
+     * Do not replace the local state until the read succeeds.
+     */
+    const snapshot = await state.api.get(
+      state.api.ref(state.db, SETTINGS_PATH)
+    );
+
+    if (state.disposed) return;
+
+    const data = snapshot.exists() ? snapshot.val() : {};
+
+    state.settings =
+      data && typeof data === "object"
+        ? data
+        : {};
+
+    state.loaded = true;
+    state.ready = true;
+
+    /*
+     * The populate functions skip any form marked dirty.
+     * Therefore unsaved fields are not overwritten by Refresh.
+     */
+    populateCleanForms();
+
+    setStatus(
+      state.dirty.size
+        ? "Latest saved settings loaded. Unsaved form changes were preserved."
+        : "Settings refreshed and synchronized.",
+      "connected"
+    );
+
+    setText("sidebarConnectionStatus", "Database connected");
+    setText("settingsFooterStatus", "Settings refreshed");
+
+    if (!state.dirty.size) {
+      setText("settingsSaveStatus", "Settings are synchronized.");
+    } else {
+      setText(
+        "settingsSaveStatus",
+        "Some forms have unsaved changes."
+      );
+    }
+
+    document.dispatchEvent(
+      new CustomEvent("restaurant-settings-updated", {
+        detail: {
+          section: "refresh",
+          settings: state.settings
+        }
+      })
+    );
+  }
+
+  /* ---------------------------------------------------------
+     12. Live database subscription
      --------------------------------------------------------- */
 
   function subscribeSettings() {
@@ -1288,6 +1373,8 @@
       },
 
       function (error) {
+        if (state.disposed) return;
+
         console.error("Settings database read failed:", {
           code: error && error.code
             ? error.code
@@ -1313,7 +1400,7 @@
   }
 
   /* ---------------------------------------------------------
-     12. Initialize protected Settings page
+     13. Initialize protected Settings page
      --------------------------------------------------------- */
 
   async function initialize() {
@@ -1361,6 +1448,18 @@
       state.db = connected.db;
       state.api = connected.api;
 
+      /*
+       * Register the safe page-specific handler after
+       * authentication and Firebase initialization.
+       */
+      if (
+        ui &&
+        typeof ui.registerPageRefresh === "function"
+      ) {
+        state.unregisterPageRefresh =
+          ui.registerPageRefresh(refreshSettingsPage);
+      }
+
       bindDirtyTracking();
       bindMapPicker();
       subscribeSettings();
@@ -1382,7 +1481,7 @@
   }
 
   /* ---------------------------------------------------------
-     13. Bind save forms
+     14. Bind save forms
      --------------------------------------------------------- */
 
   $("businessProfileForm")?.addEventListener(
@@ -1446,7 +1545,7 @@
   );
 
   /* ---------------------------------------------------------
-     14. Cleanup
+     15. Cleanup
      --------------------------------------------------------- */
 
   window.addEventListener("pagehide", function () {
@@ -1463,6 +1562,11 @@
     });
 
     state.subscriptions = [];
+
+    if (typeof state.unregisterPageRefresh === "function") {
+      state.unregisterPageRefresh();
+      state.unregisterPageRefresh = null;
+    }
 
     if (state.map) {
       state.map.remove();
