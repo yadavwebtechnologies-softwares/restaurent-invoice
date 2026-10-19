@@ -1,3 +1,4 @@
+
 /* =========================================================
    RESTAURANT BILLING SOFTWARE
    Firebase Configuration and Initialization
@@ -24,7 +25,7 @@
   };
 
   /*
-   * Publish the shared state before initialization,
+   * Publish shared state before initialization,
    * so other scripts can wait for state.readyPromise.
    */
   window.restaurantFirebase = state;
@@ -131,12 +132,18 @@
       state.ready = false;
 
       /*
-       * Load configuration through the existing Worker.
-       * Firebase client configuration is not an Admin secret.
+       * SPEED OPTIMIZATION:
+       * Fetch the existing Worker configuration and load the
+       * Firebase SDK modules concurrently. They are independent
+       * operations, so neither needs to wait for the other.
+       *
+       * The Worker URL, response validation, SDK version and
+       * Firebase initialization behaviour remain unchanged.
        */
-      const firebaseConfig = await fetchFirebaseConfig();
-
-      const sdk = await loadFirebaseSDK();
+      const [firebaseConfig, sdk] = await Promise.all([
+        fetchFirebaseConfig(),
+        loadFirebaseSDK()
+      ]);
 
       const existingApps = sdk.app.getApps();
 
@@ -149,8 +156,7 @@
 
       /*
        * Shared SDK interface for page-specific scripts.
-       * Use the same Firebase app, auth instance and database
-       * throughout this website.
+       * All website pages use the same initialization pattern.
        */
       state.sdk = {
         app: sdk.app,
@@ -194,7 +200,7 @@
   }
 
   /*
-   * A single initialization promise avoids multiple
+   * A single initialization promise prevents duplicate
    * Firebase initialization attempts from page scripts.
    */
   state.readyPromise = initializeFirebase();
