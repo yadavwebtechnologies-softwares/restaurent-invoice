@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -254,7 +255,12 @@
                 <span class="stat-label">Today's Sales</span>
               </div>
 
-              <p class="stat-value" id="dashboardTodaySales" aria-live="polite">—</p>
+              <p
+                class="stat-value"
+                id="dashboardTodaySales"
+                aria-live="polite"
+                data-loading-value
+              >—</p>
 
               <p class="stat-description" id="dashboardSalesDescription">
                 Waiting for invoice records
@@ -266,7 +272,12 @@
                 <span class="stat-label">Invoices Today</span>
               </div>
 
-              <p class="stat-value" id="dashboardTodayInvoices" aria-live="polite">—</p>
+              <p
+                class="stat-value"
+                id="dashboardTodayInvoices"
+                aria-live="polite"
+                data-loading-value
+              >—</p>
 
               <p class="stat-description" id="dashboardInvoicesDescription">
                 Waiting for invoice records
@@ -278,7 +289,12 @@
                 <span class="stat-label">Saved Products</span>
               </div>
 
-              <p class="stat-value" id="dashboardProductCount" aria-live="polite">—</p>
+              <p
+                class="stat-value"
+                id="dashboardProductCount"
+                aria-live="polite"
+                data-loading-value
+              >—</p>
 
               <p class="stat-description">
                 <a href="products.html">Manage products</a>
@@ -290,7 +306,12 @@
                 <span class="stat-label">Categories</span>
               </div>
 
-              <p class="stat-value" id="dashboardCategoryCount" aria-live="polite">—</p>
+              <p
+                class="stat-value"
+                id="dashboardCategoryCount"
+                aria-live="polite"
+                data-loading-value
+              >—</p>
 
               <p class="stat-description">
                 <a href="products.html">Manage categories</a>
@@ -315,16 +336,24 @@
             <a class="text-link" href="settings.html">Configure target</a>
           </div>
 
-          <div class="target-card">
+          <div class="target-card" data-loading-surface>
             <div class="target-summary">
               <div>
                 <p class="target-label">Target amount</p>
-                <p class="target-value" id="dailyTargetValue">—</p>
+                <p
+                  class="target-value"
+                  id="dailyTargetValue"
+                  data-loading-value
+                >—</p>
               </div>
 
               <div class="target-result">
                 <p class="target-label">Achieved</p>
-                <p class="target-value" id="dailyTargetStatus">—</p>
+                <p
+                  class="target-value"
+                  id="dailyTargetStatus"
+                  data-loading-value
+                >—</p>
               </div>
             </div>
 
@@ -359,7 +388,7 @@
             <a class="text-link" href="invoices.html">View all invoices</a>
           </div>
 
-          <div class="table-container">
+          <div class="table-container" data-loading-surface>
 
             <div class="table-scroll">
               <table class="data-table">
@@ -384,7 +413,7 @@
             </div>
 
             <div class="table-footer">
-              <span id="recentInvoicesSummary">
+              <span id="recentInvoicesSummary" data-loading-value>
                 Waiting for invoice records
               </span>
 
@@ -409,7 +438,10 @@
             <a class="text-link" href="products.html">Manage products</a>
           </div>
 
-          <div class="panel product-performance-panel">
+          <div
+            class="panel product-performance-panel"
+            data-loading-surface
+          >
             <div
               class="product-performance-list"
               id="topProductsList"
