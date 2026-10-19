@@ -2,8 +2,12 @@
 /* =========================================================
    RESTAURANT BILLING SOFTWARE
    Print and PDF Export Module
-   Uses the existing invoice preview and saved settings.
-   No Firebase connection or duplicate event listeners.
+
+   Responsibilities:
+   - Print the invoice already rendered by invoice.js.
+   - Let the browser print dialog save the invoice as PDF.
+   - Do not read or write Firebase.
+   - Do not create duplicate button listeners.
    ========================================================= */
 
 (function () {
@@ -14,38 +18,40 @@
   }
 
   function setMessage(message, type) {
-    const messageElement =
-      getElement("invoiceMessage") ||
-      getElement("formMessage") ||
-      getElement("statusMessage");
+    const element = getElement("invoiceMessage");
+    if (!element) return;
 
-    if (!messageElement) return;
+    element.textContent = message || "";
+    element.classList.remove(
+      "is-success",
+      "is-error",
+      "is-warning"
+    );
 
-    messageElement.textContent = message;
-    messageElement.dataset.type = type || "warning";
-    messageElement.hidden = !message;
+    if (type) {
+      element.classList.add("is-" + type);
+    }
   }
 
   function validateInvoice() {
     const preview = getElement("invoicePreviewSection");
     const printSheet = getElement("invoicePrintSheet");
+    const invoiceNumber = getElement("printInvoiceNumber");
 
     if (!preview || preview.hidden || !printSheet) {
       setMessage(
-        "Record an invoice before printing.",
+        "Record An Invoice Before Printing.",
         "warning"
       );
       return false;
     }
-
-    const invoiceNumber = getElement("printInvoiceNumber");
 
     if (
       !invoiceNumber ||
       !invoiceNumber.textContent.trim()
     ) {
       setMessage(
-        "Invoice details are not ready for printing.",
+        "Invoice Details Are Not Ready For Printing.",
         "warning"
       );
       return false;
@@ -59,21 +65,25 @@
       return false;
     }
 
-    setMessage("", "");
+    setMessage("");
 
-    // Uses the existing invoice preview and print CSS.
+    // Use the invoice preview already rendered by invoice.js.
     window.print();
 
     return true;
   }
 
   function printPDF() {
-    // In the browser print dialog, choose "Save as PDF".
+    // In the browser print dialog, select "Save as PDF".
     return print();
   }
 
+  /*
+   * invoice.js owns the Print Invoice button's click handler.
+   * This module only exposes methods for invoice.js to call.
+   */
   window.restaurantPrintExport = Object.freeze({
-    print,
-    printPDF
+    print: print,
+    printPDF: printPDF
   });
 })();
