@@ -1,12 +1,25 @@
 
-(() => {
+/* =========================================================
+   RESTAURANT BILLING SOFTWARE
+   Reports, Statistics, Sales Graph and CSV Export
+   Database root: restaurantBilling/
+   Safe manual refresh; preserves date filters
+   SVG graph uses real invoice data; no external chart library
+   ========================================================= */
+
+(function () {
   "use strict";
 
   const OWNER_UID = "20wif9y7LQhBZgFPDsAlrQpFjnI2";
-  const INVOICES_PATH = "restaurantBilling/invoices";
-  const PRODUCTS_PATH = "restaurantBilling/products";
-  const CATEGORIES_PATH = "restaurantBilling/categories";
-  const BUSINESS_PATH = "restaurantBilling/settings/businessProfile";
+
+  const PATHS = Object.freeze({
+    invoices: "restaurantBilling/invoices",
+    products: "restaurantBilling/products",
+    categories: "restaurantBilling/categories",
+    business: "restaurantBilling/settings/businessProfile"
+  });
+
+  const $ = (id) => document.getElementById(id);
 
   const state = {
     api: null,
@@ -19,10 +32,17 @@
     loading: true,
     error: "",
     initialized: false,
-    unsubscribers: []
+    disposed: false,
+    databaseConnected: false,
+    unsubscribers: [],
+    unregisterPageRefresh: null
   };
 
-  const $ = (id) => document.getElementById(id);
+  const SVG_NS = "http://www.w3.org/2000/svg";
+
+  /* ---------------------------------------------------------
+     1. Common helpers
+     --------------------------------------------------------- */
 
   function escapeHTML(value) {
     if (window.restaurantUI?.escapeHTML) {
@@ -89,9 +109,12 @@
       invoice.recordStatus ?? invoice.status ?? "valid"
     ).trim().toLowerCase();
 
-    return ["cancelled", "canceled", "void", "voided"].includes(status)
-      ? "cancelled"
-      : "valid";
+    return [
+      "cancelled",
+      "canceled",
+      "void",
+      "voided"
+    ].includes(status) ? "cancelled" : "valid";
   }
 
   function getInvoiceTotal(invoice) {
@@ -123,7 +146,7 @@
   }
 
   function getItemAmount(item) {
-    const storedAmount = Number(item.total ?? item.amount);
+    const storedAmount = Number(item.lineTotal ?? item.total ?? item.amount);
 
     return Number.isFinite(storedAmount)
       ? storedAmount
@@ -174,6 +197,14 @@
 
     element.textContent = message;
     element.dataset.state = isError ? "error" : "normal";
+    element.classList.remove("is-connected", "is-error", "is-warning");
+
+    if (isError) {
+      element.classList.add("is-error");
+      element.setAttribute("role", "alert");
+    } else {
+      element.setAttribute("role", "status");
+    }
   }
 
   function setConnectionStatus(message, isError = false) {
@@ -182,6 +213,16 @@
 
     element.textContent = message;
     element.dataset.state = isError ? "error" : "normal";
+
+    element.classList.remove("is-connected", "is-error", "is-warning");
+
+    if (isError) {
+      element.classList.add("is-error");
+    } else if (state.databaseConnected) {
+      element.classList.add("is-connected");
+    } else {
+      element.classList.add("is-warning");
+    }
   }
 
   function setText(id, value) {
@@ -189,13 +230,19 @@
     if (element) element.textContent = String(value ?? "");
   }
 
+  /* ---------------------------------------------------------
+     2. Branding and data normalization
+     --------------------------------------------------------- */
+
   function updateBranding() {
+    const profile = state.businessProfile || {};
+
     const businessName = String(
-      state.businessProfile.businessName ?? ""
+      profile.businessName ?? profile.name ?? ""
     ).trim();
 
     const tagline = String(
-      state.businessProfile.tagline ?? ""
+      profile.businessTagline ?? profile.tagline ?? ""
     ).trim();
 
     const name = businessName || "Restaurant Billing";
@@ -217,9 +264,7 @@
 
   function updateOwnerProfile(user) {
     const name = String(
-      user?.displayName ??
-      user?.email ??
-      "Owner"
+      user?.displayName ?? user?.email ?? "Owner"
     ).trim();
 
     setText("ownerDisplayName", name);
@@ -233,7 +278,11 @@
   function normaliseRecords(raw) {
     if (!raw || typeof raw !== "object") return [];
 
-    return Object.entries(raw)
+    const records = Array.isArray(raw)
+      ? raw.map((value, index) => [String(index), value])
+      : Object.entries(raw);
+
+    return records
       .filter(([, value]) =>
         value &&
         typeof value === "object" &&
@@ -249,9 +298,13 @@
   function normaliseLookup(raw) {
     if (!raw || typeof raw !== "object") return {};
 
+    const records = Array.isArray(raw)
+      ? raw.map((value, index) => [String(index), value])
+      : Object.entries(raw);
+
     const result = {};
 
-    Object.entries(raw).forEach(([key, value]) => {
+    records.forEach(([key, value]) => {
       if (
         value &&
         typeof value === "object" &&
@@ -308,6 +361,10 @@
     }).length;
   }
 
+  /* ---------------------------------------------------------
+     3. Report calculations
+     --------------------------------------------------------- */
+
   function buildDailyReport(invoices) {
     const daily = new Map();
 
@@ -329,6 +386,7 @@
       }
 
       const entry = daily.get(key);
+
       entry.invoiceCount += 1;
       entry.sales += getInvoiceTotal(invoice);
       entry.tax += getTax(invoice);
@@ -350,7 +408,9 @@
     invoices.forEach((invoice) => {
       getItems(invoice).forEach((item) => {
         const name = getItemName(item).trim() || "Unnamed item";
-        const key = String(item.productId ?? item.itemId ?? name.toLowerCase());
+        const key = String(
+          item.productId ?? item.itemId ?? name.toLowerCase()
+        );
 
         if (!products.has(key)) {
           products.set(key, {
@@ -361,6 +421,7 @@
         }
 
         const product = products.get(key);
+
         product.quantity += getItemQuantity(item);
         product.revenue += getItemAmount(item);
       });
@@ -386,12 +447,19 @@
       }
 
       const entry = payments.get(method);
+
       entry.invoiceCount += 1;
       entry.total += getInvoiceTotal(invoice);
     });
 
-    return [...payments.values()].sort((a, b) => b.total - a.total);
+    return [...payments.values()].sort((a, b) =>
+      b.total - a.total
+    );
   }
+
+  /* ---------------------------------------------------------
+     4. Summary cards
+     --------------------------------------------------------- */
 
   function renderSummary(invoices, daily, products) {
     const totalSales = invoices.reduce(
@@ -414,18 +482,341 @@
 
     setText("reportTotalSales", formatCurrency(totalSales));
     setText("reportInvoiceCount", formatNumber(invoices.length));
+
     setText(
       "reportAverageInvoice",
       formatCurrency(invoices.length ? totalSales / invoices.length : 0)
     );
-    setText("reportCancelledCount", formatNumber(getCancelledCount()));
 
+    setText("reportCancelledCount", formatNumber(getCancelledCount()));
     setText("reportItemsSold", formatNumber(itemsSold));
     setText("reportTaxCollected", formatCurrency(totalTax));
     setText("reportDiscountTotal", formatCurrency(totalDiscount));
     setText("reportProductCount", formatNumber(products.length));
     setText("reportActiveDays", formatNumber(daily.length));
   }
+
+  /* ---------------------------------------------------------
+     5. Sales trend graph (native SVG, real report data)
+     --------------------------------------------------------- */
+
+  function createSVGElement(tag, attributes, text) {
+    const element = document.createElementNS(SVG_NS, tag);
+
+    Object.entries(attributes || {}).forEach(([key, value]) => {
+      element.setAttribute(key, String(value));
+    });
+
+    if (text !== undefined) {
+      element.textContent = String(text);
+    }
+
+    return element;
+  }
+
+  function ensureStatisticsSection() {
+    let section = $("reportStatisticsGraphSection");
+
+    if (section) return section;
+
+    section = document.createElement("section");
+    section.id = "reportStatisticsGraphSection";
+    section.className = "dashboard-section report-statistics-section";
+    section.setAttribute("aria-labelledby", "reportStatisticsGraphHeading");
+
+    const heading = document.createElement("div");
+    heading.className = "section-heading";
+
+    const headingText = document.createElement("div");
+
+    const title = document.createElement("h2");
+    title.id = "reportStatisticsGraphHeading";
+    title.textContent = "Daily Sales Trend";
+
+    const description = document.createElement("p");
+    description.className = "muted-text";
+    description.textContent =
+      "Daily sales based on valid invoices in the selected report period.";
+
+    headingText.append(title, description);
+    heading.appendChild(headingText);
+
+    const panel = document.createElement("div");
+    panel.className = "panel report-chart-panel";
+
+    const chartContainer = document.createElement("div");
+    chartContainer.id = "reportSalesChart";
+    chartContainer.className = "report-chart-viewport";
+
+    chartContainer.setAttribute("role", "group");
+    chartContainer.setAttribute(
+      "aria-label",
+      "Daily sales trend graph"
+    );
+
+    const note = document.createElement("p");
+    note.id = "reportSalesChartNote";
+    note.className = "muted-text report-chart-note";
+
+    panel.append(chartContainer, note);
+    section.append(heading, panel);
+
+    /*
+     * Insert the graph before the daily-sales table when possible.
+     * Otherwise put it near the beginning of the report content.
+     */
+    const dailyTableBody = $("dailySalesTableBody");
+    const targetSection = dailyTableBody?.closest("section");
+    const content = document.querySelector("main.content") ||
+      document.querySelector(".content") ||
+      document.querySelector("main");
+
+    if (targetSection?.parentNode) {
+      targetSection.parentNode.insertBefore(section, targetSection);
+    } else if (content) {
+      content.appendChild(section);
+    }
+
+    return section;
+  }
+
+  function renderSalesTrendChart(daily) {
+    ensureStatisticsSection();
+
+    const container = $("reportSalesChart");
+    const note = $("reportSalesChartNote");
+
+    if (!container) return;
+
+    container.replaceChildren();
+
+    if (!daily.length) {
+      const message = document.createElement("p");
+      message.className = "empty-state";
+      message.textContent =
+        "No daily sales data is available for the selected period.";
+
+      container.appendChild(message);
+
+      if (note) {
+        note.textContent = "The graph will appear when valid invoice data is available.";
+      }
+
+      return;
+    }
+
+    /*
+     * Display up to 14 most recent dates in chronological order.
+     * All summary values and tables continue to use the full filter.
+     */
+    const chartData = daily
+      .slice()
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(-14);
+
+    const width = 900;
+    const height = 330;
+
+    const margin = {
+      top: 24,
+      right: 30,
+      bottom: 58,
+      left: 88
+    };
+
+    const plotWidth = width - margin.left - margin.right;
+    const plotHeight = height - margin.top - margin.bottom;
+
+    const maximumSales = Math.max(
+      1,
+      ...chartData.map((entry) => Math.max(0, entry.sales))
+    );
+
+    const svg = createSVGElement("svg", {
+      viewBox: `0 0 ${width} ${height}`,
+      width: "100%",
+      height: "auto",
+      role: "img",
+      "aria-labelledby": "reportSalesChartTitle reportSalesChartDescription",
+      preserveAspectRatio: "xMidYMid meet"
+    });
+
+    svg.appendChild(
+      createSVGElement(
+        "title",
+        { id: "reportSalesChartTitle" },
+        "Daily sales trend"
+      )
+    );
+
+    svg.appendChild(
+      createSVGElement(
+        "desc",
+        { id: "reportSalesChartDescription" },
+        "Line graph showing daily sales from valid invoices for up to 14 recent dates in the selected period."
+      )
+    );
+
+    const compactCurrency = (value) =>
+      "₹" + new Intl.NumberFormat("en-IN", {
+        notation: "compact",
+        maximumFractionDigits: 1
+      }).format(value);
+
+    /* Horizontal grid and Y-axis labels. */
+    for (let i = 0; i <= 4; i++) {
+      const fraction = i / 4;
+      const y = margin.top + fraction * plotHeight;
+      const value = maximumSales * (1 - fraction);
+
+      svg.appendChild(
+        createSVGElement("line", {
+          x1: margin.left,
+          y1: y,
+          x2: width - margin.right,
+          y2: y,
+          stroke: "#d1d5db",
+          "stroke-width": 1
+        })
+      );
+
+      svg.appendChild(
+        createSVGElement("text", {
+          x: margin.left - 12,
+          y: y + 4,
+          fill: "#4b5563",
+          "font-size": 12,
+          "text-anchor": "end"
+        }, compactCurrency(value))
+      );
+    }
+
+    const xForIndex = (index) => {
+      if (chartData.length === 1) {
+        return margin.left + plotWidth / 2;
+      }
+
+      return margin.left +
+        (index / (chartData.length - 1)) * plotWidth;
+    };
+
+    const yForSales = (sales) =>
+      margin.top +
+      (1 - Math.max(0, sales) / maximumSales) * plotHeight;
+
+    const points = chartData.map((entry, index) => ({
+      x: xForIndex(index),
+      y: yForSales(entry.sales),
+      entry
+    }));
+
+    const pathData = points.map((point, index) =>
+      `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`
+    ).join(" ");
+
+    svg.appendChild(
+      createSVGElement("path", {
+        d: pathData,
+        fill: "none",
+        stroke: "#202124",
+        "stroke-width": 3,
+        "stroke-linecap": "round",
+        "stroke-linejoin": "round"
+      })
+    );
+
+    points.forEach((point) => {
+      const circle = createSVGElement("circle", {
+        cx: point.x,
+        cy: point.y,
+        r: 5,
+        fill: "#ffffff",
+        stroke: "#202124",
+        "stroke-width": 2
+      });
+
+      circle.appendChild(
+        createSVGElement(
+          "title",
+          {},
+          `${displayDate(point.entry.date)}: ${formatCurrency(point.entry.sales)}`
+        )
+      );
+
+      svg.appendChild(circle);
+    });
+
+    /*
+     * Limit labels on wider date ranges so that dates do not overlap.
+     */
+    const labelStep = chartData.length <= 7
+      ? 1
+      : Math.ceil(chartData.length / 7);
+
+    points.forEach((point, index) => {
+      const isLast = index === points.length - 1;
+
+      if (
+        index % labelStep !== 0 &&
+        !isLast
+      ) {
+        return;
+      }
+
+      const labelDate = parseDate(point.entry.date);
+      const label = labelDate
+        ? new Intl.DateTimeFormat("en-IN", {
+            day: "2-digit",
+            month: "short"
+          }).format(labelDate)
+        : point.entry.date;
+
+      svg.appendChild(
+        createSVGElement("text", {
+          x: point.x,
+          y: height - margin.bottom + 24,
+          fill: "#4b5563",
+          "font-size": 12,
+          "text-anchor": "middle"
+        }, label)
+      );
+    });
+
+    /* Axes */
+    svg.appendChild(
+      createSVGElement("line", {
+        x1: margin.left,
+        y1: margin.top,
+        x2: margin.left,
+        y2: height - margin.bottom,
+        stroke: "#6b7280",
+        "stroke-width": 1
+      })
+    );
+
+    svg.appendChild(
+      createSVGElement("line", {
+        x1: margin.left,
+        y1: height - margin.bottom,
+        x2: width - margin.right,
+        y2: height - margin.bottom,
+        stroke: "#6b7280",
+        "stroke-width": 1
+      })
+    );
+
+    container.appendChild(svg);
+
+    if (note) {
+      note.textContent =
+        `Showing ${chartData.length} recent day(s). ` +
+        "Sales are calculated from valid invoices; cancelled invoices are excluded.";
+    }
+  }
+
+  /* ---------------------------------------------------------
+     6. Report tables
+     --------------------------------------------------------- */
 
   function renderDailyTable(daily) {
     const body = $("dailySalesTableBody");
@@ -490,6 +881,10 @@
     `).join("");
   }
 
+  /* ---------------------------------------------------------
+     7. Render report and graph
+     --------------------------------------------------------- */
+
   function renderReport() {
     if (state.loading) {
       setStatus("Loading saved invoice records…");
@@ -510,6 +905,7 @@
     renderDailyTable(daily);
     renderProductTable(products);
     renderPaymentTable(payments);
+    renderSalesTrendChart(daily);
 
     const startLabel = state.startDate
       ? displayDate(state.startDate)
@@ -519,8 +915,15 @@
       ? displayDate(state.endDate)
       : "Today and earlier";
 
-    setText("reportPeriodDescription", `Report period: ${startLabel} – ${endLabel}`);
-    setText("reportsFooterStatus", `${invoices.length} valid invoices included`);
+    setText(
+      "reportPeriodDescription",
+      `Report period: ${startLabel} – ${endLabel}`
+    );
+
+    setText(
+      "reportsFooterStatus",
+      `${invoices.length} valid invoices included`
+    );
 
     setStatus(
       `Report updated. ${invoices.length} valid invoice${invoices.length === 1 ? "" : "s"} included.`
@@ -538,6 +941,7 @@
 
     state.startDate = start;
     state.endDate = end;
+
     renderReport();
   }
 
@@ -558,11 +962,20 @@
       state.endDate = "";
     }
 
-    if ($("reportStartDate")) $("reportStartDate").value = state.startDate;
-    if ($("reportEndDate")) $("reportEndDate").value = state.endDate;
+    if ($("reportStartDate")) {
+      $("reportStartDate").value = state.startDate;
+    }
+
+    if ($("reportEndDate")) {
+      $("reportEndDate").value = state.endDate;
+    }
 
     renderReport();
   }
+
+  /* ---------------------------------------------------------
+     8. CSV export
+     --------------------------------------------------------- */
 
   function csvCell(value) {
     return `"${String(value ?? "").replace(/"/g, '""')}"`;
@@ -573,13 +986,17 @@
       .map((row) => row.map(csvCell).join(","))
       .join("\r\n");
 
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const blob = new Blob([csv], {
+      type: "text/csv;charset=utf-8;"
+    });
+
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
 
     link.href = url;
     link.download = filename;
     link.hidden = true;
+
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -589,13 +1006,24 @@
 
   function exportDailyReport() {
     if (state.loading || state.error) {
-      setStatus("Wait until the report has loaded before exporting.", true);
+      setStatus(
+        "Wait until the report has loaded before exporting.",
+        true
+      );
       return;
     }
 
     const invoices = getFilteredInvoices();
+
     const rows = [
-      ["Date", "Invoice Count", "Sales (INR)", "Tax (INR)", "Discount (INR)", "Items Sold"]
+      [
+        "Date",
+        "Invoice Count",
+        "Sales (INR)",
+        "Tax (INR)",
+        "Discount (INR)",
+        "Items Sold"
+      ]
     ];
 
     buildDailyReport(invoices).forEach((entry) => {
@@ -613,33 +1041,189 @@
     rows.push(["Product", "Quantity Sold", "Revenue (INR)"]);
 
     buildProductReport(invoices).forEach((product) => {
-      rows.push([product.name, product.quantity, product.revenue.toFixed(2)]);
+      rows.push([
+        product.name,
+        product.quantity,
+        product.revenue.toFixed(2)
+      ]);
     });
 
     rows.push([]);
     rows.push(["Payment Method", "Invoice Count", "Total Amount (INR)"]);
 
     buildPaymentReport(invoices).forEach((payment) => {
-      rows.push([payment.method, payment.invoiceCount, payment.total.toFixed(2)]);
+      rows.push([
+        payment.method,
+        payment.invoiceCount,
+        payment.total.toFixed(2)
+      ]);
     });
 
-    downloadCSV(`restaurant-sales-report-${localDateString(new Date())}.csv`, rows);
+    downloadCSV(
+      `restaurant-sales-report-${localDateString(new Date())}.csv`,
+      rows
+    );
+
     setStatus("CSV report exported.");
   }
+
+  /* ---------------------------------------------------------
+     9. Firebase subscriptions
+     --------------------------------------------------------- */
 
   function subscribe(path, handler, errorHandler) {
     const shared = window.restaurantFirebase;
     const reference = state.api.ref(shared.db, path);
 
-    const unsubscribe = state.api.onValue(reference, handler, errorHandler);
+    const unsubscribe = state.api.onValue(
+      reference,
+      handler,
+      errorHandler
+    );
 
     if (typeof unsubscribe === "function") {
       state.unsubscribers.push(unsubscribe);
     }
   }
 
+  function watchDatabaseConnection() {
+    const shared = window.restaurantFirebase;
+    const reference = state.api.ref(shared.db, ".info/connected");
+
+    subscribe(
+      ".info/connected",
+      (snapshot) => {
+        if (state.disposed) return;
+
+        state.databaseConnected = snapshot.val() === true;
+
+        setConnectionStatus(
+          state.databaseConnected
+            ? "Database connected"
+            : "Connecting to database"
+        );
+      },
+      () => {
+        if (state.disposed) return;
+
+        state.databaseConnected = false;
+        setConnectionStatus("Connection status unavailable", true);
+      }
+    );
+  }
+
+  /* ---------------------------------------------------------
+     10. Manual refresh
+     --------------------------------------------------------- */
+
+  async function refreshReports() {
+    if (state.disposed || !state.api) {
+      throw new Error("Reports page is not ready to refresh.");
+    }
+
+    const shared = window.restaurantFirebase;
+    const access = window.restaurantAccess;
+
+    if (
+      !shared?.ready ||
+      !shared.db ||
+      !access?.authorized ||
+      access.user?.uid !== OWNER_UID
+    ) {
+      throw new Error("Authorized Firebase access is unavailable.");
+    }
+
+    if (typeof state.api.get !== "function") {
+      throw new Error("Firebase data refresh is unavailable.");
+    }
+
+    setStatus("Refreshing report data…");
+
+    /*
+     * Fetch all source paths concurrently.
+     * Update in-memory state only when every read succeeds.
+     * Existing realtime listeners are not duplicated.
+     */
+    const paths = [
+      PATHS.invoices,
+      PATHS.products,
+      PATHS.categories,
+      PATHS.business
+    ];
+
+    const snapshots = await Promise.all(
+      paths.map((path) =>
+        state.api.get(state.api.ref(shared.db, path))
+      )
+    );
+
+    if (state.disposed) return;
+
+    const refreshedInvoices = normaliseRecords(
+      snapshots[0].exists() ? snapshots[0].val() : null
+    );
+
+    const refreshedProducts = normaliseLookup(
+      snapshots[1].exists() ? snapshots[1].val() : null
+    );
+
+    const refreshedCategories = normaliseLookup(
+      snapshots[2].exists() ? snapshots[2].val() : null
+    );
+
+    const refreshedBusiness = snapshots[3].exists()
+      ? snapshots[3].val() || {}
+      : {};
+
+    state.invoices = refreshedInvoices;
+    state.products = refreshedProducts;
+    state.categories = refreshedCategories;
+    state.businessProfile = refreshedBusiness;
+    state.loading = false;
+    state.error = "";
+
+    updateBranding();
+    renderReport();
+
+    setConnectionStatus(
+      state.databaseConnected
+        ? "Database connected"
+        : "Connecting to database"
+    );
+  }
+
+  /* ---------------------------------------------------------
+     11. Database error handling
+     --------------------------------------------------------- */
+
+  function handleDatabaseError(error) {
+    if (state.disposed) return;
+
+    state.loading = false;
+
+    state.error =
+      error?.code === "PERMISSION_DENIED" ||
+      error?.code === "permission-denied"
+        ? "Database permission denied. Check Firebase Realtime Database rules."
+        : "Unable to load report data.";
+
+    setConnectionStatus(
+      state.databaseConnected
+        ? "Database connected"
+        : "Database connection unavailable",
+      !state.databaseConnected
+    );
+
+    renderReport();
+  }
+
+  /* ---------------------------------------------------------
+     12. Page initialization
+     --------------------------------------------------------- */
+
   async function initializePage() {
     if (state.initialized) return;
+
     state.initialized = true;
 
     const shared = window.restaurantFirebase;
@@ -647,23 +1231,33 @@
     if (!shared?.readyPromise) {
       state.loading = false;
       state.error = "Firebase configuration is unavailable.";
+
       renderReport();
       setConnectionStatus("Configuration error", true);
       setText("ownerDisplayName", "Account unavailable");
+
       return;
     }
 
     try {
       setStatus("Connecting to report data…");
-      await shared.readyPromise;
 
-      if (shared.error || !shared.db || !shared.sdk?.database) {
+      const initialized = await shared.readyPromise;
+
+      if (
+        !initialized ||
+        shared.error ||
+        !shared.db ||
+        !shared.sdk?.database
+      ) {
         throw new Error("The database connection is unavailable.");
       }
 
       const access = window.restaurantAccess;
 
-      if (access?.readyPromise) await access.readyPromise;
+      if (access?.readyPromise) {
+        await access.readyPromise;
+      }
 
       if (!access?.authorized || access.user?.uid !== OWNER_UID) {
         throw new Error("Owner access is required to view reports.");
@@ -671,58 +1265,105 @@
 
       updateOwnerProfile(access.user);
 
+      const databaseAPI = shared.sdk.database;
+
+      if (
+        typeof databaseAPI.ref !== "function" ||
+        typeof databaseAPI.onValue !== "function" ||
+        typeof databaseAPI.get !== "function"
+      ) {
+        throw new Error("Required Realtime Database methods are unavailable.");
+      }
+
       state.api = {
-        ref: shared.sdk.database.ref,
-        onValue: shared.sdk.database.onValue
+        ref: databaseAPI.ref,
+        onValue: databaseAPI.onValue,
+        get: databaseAPI.get
       };
 
-      setConnectionStatus("Connected");
+      if (
+        window.restaurantUI &&
+        typeof window.restaurantUI.registerPageRefresh === "function"
+      ) {
+        state.unregisterPageRefresh =
+          window.restaurantUI.registerPageRefresh(refreshReports);
+      }
+
+      watchDatabaseConnection();
 
       subscribe(
-        INVOICES_PATH,
+        PATHS.invoices,
         (snapshot) => {
+          if (state.disposed) return;
+
           state.invoices = normaliseRecords(snapshot.val());
           state.loading = false;
           state.error = "";
+
           renderReport();
         },
         handleDatabaseError
       );
 
-      subscribe(PRODUCTS_PATH, (snapshot) => {
-        state.products = normaliseLookup(snapshot.val());
-      }, handleDatabaseError);
+      subscribe(
+        PATHS.products,
+        (snapshot) => {
+          if (state.disposed) return;
 
-      subscribe(CATEGORIES_PATH, (snapshot) => {
-        state.categories = normaliseLookup(snapshot.val());
-      }, handleDatabaseError);
+          state.products = normaliseLookup(snapshot.val());
 
-      subscribe(BUSINESS_PATH, (snapshot) => {
-        state.businessProfile = snapshot.val() || {};
-        updateBranding();
-      }, () => {
-        state.businessProfile = {};
-        updateBranding();
-      });
+          if (!state.loading) renderReport();
+        },
+        handleDatabaseError
+      );
+
+      subscribe(
+        PATHS.categories,
+        (snapshot) => {
+          if (state.disposed) return;
+
+          state.categories = normaliseLookup(snapshot.val());
+
+          if (!state.loading) renderReport();
+        },
+        handleDatabaseError
+      );
+
+      subscribe(
+        PATHS.business,
+        (snapshot) => {
+          if (state.disposed) return;
+
+          state.businessProfile = snapshot.val() || {};
+          updateBranding();
+        },
+        (error) => {
+          if (state.disposed) return;
+
+          console.warn(
+            "Optional business profile could not be loaded:",
+            error?.code || "unknown"
+          );
+
+          state.businessProfile = {};
+          updateBranding();
+        }
+      );
+
     } catch (error) {
       state.loading = false;
       state.error = error?.message || "Could not connect to reports.";
 
       setConnectionStatus("Connection error", true);
       setText("ownerDisplayName", "Account unavailable");
+
       renderReport();
     }
   }
 
-  function handleDatabaseError(error) {
-    state.loading = false;
-    state.error = error?.code === "PERMISSION_DENIED"
-      ? "Database permission denied. Check Firebase Realtime Database rules."
-      : "Unable to load report data.";
-
-    setConnectionStatus("Database error", true);
-    renderReport();
-  }
+  /* ---------------------------------------------------------
+     13. Events and cleanup
+     --------------------------------------------------------- */
 
   function bindEvents() {
     $("reportFiltersForm")?.addEventListener("submit", (event) => {
@@ -741,8 +1382,22 @@
     $("exportReportBtn")?.addEventListener("click", exportDailyReport);
 
     window.addEventListener("pagehide", () => {
-      state.unsubscribers.forEach((unsubscribe) => unsubscribe());
+      state.disposed = true;
+
+      state.unsubscribers.forEach((unsubscribe) => {
+        try {
+          unsubscribe();
+        } catch (_) {
+          /* Best-effort listener cleanup. */
+        }
+      });
+
       state.unsubscribers = [];
+
+      if (typeof state.unregisterPageRefresh === "function") {
+        state.unregisterPageRefresh();
+        state.unregisterPageRefresh = null;
+      }
     });
   }
 
