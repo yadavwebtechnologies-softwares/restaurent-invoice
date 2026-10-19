@@ -1,7 +1,9 @@
+
 /* =========================================================
    RESTAURANT BILLING SOFTWARE
    Live Dashboard
    Database root: restaurantBilling/
+   Live connection monitoring and safe manual refresh
    No demo data, no hardcoded business secrets
    ========================================================= */
 
@@ -26,7 +28,9 @@
   let database = null;
   let databaseAPI = null;
   let subscriptions = [];
+  let unregisterPageRefresh = null;
   let stopped = false;
+  let databaseConnected = false;
 
   const state = {
     invoices: [],
@@ -204,6 +208,23 @@
 
     if (type) {
       target.classList.add("is-" + type);
+    }
+  }
+
+  function setSidebarStatus(message, type) {
+    const connection = el("sidebarConnectionStatus");
+
+    if (!connection) return;
+
+    connection.textContent = message;
+    connection.classList.remove(
+      "is-connected",
+      "is-error",
+      "is-warning"
+    );
+
+    if (type) {
+      connection.classList.add("is-" + type);
     }
   }
 
@@ -501,7 +522,6 @@
 
   function renderSalesSummary() {
     const validInvoices = getValidInvoices();
-
     const todayInvoices = validInvoices.filter(isToday);
 
     const todaySales = todayInvoices.reduce(function (total, invoice) {
@@ -806,7 +826,7 @@
   }
 
   /* ---------------------------------------------------------
-     9. Render page
+     9. Connection state and rendering
      --------------------------------------------------------- */
 
   function renderDashboard() {
@@ -834,28 +854,43 @@
         "error"
       );
 
+      setSidebarStatus("Some data unavailable", "error");
       setText("dashboardFooterStatus", "Some data unavailable");
       return;
     }
 
     const allLoaded = Object.values(state.loaded).every(Boolean);
 
+    if (!databaseConnected) {
+      setStatus(
+        "Waiting for Firebase database connection...",
+        "warning"
+      );
+
+      setSidebarStatus("Connecting to database", "warning");
+      setText(
+        "dashboardFooterStatus",
+        "Checking database connection"
+      );
+
+      return;
+    }
+
+    setSidebarStatus("Database connected", "connected");
+
     if (allLoaded) {
       setStatus(
-        "Dashboard connected. Live database updates are enabled.",
+        "Database connected. Dashboard data is up to date.",
         "connected"
       );
 
-      setText("sidebarConnectionStatus", "Database connected");
       setText("dashboardFooterStatus", "Live data connected");
-
-      const connection = el("sidebarConnectionStatus");
-
-      if (connection) {
-        connection.classList.add("is-connected");
-      }
     } else {
-      setStatus("Connecting to live business records...", "warning");
+      setStatus(
+        "Database connected. Loading business records...",
+        "connected"
+      );
+
       setText("dashboardFooterStatus", "Loading business records");
     }
   }
@@ -863,6 +898,21 @@
   /* ---------------------------------------------------------
      10. Realtime Database subscriptions
      --------------------------------------------------------- */
+
+  function removePathError(path) {
+    state.errors = state.errors.filter(function (error) {
+      return error.path !== path;
+    });
+  }
+
+  function addPathError(path, error) {
+    removePathError(path);
+
+    state.errors.push({
+      path: path,
+      code: error && error.code ? error.code : "unknown"
+    });
+  }
 
   function subscribeTo(path, key, normalize) {
     const reference = databaseAPI.ref(database, path);
@@ -878,10 +928,7 @@
         state[key] = normalize ? normalize(data) : data;
         state.loaded[key] = true;
 
-        state.errors = state.errors.filter(function (error) {
-          return error.path !== path;
-        });
-
+        removePathError(path);
         renderDashboard();
       },
 
@@ -894,15 +941,7 @@
           error && error.code ? error.code : "unknown"
         );
 
-        state.errors = state.errors.filter(function (item) {
-          return item.path !== path;
-        });
-
-        state.errors.push({
-          path: path,
-          code: error && error.code ? error.code : "unknown"
-        });
-
+        addPathError(path, error);
         state.loaded[key] = false;
 
         renderDashboard();
@@ -912,13 +951,131 @@
     subscriptions.push(unsubscribe);
   }
 
+  /*
+   * Realtime Database connection monitoring is separate from
+   * whether all four data sources have finished their first load.
+   */
+  function subscribeConnectionStatus() {
+    const reference = databaseAPI.ref(database, ".info/connected");
+
+    const unsubscribe = databaseAPI.onValue(
+      reference,
+
+      function (snapshot) {
+        if (stopped) return;
+
+        databaseConnected = snapshot.val() === true;
+        renderDashboard();
+      },
+
+      function (error) {
+        if (stopped) return;
+
+        databaseConnected = false;
+
+        console.error(
+          "Database connection monitor failed:",
+          error && error.code ? error.code : "unknown"
+        );
+
+        renderDashboard();
+      }
+    );
+
+    subscriptions.push(unsubscribe);
+  }
+
   /* ---------------------------------------------------------
-     11. Initialize
+     11. Manual refresh
+     --------------------------------------------------------- */
+
+  function normalizeSettings(value) {
+    return value && typeof value === "object" ? value : {};
+  }
+
+  async function refreshDashboard() {
+    if (stopped || !database || !databaseAPI) {
+      throw new Error("Dashboard is not ready to refresh.");
+    }
+
+    if (typeof databaseAPI.get !== "function") {
+      throw new Error("Firebase database refresh is unavailable.");
+    }
+
+    const sources = [
+      {
+        path: PATHS.invoices,
+        key: "invoices",
+        normalize: entries
+      },
+      {
+        path: PATHS.products,
+        key: "products",
+        normalize: entries
+      },
+      {
+        path: PATHS.categories,
+        key: "categories",
+        normalize: entries
+      },
+      {
+        path: PATHS.settings,
+        key: "settings",
+        normalize: normalizeSettings
+      }
+    ];
+
+    const results = await Promise.allSettled(
+      sources.map(function (source) {
+        return databaseAPI.get(
+          databaseAPI.ref(database, source.path)
+        );
+      })
+    );
+
+    if (stopped) return;
+
+    let failureCount = 0;
+
+    results.forEach(function (result, index) {
+      const source = sources[index];
+
+      if (result.status === "fulfilled") {
+        const snapshot = result.value;
+
+        const value = snapshot.exists()
+          ? snapshot.val()
+          : null;
+
+        state[source.key] = source.normalize(value);
+        state.loaded[source.key] = true;
+
+        removePathError(source.path);
+      } else {
+        failureCount++;
+        addPathError(source.path, result.reason);
+      }
+    });
+
+    renderDashboard();
+
+    if (failureCount > 0) {
+      throw new Error(
+        failureCount === 1
+          ? "One data source could not be refreshed."
+          : failureCount + " data sources could not be refreshed."
+      );
+    }
+  }
+
+  /* ---------------------------------------------------------
+     12. Initialize
      --------------------------------------------------------- */
 
   async function initialize() {
     try {
       setStatus("Checking owner authorization...", "warning");
+      setSidebarStatus("Connecting to database", "warning");
 
       const access = window.restaurantAccess;
 
@@ -956,10 +1113,30 @@
 
       if (
         typeof databaseAPI.ref !== "function" ||
-        typeof databaseAPI.onValue !== "function"
+        typeof databaseAPI.onValue !== "function" ||
+        typeof databaseAPI.get !== "function"
       ) {
-        throw new Error("Realtime Database methods are unavailable.");
+        throw new Error("Required Realtime Database methods are unavailable.");
       }
+
+      /*
+       * Register one page-specific refresh handler.
+       * Existing subscriptions continue to provide live updates;
+       * manual refresh does not add any new subscriptions.
+       */
+      if (
+        ui &&
+        typeof ui.registerPageRefresh === "function"
+      ) {
+        unregisterPageRefresh = ui.registerPageRefresh(
+          refreshDashboard
+        );
+      }
+
+      /*
+       * Start connection monitoring and data subscriptions together.
+       */
+      subscribeConnectionStatus();
 
       subscribeTo(
         PATHS.invoices,
@@ -982,12 +1159,10 @@
       subscribeTo(
         PATHS.settings,
         "settings",
-        function (value) {
-          return value && typeof value === "object" ? value : {};
-        }
+        normalizeSettings
       );
 
-      setText("sidebarConnectionStatus", "Loading database records");
+      renderDashboard();
 
     } catch (error) {
       console.error("Dashboard initialization failed:", error);
@@ -999,6 +1174,7 @@
         "error"
       );
 
+      setSidebarStatus("Database unavailable", "error");
       setText("dashboardFooterStatus", "Initialization failed");
     }
   }
@@ -1017,8 +1193,14 @@
     });
 
     subscriptions = [];
+
+    if (typeof unregisterPageRefresh === "function") {
+      unregisterPageRefresh();
+      unregisterPageRefresh = null;
+    }
   });
 
+  renderDashboard();
   initialize();
 
 })();
