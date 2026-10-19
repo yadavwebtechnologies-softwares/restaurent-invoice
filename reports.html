@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="style.css">
 </head>
 
-<body class="reports-page">
+<body class="dashboard-page reports-page is-dashboard-loading">
 
   <div class="app" id="app">
 
@@ -110,7 +110,7 @@
                stroke-width="1.8" stroke-linecap="round"
                stroke-linejoin="round" aria-hidden="true">
             <circle cx="12" cy="12" r="3"/>
-            <path d="M19.4 15a2 2 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a2 2 0 0 0-1.8-.3 2 2 0 0 0-1 1.5v.2a2 2 0 1 1-4 0v-.2a2 2 0 0 0-1-1.5 2 2 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a2 2 0 0 0 .3-1.8 2 2 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.2a2 2 0 0 0 1.5-1 2 2 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a2 2 0 0 0 1.8.3 2 2 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.2a2 2 0 0 0 1 1.5 2 2 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a2 2 0 0 0-.3 1.8 2 2 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.2a2 2 0 0 0-1.5 1Z"/>
+            <path d="M19.4 15a2 2 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a2 2 0 0 0-1.8-.3 2 2 0 0 0-1 1.5v.2a2 2 0 1 1-4 0v-.2a2 2 0 0 0-1-1.5 2 2 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l-.1.1a2 2 0 0 0 .3-1.8 2 2 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.2a2 2 0 0 0 1.5-1 2 2 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a2 2 0 0 0 1.8.3 2 2 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.2a2 2 0 0 0 1 1.5 2 2 0 0 0 1.8-.3l-.1-.1a2 2 0 1 1 2.8 2.8l.1.1a2 2 0 0 0-.3 1.8 2 2 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.2a2 2 0 0 0-1.5 1Z"/>
           </svg>
           <span>Settings</span>
         </a>
@@ -153,7 +153,7 @@
     <div class="main">
 
       <!-- Shared Header -->
-      <header class="topbar">
+      <header class="topbar" data-loading-surface>
 
         <div class="topbar-left">
 
@@ -195,7 +195,7 @@
       <!-- Reports Content -->
       <main class="content" id="reportsContent">
 
-        <section class="page-heading">
+        <section class="page-heading" data-loading-surface>
 
           <div>
             <p class="section-eyebrow">BUSINESS ANALYTICS</p>
@@ -221,12 +221,17 @@
           role="status"
           aria-live="polite"
           aria-atomic="true"
+          data-loading-value
         >
           Loading saved invoice records.
         </div>
 
         <!-- Report Filters -->
-        <section class="dashboard-section" aria-labelledby="reportFiltersHeading">
+        <section
+          class="dashboard-section"
+          aria-labelledby="reportFiltersHeading"
+          data-loading-surface
+        >
 
           <div class="section-heading">
             <div>
@@ -237,7 +242,7 @@
             </div>
           </div>
 
-          <div class="panel">
+          <div class="panel" data-loading-surface>
 
             <form id="reportFiltersForm" class="management-form">
 
@@ -307,40 +312,48 @@
         </section>
 
         <!-- Summary Metrics -->
-        <section class="dashboard-section" aria-labelledby="reportSummaryHeading">
+        <section
+          class="dashboard-section"
+          aria-labelledby="reportSummaryHeading"
+          data-loading-surface
+        >
 
           <div class="section-heading">
             <div>
               <h2 id="reportSummaryHeading">Report Summary</h2>
-              <p class="muted-text" id="reportPeriodDescription">
+              <p
+                class="muted-text"
+                id="reportPeriodDescription"
+                data-loading-value
+              >
                 Waiting for report data.
               </p>
             </div>
           </div>
 
-          <div class="stats-grid">
+          <div class="stats-grid" data-loading-surface>
 
-            <article class="stat-card">
+            <article class="stat-card" data-loading-surface>
               <p class="stat-label">Total Sales</p>
-              <p class="stat-value" id="reportTotalSales">—</p>
+              <p class="stat-value" id="reportTotalSales" data-loading-value>—</p>
               <p class="stat-description">Valid saved invoices in the selected period</p>
             </article>
 
-            <article class="stat-card">
+            <article class="stat-card" data-loading-surface>
               <p class="stat-label">Invoices</p>
-              <p class="stat-value" id="reportInvoiceCount">—</p>
+              <p class="stat-value" id="reportInvoiceCount" data-loading-value>—</p>
               <p class="stat-description">Non-cancelled records</p>
             </article>
 
-            <article class="stat-card">
+            <article class="stat-card" data-loading-surface>
               <p class="stat-label">Average Invoice Value</p>
-              <p class="stat-value" id="reportAverageInvoice">—</p>
+              <p class="stat-value" id="reportAverageInvoice" data-loading-value>—</p>
               <p class="stat-description">Total sales divided by invoice count</p>
             </article>
 
-            <article class="stat-card">
+            <article class="stat-card" data-loading-surface>
               <p class="stat-label">Cancelled Invoices</p>
-              <p class="stat-value" id="reportCancelledCount">—</p>
+              <p class="stat-value" id="reportCancelledCount" data-loading-value>—</p>
               <p class="stat-description">Cancelled records in the selected period</p>
             </article>
 
@@ -349,7 +362,11 @@
         </section>
 
         <!-- Sales by Date -->
-        <section class="dashboard-section" aria-labelledby="dailySalesHeading">
+        <section
+          class="dashboard-section"
+          aria-labelledby="dailySalesHeading"
+          data-loading-surface
+        >
 
           <div class="section-heading">
             <div>
@@ -360,7 +377,7 @@
             </div>
           </div>
 
-          <div class="table-container">
+          <div class="table-container" data-loading-surface>
             <div class="table-scroll">
 
               <table class="data-table">
@@ -387,7 +404,11 @@
         </section>
 
         <!-- Product Performance -->
-        <section class="dashboard-section" aria-labelledby="productReportHeading">
+        <section
+          class="dashboard-section"
+          aria-labelledby="productReportHeading"
+          data-loading-surface
+        >
 
           <div class="section-heading">
             <div>
@@ -398,7 +419,7 @@
             </div>
           </div>
 
-          <div class="table-container">
+          <div class="table-container" data-loading-surface>
             <div class="table-scroll">
 
               <table class="data-table">
@@ -425,7 +446,11 @@
         </section>
 
         <!-- Payment Breakdown -->
-        <section class="dashboard-section" aria-labelledby="paymentReportHeading">
+        <section
+          class="dashboard-section"
+          aria-labelledby="paymentReportHeading"
+          data-loading-surface
+        >
 
           <div class="section-heading">
             <div>
@@ -436,7 +461,7 @@
             </div>
           </div>
 
-          <div class="table-container">
+          <div class="table-container" data-loading-surface>
             <div class="table-scroll">
 
               <table class="data-table">
@@ -462,7 +487,7 @@
 
         </section>
 
-        <footer class="app-footer">
+        <footer class="app-footer" data-loading-surface>
           <span id="businessFooterName" data-business-name>
             Business reports
           </span>
