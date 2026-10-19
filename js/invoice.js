@@ -5,7 +5,7 @@
    Database root: restaurantBilling/
    Static restaurant-location QR only
    Safe manual refresh preserves the current invoice draft
-   No invoice verification records or dynamic QR generation
+   Lightweight initial loading and reveal animation
    ========================================================= */
 
 (function () {
@@ -41,11 +41,88 @@
     ready: false,
     saving: false,
     nextItemId: 1,
-    disposed: false
+    disposed: false,
+
+    /* Tracks completion of each initial database read. */
+    initialResolved: {
+      products: false,
+      categories: false,
+      settings: false
+    }
   };
 
   /* ---------------------------------------------------------
-     1. General helpers
+     1. Lightweight initial loading animation
+     Uses the existing shared CSS. No additional stylesheet.
+     --------------------------------------------------------- */
+
+  let loadingPhase = "loading";
+  let revealTimer = null;
+
+  function resolveInitialSource(path) {
+    const key = Object.keys(PATHS).find(
+      (name) => PATHS[name] === path
+    );
+
+    if (
+      key &&
+      Object.prototype.hasOwnProperty.call(
+        state.initialResolved,
+        key
+      )
+    ) {
+      state.initialResolved[key] = true;
+    }
+  }
+
+  function allInitialSourcesResolved() {
+    return Object.values(state.initialResolved).every(Boolean);
+  }
+
+  function finishInvoiceLoadingImmediately() {
+    if (revealTimer !== null) {
+      window.clearTimeout(revealTimer);
+      revealTimer = null;
+    }
+
+    document.body.classList.remove(
+      "is-dashboard-loading",
+      "is-dashboard-revealing"
+    );
+
+    loadingPhase = "complete";
+  }
+
+  function revealInvoicePageWhenReady() {
+    if (
+      state.disposed ||
+      loadingPhase !== "loading" ||
+      !allInitialSourcesResolved()
+    ) {
+      return;
+    }
+
+    /*
+     * Real invoice values are rendered before this function runs.
+     * The existing CSS handles the spinner swipe and blur removal.
+     */
+    loadingPhase = "revealing";
+
+    document.body.classList.remove("is-dashboard-loading");
+    document.body.classList.add("is-dashboard-revealing");
+
+    revealTimer = window.setTimeout(function () {
+      revealTimer = null;
+
+      if (state.disposed) return;
+
+      document.body.classList.remove("is-dashboard-revealing");
+      loadingPhase = "complete";
+    }, 270);
+  }
+
+  /* ---------------------------------------------------------
+     2. General helpers
      --------------------------------------------------------- */
 
   function setText(id, value) {
@@ -253,7 +330,7 @@
   }
 
   /* ---------------------------------------------------------
-     2. Settings
+     3. Settings
      --------------------------------------------------------- */
 
   function settingsSections() {
@@ -382,7 +459,7 @@
   }
 
   /* ---------------------------------------------------------
-     3. Products and categories
+     4. Products and categories
      --------------------------------------------------------- */
 
   function productName(product) {
@@ -489,10 +566,6 @@
 
     select.disabled = false;
 
-    /*
-     * Keep the user's current selection when the list still
-     * contains that product after a live update or manual refresh.
-     */
     if (
       previouslySelected &&
       products.some((product) =>
@@ -557,7 +630,7 @@
   }
 
   /* ---------------------------------------------------------
-     4. Custom items
+     5. Custom items
      --------------------------------------------------------- */
 
   function addCustomItem(event) {
@@ -618,7 +691,7 @@
   }
 
   /* ---------------------------------------------------------
-     5. Discount and invoice totals
+     6. Discount and invoice totals
      --------------------------------------------------------- */
 
   function ensureDiscountInput() {
@@ -862,7 +935,7 @@
   }
 
   /* ---------------------------------------------------------
-     6. Invoice number reservation
+     7. Invoice number reservation
      --------------------------------------------------------- */
 
   async function reserveInvoiceNumber(date) {
@@ -900,7 +973,7 @@
   }
 
   /* ---------------------------------------------------------
-     7. Business profile and invoice footer
+     8. Business profile and invoice footer
      --------------------------------------------------------- */
 
   function renderOptionalText(id, value, enabled) {
@@ -1199,7 +1272,7 @@
   }
 
   /* ---------------------------------------------------------
-     8. Customer and payment details
+     9. Customer and payment details
      --------------------------------------------------------- */
 
   function normalizePaymentMethod(value) {
@@ -1238,7 +1311,7 @@
   }
 
   /* ---------------------------------------------------------
-     9. Static restaurant-location QR visibility
+     10. Static restaurant-location QR visibility
      --------------------------------------------------------- */
 
   function updatePaymentQRVisibility() {
@@ -1258,7 +1331,7 @@
   }
 
   /* ---------------------------------------------------------
-     10. Invoice preview
+     11. Invoice preview
      --------------------------------------------------------- */
 
   function createInvoicePrintRow(item, index) {
@@ -1397,7 +1470,7 @@
   }
 
   /* ---------------------------------------------------------
-     11. Validation and Firebase invoice saving
+     12. Validation and Firebase invoice saving
      --------------------------------------------------------- */
 
   function validateCart() {
@@ -1517,7 +1590,7 @@
       };
 
       /*
-       * Save only the private invoice record.
+       * Save only the invoice record.
        * No public invoice verification record is created.
        */
       const invoiceListRef = state.api.ref(
@@ -1589,7 +1662,7 @@
   }
 
   /* ---------------------------------------------------------
-     12. Realtime Database subscriptions
+     13. Realtime Database subscriptions
      --------------------------------------------------------- */
 
   function subscribe(path, callback, errorCallback) {
@@ -1610,6 +1683,7 @@
     );
 
     state.loaded.products = true;
+    resolveInitialSource(PATHS.products);
 
     populateProductSelect();
     renderCart();
@@ -1622,6 +1696,7 @@
     );
 
     state.loaded.categories = true;
+    resolveInitialSource(PATHS.categories);
 
     populateProductSelect();
     renderCart();
@@ -1634,6 +1709,7 @@
       : {};
 
     state.loaded.settings = true;
+    resolveInitialSource(PATHS.settings);
 
     renderInvoiceBusinessDetails();
     renderCart();
@@ -1645,6 +1721,8 @@
       path: path,
       code: error && error.code ? error.code : "unknown"
     });
+
+    resolveInitialSource(path);
 
     setPageStatus(
       "Unable To Load Required Billing Data. Check The Database Connection And Access Rules.",
@@ -1658,6 +1736,12 @@
 
     state.ready = false;
     renderCart();
+
+    /*
+     * When all first reads have either succeeded or failed,
+     * reveal the real page instead of leaving spinners indefinitely.
+     */
+    revealInvoicePageWhenReady();
   }
 
   function checkReady() {
@@ -1669,10 +1753,11 @@
     }
 
     renderCart();
+    revealInvoicePageWhenReady();
   }
 
   /* ---------------------------------------------------------
-     13. Manual refresh
+     14. Manual refresh
      --------------------------------------------------------- */
 
   async function refreshInvoicePage() {
@@ -1694,10 +1779,6 @@
 
     setPageStatus("Refreshing billing data...", "warning");
 
-    /*
-     * Fetch first, then update state only after all reads succeed.
-     * Existing live subscriptions are not duplicated.
-     */
     const sources = [
       PATHS.products,
       PATHS.categories,
@@ -1714,10 +1795,6 @@
 
     if (state.disposed) return;
 
-    /*
-     * Preserve the currently selected product where possible.
-     * Cart items and customer/payment form values are untouched.
-     */
     const selectedProductId = $("productSelect")?.value || "";
 
     state.products = recordEntries(
@@ -1756,7 +1833,7 @@
   }
 
   /* ---------------------------------------------------------
-     14. Reset, close and print
+     15. Reset, close and print
      --------------------------------------------------------- */
 
   function resetInvoice() {
@@ -1809,7 +1886,7 @@
   }
 
   /* ---------------------------------------------------------
-     15. Initialize
+     16. Initialize
      --------------------------------------------------------- */
 
   async function initialize() {
@@ -1890,6 +1967,9 @@
     } catch (error) {
       state.ready = false;
 
+      /* Avoid leaving the loading animation running on init errors. */
+      finishInvoiceLoadingImmediately();
+
       console.error("Invoice page initialization failed:", error);
 
       setPageStatus(
@@ -1907,7 +1987,7 @@
   }
 
   /* ---------------------------------------------------------
-     16. Event handlers
+     17. Event handlers
      --------------------------------------------------------- */
 
   $("addInvoiceItemForm")?.addEventListener("submit", addSavedProduct);
@@ -1937,8 +2017,13 @@
   renderCart();
   initialize();
 
+  /* ---------------------------------------------------------
+     18. Cleanup
+     --------------------------------------------------------- */
+
   window.addEventListener("pagehide", function () {
     state.disposed = true;
+    finishInvoiceLoadingImmediately();
 
     state.subscriptions.forEach((unsubscribe) => {
       try {
