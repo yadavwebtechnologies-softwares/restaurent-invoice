@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -15,7 +16,7 @@
   <link rel="stylesheet" href="style.css">
 </head>
 
-<body class="invoices-page">
+<body class="dashboard-page invoices-page is-dashboard-loading">
 
   <div class="app" id="app">
 
@@ -97,7 +98,7 @@
                stroke-width="1.8" stroke-linecap="round"
                stroke-linejoin="round" aria-hidden="true">
             <circle cx="12" cy="12" r="3"/>
-            <path d="M19.4 15a2 2 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a2 2 0 0 0-1.8-.3 2 2 0 0 0-1 1.5v.2a2 2 0 1 1-4 0v-.2a2 2 0 0 0-1-1.5 2 2 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a2 2 0 0 0 .3-1.8 2 2 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.2a2 2 0 0 0 1.5-1 2 2 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a2 2 0 0 0 1.8.3 2 2 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.2a2 2 0 0 0 1 1.5 2 2 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a2 2 0 0 0-.3 1.8 2 2 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.2a2 2 0 0 0-1.5 1Z"/>
+            <path d="M19.4 15a2 2 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a2 2 0 0 0-1.8-.3 2 2 0 0 0-1 1.5v.2a2 2 0 1 1-4 0v-.2a2 2 0 0 0-1-1.5 2 2 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l-.1-.1a2 2 0 0 0 .3-1.8 2 2 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.2a2 2 0 0 0 1.5-1 2 2 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a2 2 0 0 0 1.8.3 2 2 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.2a2 2 0 0 0 1 1.5 2 2 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a2 2 0 0 0-.3 1.8 2 2 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.2a2 2 0 0 0-1.5 1Z"/>
           </svg>
           <span>Settings</span>
         </a>
@@ -208,29 +209,29 @@
             </div>
           </div>
 
-          <div class="stats-grid">
+          <div class="stats-grid" data-loading-surface>
 
             <article class="stat-card">
               <p class="stat-label">Total Invoices</p>
-              <p class="stat-value" id="totalInvoicesCount">—</p>
+              <p class="stat-value" id="totalInvoicesCount" data-loading-value>—</p>
               <p class="stat-description">Matching records</p>
             </article>
 
             <article class="stat-card">
               <p class="stat-label">Valid Invoice Value</p>
-              <p class="stat-value" id="totalInvoiceValue">—</p>
+              <p class="stat-value" id="totalInvoiceValue" data-loading-value>—</p>
               <p class="stat-description">Saved non-cancelled invoices</p>
             </article>
 
             <article class="stat-card">
               <p class="stat-label">Recorded Invoices</p>
-              <p class="stat-value" id="generatedInvoicesCount">—</p>
+              <p class="stat-value" id="generatedInvoicesCount" data-loading-value>—</p>
               <p class="stat-description">Saved invoice records</p>
             </article>
 
             <article class="stat-card">
               <p class="stat-label">Cancelled Invoices</p>
-              <p class="stat-value" id="cancelledInvoicesCount">—</p>
+              <p class="stat-value" id="cancelledInvoicesCount" data-loading-value>—</p>
               <p class="stat-description">Cancelled or void records</p>
             </article>
 
@@ -324,7 +325,7 @@
             </div>
           </div>
 
-          <div class="table-container">
+          <div class="table-container" data-loading-surface>
 
             <div class="table-scroll">
               <table class="data-table">
@@ -351,7 +352,7 @@
             </div>
 
             <div class="table-footer">
-              <span id="invoicePaginationInfo">Waiting for invoice records</span>
+              <span id="invoicePaginationInfo" data-loading-value>Waiting for invoice records</span>
 
               <div class="page-actions">
                 <button
