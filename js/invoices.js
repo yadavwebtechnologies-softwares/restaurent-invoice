@@ -1,7 +1,9 @@
+
 /* =========================================================
    RESTAURANT BILLING SOFTWARE
    Invoice History, Filtering, Details and Printing
    Database root: restaurantBilling/
+   Safe manual refresh preserves filters and current page
    No demo invoices, fake products or embedded secrets
    ========================================================= */
 
@@ -21,10 +23,12 @@
     selectedInvoice: null,
     unsubscribeInvoices: null,
     unsubscribeBusiness: null,
+    unregisterPageRefresh: null,
     initialized: false,
     loading: true,
     error: "",
-    businessProfile: {}
+    businessProfile: {},
+    disposed: false
   };
 
   const $ = (id) => document.getElementById(id);
@@ -255,10 +259,7 @@
         };
       })
       .filter(Boolean)
-      .filter((invoice) => {
-        // Only show records belonging to the authorized owner.
-        return invoice.ownerUid === OWNER_UID;
-      })
+      .filter((invoice) => invoice.ownerUid === OWNER_UID)
       .sort((a, b) => {
         const dateA = getInvoiceDate(a)?.getTime() ?? 0;
         const dateB = getInvoiceDate(b)?.getTime() ?? 0;
@@ -301,16 +302,11 @@
     }
   }
 
-  function applyFilters() {
+  function applyFilters(preservePage = false) {
     const searchText = String($("invoiceSearchInput")?.value ?? "")
       .trim()
       .toLowerCase();
 
-    /*
-     * Important fix:
-     * An empty dropdown value must behave like "all".
-     * The || operator handles both null/undefined and "".
-     */
     const statusFilter = String(
       $("invoiceStatusFilter")?.value || "all"
     ).toLowerCase();
@@ -360,7 +356,10 @@
       return true;
     });
 
-    state.currentPage = 1;
+    if (!preservePage) {
+      state.currentPage = 1;
+    }
+
     renderTable();
 
     return true;
@@ -606,12 +605,17 @@
   }
 
   function getBusinessAddress() {
-    return String(state.businessProfile?.address ?? "").trim();
+    const profile = state.businessProfile || {};
+    return String(
+      profile.businessAddress ?? profile.address ?? ""
+    ).trim();
   }
 
   function getBusinessContact() {
     const profile = state.businessProfile ?? {};
-    const values = [profile.phone, profile.email].filter(Boolean);
+    const phone = profile.businessPhone ?? profile.phone;
+    const email = profile.businessEmail ?? profile.email;
+    const values = [phone, email].filter(Boolean);
 
     return values.join(" · ");
   }
@@ -780,6 +784,101 @@
     applyFilters();
   }
 
+  /* ---------------------------------------------------------
+     Manual refresh
+     Reads fresh data without adding realtime listeners.
+     Keeps active filters and current page where possible.
+     --------------------------------------------------------- */
+
+  async function refreshInvoiceHistory() {
+    if (state.disposed || !state.api) {
+      throw new Error("Invoice history is not ready to refresh.");
+    }
+
+    const shared = window.restaurantFirebase;
+
+    if (
+      !shared?.ready ||
+      !shared.db ||
+      typeof state.api.get !== "function"
+    ) {
+      throw new Error("Firebase database refresh is unavailable.");
+    }
+
+    const access = window.restaurantAccess;
+
+    if (
+      !access?.authorized ||
+      access.user?.uid !== OWNER_UID
+    ) {
+      throw new Error("Owner access is required to refresh invoice history.");
+    }
+
+    setStatus("Refreshing invoice history…");
+
+    /*
+     * Fetch both paths before replacing the current in-memory data.
+     * If either read fails, previously loaded data remains intact.
+     */
+    const snapshots = await Promise.all([
+      state.api.get(state.api.ref(shared.db, INVOICES_PATH)),
+      state.api.get(state.api.ref(shared.db, SETTINGS_PATH))
+    ]);
+
+    if (state.disposed) return;
+
+    const refreshedInvoices = normalizeInvoices(
+      snapshots[0].exists() ? snapshots[0].val() : null
+    );
+
+    const refreshedProfile = snapshots[1].exists()
+      ? snapshots[1].val() || {}
+      : {};
+
+    state.invoices = refreshedInvoices;
+    state.businessProfile = refreshedProfile;
+    state.loading = false;
+    state.error = "";
+
+    updateBusinessBranding(state.businessProfile);
+    renderSummary();
+
+    /*
+     * Retain search/date/status inputs and the current page,
+     * clamping the page if the filtered result count has changed.
+     */
+    applyFilters(true);
+
+    /*
+     * Keep the open invoice details connected to the latest record
+     * when that invoice still exists.
+     */
+    if (state.selectedInvoice) {
+      const selectedKey = state.selectedInvoice._databaseKey;
+
+      const updatedSelected = state.invoices.find(
+        (invoice) => invoice._databaseKey === selectedKey
+      );
+
+      if (updatedSelected) {
+        state.selectedInvoice = updatedSelected;
+
+        if ($("invoiceDetailsDialog")?.open) {
+          renderInvoiceDetails(updatedSelected);
+        }
+      }
+    }
+
+    setConnectionStatus("Database connected");
+    setStatus(
+      `Invoice history refreshed. ${state.filteredInvoices.length} matching records found.`
+    );
+  }
+
+  /* ---------------------------------------------------------
+     Initialize protected page
+     --------------------------------------------------------- */
+
   async function initializePage() {
     if (state.initialized) return;
 
@@ -821,13 +920,31 @@
 
       state.api = {
         ref: shared.sdk.database.ref,
-        onValue: shared.sdk.database.onValue
+        onValue: shared.sdk.database.onValue,
+        get: shared.sdk.database.get
       };
 
-      setConnectionStatus("Connected");
+      if (
+        typeof state.api.ref !== "function" ||
+        typeof state.api.onValue !== "function" ||
+        typeof state.api.get !== "function"
+      ) {
+        throw new Error("Required Realtime Database methods are unavailable.");
+      }
+
+      if (
+        window.restaurantUI &&
+        typeof window.restaurantUI.registerPageRefresh === "function"
+      ) {
+        state.unregisterPageRefresh =
+          window.restaurantUI.registerPageRefresh(refreshInvoiceHistory);
+      }
+
+      setConnectionStatus("Connecting to database");
 
       watchInvoices();
       watchBusinessProfile();
+
     } catch (error) {
       state.loading = false;
       state.error = error?.message || "Could not connect to invoice history.";
@@ -845,20 +962,26 @@
       reference,
 
       (snapshot) => {
+        if (state.disposed) return;
+
         state.invoices = normalizeInvoices(snapshot.val());
 
         state.loading = false;
         state.error = "";
 
         renderSummary();
-        applyFilters();
+        applyFilters(true);
+        setConnectionStatus("Database connected");
       },
 
       (error) => {
+        if (state.disposed) return;
+
         state.loading = false;
 
         state.error =
-          error?.code === "PERMISSION_DENIED"
+          error?.code === "PERMISSION_DENIED" ||
+          error?.code === "permission-denied"
             ? "Database permission denied. Check Firebase Realtime Database rules."
             : "Unable to load invoice history.";
 
@@ -875,11 +998,15 @@
       state.api.ref(shared.db, SETTINGS_PATH),
 
       (snapshot) => {
+        if (state.disposed) return;
+
         state.businessProfile = snapshot.val() || {};
         updateBusinessBranding(state.businessProfile);
       },
 
       () => {
+        if (state.disposed) return;
+
         // Invoice history remains usable if optional settings fail.
         state.businessProfile = {};
         updateBusinessBranding({});
@@ -953,8 +1080,15 @@
     );
 
     window.addEventListener("pagehide", () => {
+      state.disposed = true;
+
       state.unsubscribeInvoices?.();
       state.unsubscribeBusiness?.();
+
+      if (typeof state.unregisterPageRefresh === "function") {
+        state.unregisterPageRefresh();
+        state.unregisterPageRefresh = null;
+      }
     });
   }
 
