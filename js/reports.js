@@ -1,10 +1,10 @@
-
 /* =========================================================
    RESTAURANT BILLING SOFTWARE
    Reports, Statistics, Sales Graph and CSV Export
    Database root: restaurantBilling/
    Safe manual refresh; preserves date filters
    SVG graph uses real invoice data; no external chart library
+   Shared dashboard loading animation
    ========================================================= */
 
 (function () {
@@ -18,6 +18,8 @@
     categories: "restaurantBilling/categories",
     business: "restaurantBilling/settings/businessProfile"
   });
+
+  const LOADING_REVEAL_MS = 270;
 
   const $ = (id) => document.getElementById(id);
 
@@ -35,13 +37,56 @@
     disposed: false,
     databaseConnected: false,
     unsubscribers: [],
-    unregisterPageRefresh: null
+    unregisterPageRefresh: null,
+
+    // Shared loading animation state
+    loadingPhase: "loading",
+    revealTimer: null
   };
 
   const SVG_NS = "http://www.w3.org/2000/svg";
 
   /* ---------------------------------------------------------
-     1. Common helpers
+     1. Shared dashboard loading animation
+     --------------------------------------------------------- */
+
+  function revealReportsPage() {
+    if (
+      state.disposed ||
+      state.loadingPhase !== "loading"
+    ) {
+      return;
+    }
+
+    state.loadingPhase = "revealing";
+
+    document.body.classList.remove("is-dashboard-loading");
+    document.body.classList.add("is-dashboard-revealing");
+
+    clearTimeout(state.revealTimer);
+
+    state.revealTimer = window.setTimeout(() => {
+      document.body.classList.remove("is-dashboard-revealing");
+
+      state.loadingPhase = "complete";
+      state.revealTimer = null;
+    }, LOADING_REVEAL_MS);
+  }
+
+  function finishReportsLoadingImmediately() {
+    clearTimeout(state.revealTimer);
+    state.revealTimer = null;
+
+    document.body.classList.remove(
+      "is-dashboard-loading",
+      "is-dashboard-revealing"
+    );
+
+    state.loadingPhase = "complete";
+  }
+
+  /* ---------------------------------------------------------
+     2. Common helpers
      --------------------------------------------------------- */
 
   function escapeHTML(value) {
@@ -231,7 +276,7 @@
   }
 
   /* ---------------------------------------------------------
-     2. Branding and data normalization
+     3. Branding and data normalization
      --------------------------------------------------------- */
 
   function updateBranding() {
@@ -362,7 +407,7 @@
   }
 
   /* ---------------------------------------------------------
-     3. Report calculations
+     4. Report calculations
      --------------------------------------------------------- */
 
   function buildDailyReport(invoices) {
@@ -458,7 +503,7 @@
   }
 
   /* ---------------------------------------------------------
-     4. Summary cards
+     5. Summary cards
      --------------------------------------------------------- */
 
   function renderSummary(invoices, daily, products) {
@@ -497,7 +542,7 @@
   }
 
   /* ---------------------------------------------------------
-     5. Sales trend graph (native SVG, real report data)
+     6. Sales trend graph (native SVG, real report data)
      --------------------------------------------------------- */
 
   function createSVGElement(tag, attributes, text) {
@@ -523,6 +568,7 @@
     section.id = "reportStatisticsGraphSection";
     section.className = "dashboard-section report-statistics-section";
     section.setAttribute("aria-labelledby", "reportStatisticsGraphHeading");
+    section.setAttribute("data-loading-surface", "");
 
     const heading = document.createElement("div");
     heading.className = "section-heading";
@@ -599,7 +645,8 @@
       container.appendChild(message);
 
       if (note) {
-        note.textContent = "The graph will appear when valid invoice data is available.";
+        note.textContent =
+          "The graph will appear when valid invoice data is available.";
       }
 
       return;
@@ -815,7 +862,7 @@
   }
 
   /* ---------------------------------------------------------
-     6. Report tables
+     7. Report tables
      --------------------------------------------------------- */
 
   function renderDailyTable(daily) {
@@ -882,7 +929,7 @@
   }
 
   /* ---------------------------------------------------------
-     7. Render report and graph
+     8. Render report and graph
      --------------------------------------------------------- */
 
   function renderReport() {
@@ -974,7 +1021,7 @@
   }
 
   /* ---------------------------------------------------------
-     8. CSV export
+     9. CSV export
      --------------------------------------------------------- */
 
   function csvCell(value) {
@@ -1068,7 +1115,7 @@
   }
 
   /* ---------------------------------------------------------
-     9. Firebase subscriptions
+     10. Firebase subscriptions
      --------------------------------------------------------- */
 
   function subscribe(path, handler, errorHandler) {
@@ -1113,7 +1160,7 @@
   }
 
   /* ---------------------------------------------------------
-     10. Manual refresh
+     11. Manual refresh
      --------------------------------------------------------- */
 
   async function refreshReports() {
@@ -1193,7 +1240,7 @@
   }
 
   /* ---------------------------------------------------------
-     11. Database error handling
+     12. Database error handling
      --------------------------------------------------------- */
 
   function handleDatabaseError(error) {
@@ -1215,10 +1262,13 @@
     );
 
     renderReport();
+
+    // Prevent loading animation from remaining indefinitely on error.
+    revealReportsPage();
   }
 
   /* ---------------------------------------------------------
-     12. Page initialization
+     13. Page initialization
      --------------------------------------------------------- */
 
   async function initializePage() {
@@ -1235,6 +1285,7 @@
       renderReport();
       setConnectionStatus("Configuration error", true);
       setText("ownerDisplayName", "Account unavailable");
+      finishReportsLoadingImmediately();
 
       return;
     }
@@ -1301,6 +1352,9 @@
           state.error = "";
 
           renderReport();
+
+          // Initial invoice data is ready; reveal the report smoothly.
+          revealReportsPage();
         },
         handleDatabaseError
       );
@@ -1351,6 +1405,8 @@
       );
 
     } catch (error) {
+      if (state.disposed) return;
+
       state.loading = false;
       state.error = error?.message || "Could not connect to reports.";
 
@@ -1358,11 +1414,12 @@
       setText("ownerDisplayName", "Account unavailable");
 
       renderReport();
+      finishReportsLoadingImmediately();
     }
   }
 
   /* ---------------------------------------------------------
-     13. Events and cleanup
+     14. Events and cleanup
      --------------------------------------------------------- */
 
   function bindEvents() {
@@ -1383,6 +1440,9 @@
 
     window.addEventListener("pagehide", () => {
       state.disposed = true;
+
+      clearTimeout(state.revealTimer);
+      state.revealTimer = null;
 
       state.unsubscribers.forEach((unsubscribe) => {
         try {
