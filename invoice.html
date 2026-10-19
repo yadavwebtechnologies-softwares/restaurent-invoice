@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -9,7 +10,7 @@
   <meta name="description" content="Create and record business invoices.">
   <link rel="stylesheet" href="style.css">
 </head>
-<body class="invoice-page">
+<body class="dashboard-page invoice-page is-dashboard-loading">
 
   <div class="app" id="app">
     <aside class="sidebar" id="sidebar">
@@ -27,9 +28,7 @@
         <p class="nav-section">Main</p>
 
         <a class="nav-item active" href="dashboard.html" aria-current="page">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.8" stroke-linecap="round"
-               stroke-linejoin="round" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <rect x="3" y="3" width="7" height="9" rx="1.5"/>
             <rect x="14" y="3" width="7" height="5" rx="1.5"/>
             <rect x="14" y="12" width="7" height="9" rx="1.5"/>
@@ -39,9 +38,7 @@
         </a>
 
         <a class="nav-item" href="invoice.html">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.8" stroke-linecap="round"
-               stroke-linejoin="round" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M12 5v14M5 12h14"/>
             <rect x="3" y="3" width="18" height="18" rx="3"/>
           </svg>
@@ -49,9 +46,7 @@
         </a>
 
         <a class="nav-item" href="invoices.html">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.8" stroke-linecap="round"
-               stroke-linejoin="round" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
             <path d="M14 2v6h6M8 13h8M8 17h6"/>
           </svg>
@@ -59,9 +54,7 @@
         </a>
 
         <a class="nav-item" href="reports.html">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.8" stroke-linecap="round"
-               stroke-linejoin="round" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M3 3v18h18"/>
             <path d="m7 14 4-4 3 3 5-7"/>
           </svg>
@@ -71,9 +64,7 @@
         <p class="nav-section">Management</p>
 
         <a class="nav-item" href="products.html">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.8" stroke-linecap="round"
-               stroke-linejoin="round" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="m12 3 9 5-9 5-9-5 9-5Z"/>
             <path d="M3 8v9l9 5 9-5V8"/>
             <path d="M12 13v9"/>
@@ -82,9 +73,7 @@
         </a>
 
         <a class="nav-item" href="settings.html">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.8" stroke-linecap="round"
-               stroke-linejoin="round" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="12" cy="12" r="3"/>
             <path d="m19.4 15 .1.1a2 2 0 1 1-2.8 2.8l-.1-.1a2 2 0 0 0-3.4 1.4v.2a2 2 0 1 1-4 0v-.2A2 2 0 0 0 5.8 17l-.1.1a2 2 0 1 1-2.8-2.8L3 14.2a2 2 0 0 0-1.4-3.4h-.2a2 2 0 1 1 0-4h.2A2 2 0 0 0 3 3.4l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a2 2 0 0 0 3.4-1.4V-.9"/>
           </svg>
@@ -104,27 +93,13 @@
       </div>
     </aside>
 
-    <button
-      type="button"
-      class="overlay"
-      id="overlay"
-      aria-label="Close navigation"
-      hidden
-    ></button>
+    <button type="button" class="overlay" id="overlay" aria-label="Close navigation" hidden></button>
 
     <div class="main">
       <header class="topbar">
         <div class="topbar-left">
-          <button
-            type="button"
-            class="menu-btn"
-            id="menuBtn"
-            aria-label="Open navigation"
-            aria-controls="sidebar"
-            aria-expanded="false"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <button type="button" class="menu-btn" id="menuBtn" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
               <path d="M3 6h18M3 12h18M3 18h18"/>
             </svg>
           </button>
@@ -157,8 +132,7 @@
           </div>
         </section>
 
-        <div class="dashboard-status" id="invoicePageStatus"
-             role="status" aria-live="polite">
+        <div class="dashboard-status" id="invoicePageStatus" role="status" aria-live="polite">
           Loading saved products and billing settings.
         </div>
 
@@ -170,7 +144,7 @@
             </div>
           </div>
 
-          <div class="panel invoice-entry-panel">
+          <div class="panel invoice-entry-panel" data-loading-surface>
             <form id="addInvoiceItemForm" class="invoice-item-form">
               <div class="form-field">
                 <label for="productSelect">Product</label>
@@ -181,19 +155,14 @@
 
               <div class="form-field">
                 <label for="itemQuantity">Quantity</label>
-                <input type="number" id="itemQuantity" name="quantity"
-                       min="1" step="1" value="1" inputmode="numeric" required>
+                <input type="number" id="itemQuantity" name="quantity" min="1" step="1" value="1" inputmode="numeric" required>
               </div>
 
-              <button type="submit" class="btn btn-primary" id="addItemBtn">
-                Add Item
-              </button>
+              <button type="submit" class="btn btn-primary" id="addItemBtn">Add Item</button>
             </form>
 
             <div class="custom-item-actions">
-              <button type="button" class="btn btn-secondary"
-                      id="toggleCustomItemBtn" aria-expanded="false"
-                      aria-controls="customItemPanel">
+              <button type="button" class="btn btn-secondary" id="toggleCustomItemBtn" aria-expanded="false" aria-controls="customItemPanel">
                 Add Custom Item
               </button>
             </div>
@@ -204,26 +173,20 @@
               <form id="customItemForm" class="invoice-item-form">
                 <div class="form-field">
                   <label for="customItemName">Item Name</label>
-                  <input type="text" id="customItemName" name="customItemName"
-                         maxlength="120" autocomplete="off">
+                  <input type="text" id="customItemName" name="customItemName" maxlength="120" autocomplete="off">
                 </div>
 
                 <div class="form-field">
                   <label for="customItemPrice">Unit Price (₹)</label>
-                  <input type="number" id="customItemPrice" name="customItemPrice"
-                         min="0.01" step="0.01" inputmode="decimal">
+                  <input type="number" id="customItemPrice" name="customItemPrice" min="0.01" step="0.01" inputmode="decimal">
                 </div>
 
                 <div class="form-field">
                   <label for="customItemQuantity">Quantity</label>
-                  <input type="number" id="customItemQuantity"
-                         name="customItemQuantity" min="1" step="1"
-                         value="1" inputmode="numeric">
+                  <input type="number" id="customItemQuantity" name="customItemQuantity" min="1" step="1" value="1" inputmode="numeric">
                 </div>
 
-                <button type="submit" class="btn btn-primary" id="addCustomItemBtn">
-                  Add Custom Item
-                </button>
+                <button type="submit" class="btn btn-primary" id="addCustomItemBtn">Add Custom Item</button>
               </form>
             </div>
           </div>
@@ -236,9 +199,7 @@
               <p class="muted-text" id="itemCount">No items added</p>
             </div>
 
-            <button type="button" class="btn btn-secondary" id="clearItemsBtn">
-              Clear Items
-            </button>
+            <button type="button" class="btn btn-secondary" id="clearItemsBtn">Clear Items</button>
           </div>
 
           <div class="table-container">
@@ -264,7 +225,7 @@
         </section>
 
         <section class="dashboard-section" aria-labelledby="invoiceTotalsHeading">
-          <div class="panel invoice-total-panel">
+          <div class="panel invoice-total-panel" data-loading-surface>
             <div class="section-heading">
               <div>
                 <h2 id="invoiceTotalsHeading">Bill Summary</h2>
@@ -275,22 +236,22 @@
             <dl class="invoice-totals">
               <div class="invoice-total-row">
                 <dt>Subtotal</dt>
-                <dd id="invoiceSubtotal">—</dd>
+                <dd id="invoiceSubtotal" data-loading-value>—</dd>
               </div>
 
               <div class="invoice-total-row" id="discountTotalRow" hidden>
                 <dt>Discount</dt>
-                <dd id="invoiceDiscount">—</dd>
+                <dd id="invoiceDiscount" data-loading-value>—</dd>
               </div>
 
               <div class="invoice-total-row" id="taxTotalRow" hidden>
                 <dt id="invoiceTaxLabel">Tax</dt>
-                <dd id="invoiceTax">—</dd>
+                <dd id="invoiceTax" data-loading-value>—</dd>
               </div>
 
               <div class="invoice-total-row invoice-grand-total">
                 <dt>Grand Total</dt>
-                <dd id="invoiceGrandTotal">—</dd>
+                <dd id="invoiceGrandTotal" data-loading-value>—</dd>
               </div>
             </dl>
 
@@ -300,36 +261,17 @@
 
                 <div class="form-field">
                   <label for="customerName">Customer Name</label>
-                  <input
-                    type="text"
-                    id="customerName"
-                    name="customerName"
-                    value="Walk-in Customer"
-                    maxlength="120"
-                    autocomplete="name"
-                    required
-                  >
+                  <input type="text" id="customerName" name="customerName" value="Walk-in Customer" maxlength="120" autocomplete="name" required>
                 </div>
 
                 <div class="form-field">
                   <label for="customerPhone">Customer Phone (Optional)</label>
-                  <input
-                    type="tel"
-                    id="customerPhone"
-                    name="customerPhone"
-                    maxlength="25"
-                    autocomplete="tel"
-                  >
+                  <input type="tel" id="customerPhone" name="customerPhone" maxlength="25" autocomplete="tel">
                 </div>
 
                 <div class="form-field">
                   <label for="tableNumber">Table Number (Optional)</label>
-                  <input
-                    type="text"
-                    id="tableNumber"
-                    name="tableNumber"
-                    maxlength="30"
-                  >
+                  <input type="text" id="tableNumber" name="tableNumber" maxlength="30">
                 </div>
 
                 <div class="form-field">
@@ -355,17 +297,13 @@
 
               <div class="form-field">
                 <label for="invoiceNotes">Notes (Optional)</label>
-                <textarea id="invoiceNotes" name="notes" rows="2"
-                          maxlength="500" placeholder="Add a note if required"></textarea>
+                <textarea id="invoiceNotes" name="notes" rows="2" maxlength="500" placeholder="Add a note if required"></textarea>
               </div>
 
-              <div class="form-message" id="invoiceMessage"
-                   role="status" aria-live="polite" aria-atomic="true"></div>
+              <div class="form-message" id="invoiceMessage" role="status" aria-live="polite" aria-atomic="true"></div>
 
               <div class="invoice-actions">
-                <button type="button" class="btn btn-secondary" id="resetInvoiceBtn">
-                  Reset
-                </button>
+                <button type="button" class="btn btn-secondary" id="resetInvoiceBtn">Reset</button>
 
                 <button type="submit" class="btn btn-primary" id="generateInvoiceBtn">
                   <span id="invoiceSubmitLabel">Record / Save Invoice</span>
@@ -375,9 +313,7 @@
           </div>
         </section>
 
-        <section class="dashboard-section invoice-preview-section"
-                 id="invoicePreviewSection"
-                 aria-labelledby="invoicePreviewHeading" hidden>
+        <section class="dashboard-section invoice-preview-section" id="invoicePreviewSection" aria-labelledby="invoicePreviewHeading" hidden>
           <div class="section-heading">
             <div>
               <h2 id="invoicePreviewHeading">Invoice Preview</h2>
@@ -385,13 +321,8 @@
             </div>
 
             <div class="invoice-actions">
-              <button type="button" class="btn btn-secondary" id="closeInvoicePreviewBtn">
-                Close Preview
-              </button>
-
-              <button type="button" class="btn btn-primary" id="printInvoiceBtn">
-                Print Invoice
-              </button>
+              <button type="button" class="btn btn-secondary" id="closeInvoicePreviewBtn">Close Preview</button>
+              <button type="button" class="btn btn-primary" id="printInvoiceBtn">Print Invoice</button>
             </div>
           </div>
 
@@ -399,9 +330,7 @@
             <header class="inv-header">
               <img class="inv-logo" id="printBusinessLogo" alt="Business Logo" hidden>
 
-              <h2 class="inv-biz-name" id="printBusinessName" data-business-name>
-                Business Profile
-              </h2>
+              <h2 class="inv-biz-name" id="printBusinessName" data-business-name>Business Profile</h2>
 
               <p class="inv-biz-tag" id="printBusinessTagline" data-business-tagline hidden></p>
 
@@ -502,10 +431,7 @@
               <!-- Static restaurant location QR; no dynamic invoice QR -->
               <div class="inv-qr-block" id="printQrSection">
                 <div class="inv-qr-static">
-                  <a href="business-location.html"
-                     target="_blank"
-                     rel="noopener noreferrer"
-                     aria-label="Open restaurant location">
+                  <a href="business-location.html" target="_blank" rel="noopener noreferrer" aria-label="Open restaurant location">
                     <img
                       src="business-location-qr.png"
                       alt="Scan to find our restaurant on Google Maps"
