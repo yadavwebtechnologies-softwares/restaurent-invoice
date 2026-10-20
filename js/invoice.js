@@ -1,4 +1,3 @@
-
 /* =========================================================
    RESTAURANT BILLING SOFTWARE
    Invoice Creation, Calculation, Saving and Preview
@@ -6,6 +5,7 @@
    Static restaurant-location QR only
    Safe manual refresh preserves the current invoice draft
    Lightweight initial loading and reveal animation
+   Dynamic Amount in Words — Indian Numbering System
    ========================================================= */
 
 (function () {
@@ -320,6 +320,150 @@
     ) {
       throw new Error("The authorized owner session is required.");
     }
+  }
+
+  /* ---------------------------------------------------------
+     2A. Dynamic Amount in Words
+     Indian numbering: Thousand, Lakh, Crore
+     --------------------------------------------------------- */
+
+  function numberBelowHundred(number) {
+    const ones = [
+      "Zero", "One", "Two", "Three", "Four",
+      "Five", "Six", "Seven", "Eight", "Nine",
+      "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen",
+      "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"
+    ];
+
+    const tens = [
+      "", "", "Twenty", "Thirty", "Forty",
+      "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"
+    ];
+
+    if (number < 20) return ones[number];
+
+    const ten = Math.floor(number / 10);
+    const one = number % 10;
+
+    return tens[ten] + (one ? " " + ones[one] : "");
+  }
+
+  function numberToWordsIndian(number) {
+    number = Math.floor(Number(number));
+
+    if (!Number.isFinite(number) || number < 0) {
+      return "Zero";
+    }
+
+    if (number === 0) return "Zero";
+
+    if (number > 999999999999) {
+      return String(number);
+    }
+
+    const parts = [];
+
+    const crore = Math.floor(number / 10000000);
+    number %= 10000000;
+
+    const lakh = Math.floor(number / 100000);
+    number %= 100000;
+
+    const thousand = Math.floor(number / 1000);
+    number %= 1000;
+
+    const hundred = Math.floor(number / 100);
+    number %= 100;
+
+    if (crore) {
+      parts.push(numberToWordsIndian(crore) + " Crore");
+    }
+
+    if (lakh) {
+      parts.push(numberToWordsIndian(lakh) + " Lakh");
+    }
+
+    if (thousand) {
+      parts.push(numberToWordsIndian(thousand) + " Thousand");
+    }
+
+    if (hundred) {
+      parts.push(numberBelowHundred(hundred) + " Hundred");
+    }
+
+    if (number) {
+      parts.push(numberBelowHundred(number));
+    }
+
+    return parts.join(" ");
+  }
+
+  function amountToWordsIndian(amount) {
+    const safeAmount = Math.max(0, roundMoney(Number(amount) || 0));
+
+    const rupees = Math.floor(safeAmount);
+    const paise = Math.round((safeAmount - rupees) * 100);
+
+    let result = numberToWordsIndian(rupees) + " Rupees";
+
+    if (paise > 0) {
+      result += " and " + numberToWordsIndian(paise) + " Paise";
+    }
+
+    return result + " Only";
+  }
+
+  function ensureAmountWordsElement() {
+    let element = $("printInvoiceAmountWords");
+
+    if (element) return element;
+
+    const totalElement = $("printInvoiceGrandTotal");
+
+    if (!totalElement) return null;
+
+    const container =
+      totalElement.closest(".inv-total-row") ||
+      totalElement.closest(".inv-totals") ||
+      totalElement.parentElement;
+
+    if (!container || !container.parentElement) return null;
+
+    element = document.createElement("div");
+    element.id = "printInvoiceAmountWords";
+    element.className = "invoice-amount-words";
+
+    const label = document.createElement("strong");
+    label.textContent = "Amount in Words: ";
+
+    const value = document.createElement("span");
+    value.id = "printInvoiceAmountWordsText";
+
+    element.append(label, value);
+
+    container.parentElement.insertBefore(
+      element,
+      container.nextSibling
+    );
+
+    return element;
+  }
+
+  function updateInvoiceAmountWords(amount) {
+    const words = amountToWordsIndian(amount);
+    const element = ensureAmountWordsElement();
+
+    if (!element) return;
+
+    const textElement = $("printInvoiceAmountWordsText");
+
+    if (textElement) {
+      textElement.textContent = words;
+    } else {
+      element.textContent = "Amount in Words: " + words;
+    }
+
+    element.hidden = false;
   }
 
   /* ---------------------------------------------------------
@@ -1391,6 +1535,9 @@
     setText("printInvoiceTax", formatMoney(invoice.taxAmount));
     setText("printInvoiceRoundOff", formatMoney(invoice.roundOff || 0));
     setText("printInvoiceGrandTotal", formatMoney(invoice.grandTotal));
+
+    /* Dynamic amount in words for the saved invoice */
+    updateInvoiceAmountWords(invoice.grandTotal);
 
     setText(
       "printInvoiceTaxLabel",
