@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -13,41 +14,22 @@
 <body class="dashboard-page invoice-page is-dashboard-loading">
 
   <div class="app" id="app">
-<!-- Sidebar -->
     <aside class="sidebar" id="sidebar">
-
       <div class="brand">
         <a class="brand-link" href="dashboard.html" aria-label="Dashboard">
           <span class="brand-mark" id="brandMark" aria-hidden="true">B</span>
-
           <span class="brand-text">
-            <span
-              class="brand-name"
-              id="sidebarBusinessName"
-              data-business-name
-            >Business profile</span>
-
-            <span
-              class="brand-description"
-              id="sidebarBusinessTagline"
-              data-business-tagline
-            >Billing and management</span>
+            <span class="brand-name" id="sidebarBusinessName" data-business-name>Business profile</span>
+            <span class="brand-description" id="sidebarBusinessTagline" data-business-tagline>Billing and management</span>
           </span>
         </a>
       </div>
 
       <nav class="sidebar-navigation" aria-label="Main navigation">
-
         <p class="nav-section">Main</p>
 
-        <a
-          class="nav-item active"
-          href="dashboard.html"
-          aria-current="page"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.8" stroke-linecap="round"
-               stroke-linejoin="round" aria-hidden="true">
+        <a class="nav-item" href="dashboard.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <rect x="3" y="3" width="7" height="9" rx="1.5"/>
             <rect x="14" y="3" width="7" height="5" rx="1.5"/>
             <rect x="14" y="12" width="7" height="9" rx="1.5"/>
@@ -56,10 +38,8 @@
           <span>Dashboard</span>
         </a>
 
-        <a class="nav-item" href="invoice.html">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.8" stroke-linecap="round"
-               stroke-linejoin="round" aria-hidden="true">
+        <a class="nav-item active" href="invoice.html" aria-current="page">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M12 5v14M5 12h14"/>
             <rect x="3" y="3" width="18" height="18" rx="3"/>
           </svg>
@@ -67,9 +47,7 @@
         </a>
 
         <a class="nav-item" href="invoices.html">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.8" stroke-linecap="round"
-               stroke-linejoin="round" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
             <path d="M14 2v6h6M8 13h8M8 17h6"/>
           </svg>
@@ -77,9 +55,7 @@
         </a>
 
         <a class="nav-item" href="reports.html">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.8" stroke-linecap="round"
-               stroke-linejoin="round" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M3 3v18h18"/>
             <path d="m7 14 4-4 3 3 5-7"/>
           </svg>
@@ -89,9 +65,7 @@
         <p class="nav-section">Management</p>
 
         <a class="nav-item" href="products.html">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.8" stroke-linecap="round"
-               stroke-linejoin="round" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="m12 3 9 5-9 5-9-5 9-5Z"/>
             <path d="M3 8v9l9 5 9-5V8"/>
             <path d="M12 13v9"/>
@@ -100,15 +74,12 @@
         </a>
 
         <a class="nav-item" href="settings.html">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.8" stroke-linecap="round"
-               stroke-linejoin="round" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="12" cy="12" r="3"/>
             <path d="m19.4 15 .1.1a2 2 0 1 1-2.8 2.8l-.1-.1a2 2 0 0 0-3.4 1.4v.2a2 2 0 1 1-4 0v-.2A2 2 0 0 0 5.8 17l-.1.1a2 2 0 1 1-2.8-2.8L3 14.2a2 2 0 0 0-1.4-3.4h-.2a2 2 0 1 1 0-4h.2A2 2 0 0 0 3 3.4l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a2 2 0 0 0 3.4-1.4V-.9"/>
           </svg>
           <span>Settings</span>
         </a>
-
       </nav>
 
       <div class="sidebar-footer">
@@ -117,21 +88,10 @@
           <span id="sidebarConnectionStatus">Connecting to database</span>
         </div>
 
-        <button
-          type="button"
-          class="nav-item logout-button"
-          id="logoutBtn"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.8" stroke-linecap="round"
-               stroke-linejoin="round" aria-hidden="true">
-            <path d="M10 17l5-5-5-5M15 12H3"/>
-            <path d="M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7"/>
-          </svg>
+        <button type="button" class="nav-item logout-button" id="logoutBtn">
           <span>Sign Out</span>
         </button>
       </div>
-
     </aside>
 
     <button type="button" class="overlay" id="overlay" aria-label="Close navigation" hidden></button>
@@ -408,20 +368,19 @@
               <section class="section order-section" aria-labelledby="printOrderDetailsHeading">
                 <h3 class="section-title" id="printOrderDetailsHeading">Order Details</h3>
 
-                <table class="inv-item-table">
-                  <thead>
-                    <tr>
-                      <th scope="col">Item Description</th>
-                      <th scope="col">Qty</th>
-                      <th scope="col">Rate (₹)</th>
-                      <th scope="col">Amount (₹)</th>
-                    </tr>
-                  </thead>
+                <div class="inv-items" role="table" aria-label="Order details">
+                  <div class="inv-items-head" role="row">
+                    <span role="columnheader">#</span>
+                    <span role="columnheader">Item Description</span>
+                    <span role="columnheader">Qty</span>
+                    <span role="columnheader">Rate (₹)</span>
+                    <span role="columnheader">Amount (₹)</span>
+                  </div>
 
-                  <tbody id="printInvoiceItemsBody">
-                    <tr><td colspan="4" class="inv-empty-items">Invoice items will appear here.</td></tr>
-                  </tbody>
-                </table>
+                  <div class="inv-items-body" id="printInvoiceItemsBody" role="rowgroup">
+                    <div class="inv-empty-items" role="row">Invoice items will appear here.</div>
+                  </div>
+                </div>
               </section>
 
               <section class="bottom-section" aria-label="Payment and totals">
