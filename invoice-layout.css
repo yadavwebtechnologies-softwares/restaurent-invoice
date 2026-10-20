@@ -692,3 +692,78 @@
     print-color-adjust: exact;
   }
 }
+
+/* Fix invoice table column alignment */
+.invoice-print-sheet .inv-item-table {
+  width: 100% !important;
+  table-layout: fixed !important;
+  border-collapse: collapse !important;
+}
+
+.invoice-print-sheet .inv-item-table tr {
+  display: table-row !important;
+}
+
+.invoice-print-sheet .inv-item-table th,
+.invoice-print-sheet .inv-item-table td {
+  display: table-cell !important;
+  box-sizing: border-box !important;
+}
+
+.invoice-print-sheet .inv-item-table th:nth-child(1),
+.invoice-print-sheet .inv-item-table td.col-item {
+  width: 46% !important;
+  text-align: left !important;
+}
+
+.invoice-print-sheet .inv-item-table th:nth-child(2),
+.invoice-print-sheet .inv-item-table td.col-qty {
+  width: 12% !important;
+  text-align: center !important;
+}
+
+.invoice-print-sheet .inv-item-table th:nth-child(3),
+.invoice-print-sheet .inv-item-table td.col-rate {
+  width: 19% !important;
+  text-align: right !important;
+}
+
+.invoice-print-sheet .inv-item-table th:nth-child(4),
+.invoice-print-sheet .inv-item-table td.col-amt {
+  width: 23% !important;
+  text-align: right !important;
+}
+
+.invoice-print-sheet .inv-item-table td.col-item {
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+}
+
+.invoice-print-sheet .inv-item-table td.col-qty,
+.invoice-print-sheet .inv-item-table td.col-rate,
+.invoice-print-sheet .inv-item-table td.col-amt {
+  white-space: nowrap !important;
+}
+
+/* Balance customer and invoice details */
+.invoice-print-sheet .details-grid {
+  grid-template-columns: 1fr 1fr !important;
+  align-items: start !important;
+  gap: 24px !important;
+}
+
+.invoice-print-sheet .detail p {
+  min-height: 18px;
+  margin: 6px 0 !important;
+  line-height: 1.35 !important;
+}
+
+.invoice-print-sheet .detail strong {
+  min-width: 100px !important;
+}
+
+@media print {
+  .invoice-print-sheet .inv-item-table {
+    width: 100% !important;
+  }
+}
